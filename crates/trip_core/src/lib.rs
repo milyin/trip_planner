@@ -4,9 +4,9 @@ use std::fmt::{self, Display};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct RouteId(Uuid);
+pub struct SegmentId(Uuid);
 
-impl RouteId {
+impl SegmentId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
@@ -20,21 +20,21 @@ impl RouteId {
     }
 }
 
-impl Default for RouteId {
+impl Default for SegmentId {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Display for RouteId {
+impl Display for SegmentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Route {
-    pub id: RouteId,
+pub struct Segment {
+    pub id: SegmentId,
     pub departure: Stop,
     pub arrival: Stop,
     pub transport: Transport,
@@ -42,7 +42,7 @@ pub struct Route {
     pub cost: Money,
 }
 
-impl Route {
+impl Segment {
     pub fn new(
         departure: Stop,
         arrival: Stop,
@@ -50,16 +50,16 @@ impl Route {
         company: Option<String>,
         cost: Money,
     ) -> Result<Self, ValidationError> {
-        let route = Self {
-            id: RouteId::new(),
+        let segment = Self {
+            id: SegmentId::new(),
             departure,
             arrival,
             transport,
             company: company.and_then(non_empty_string),
             cost,
         };
-        route.validate()?;
-        Ok(route)
+        segment.validate()?;
+        Ok(segment)
     }
 
     pub fn validate(&self) -> Result<(), ValidationError> {
@@ -69,7 +69,7 @@ impl Route {
         self.cost.validate()?;
 
         if self.departure.time >= self.arrival.time {
-            return Err(ValidationError::NonChronologicalRoute);
+            return Err(ValidationError::NonChronologicalSegment);
         }
 
         Ok(())
@@ -314,14 +314,14 @@ impl TimeInterval {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlanRow {
-    Route(Route),
+    Segment(Segment),
     Gap(GapInfo),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GapInfo {
-    pub from_route: RouteId,
-    pub to_route: RouteId,
+    pub from_segment: SegmentId,
+    pub to_segment: SegmentId,
     pub duration: Duration,
     pub distance_km: Option<f64>,
 }
@@ -337,8 +337,8 @@ impl GapInfo {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct RouteAvailability {
-    pub route: Route,
+pub struct SegmentAvailability {
+    pub segment: Segment,
     pub status: AvailabilityStatus,
 }
 
@@ -349,25 +349,25 @@ pub enum AvailabilityStatus {
     Disabled { reason: String },
 }
 
-pub fn routes_overlap(left: &Route, right: &Route) -> bool {
+pub fn segments_overlap(left: &Segment, right: &Segment) -> bool {
     left.interval().overlaps(right.interval())
 }
 
-pub fn route_availability(routes: &[Route], selected_ids: &[RouteId]) -> Vec<RouteAvailability> {
-    let selected_routes: Vec<_> = routes
+pub fn segment_availability(segments: &[Segment], selected_ids: &[SegmentId]) -> Vec<SegmentAvailability> {
+    let selected_segments: Vec<_> = segments
         .iter()
-        .filter(|route| selected_ids.contains(&route.id))
+        .filter(|segment| selected_ids.contains(&segment.id))
         .collect();
 
-    routes
+    segments
         .iter()
         .cloned()
-        .map(|route| {
-            let status = if selected_ids.contains(&route.id) {
+        .map(|segment| {
+            let status = if selected_ids.contains(&segment.id) {
                 AvailabilityStatus::Selected
-            } else if let Some(conflict) = selected_routes
+            } else if let Some(conflict) = selected_segments
                 .iter()
-                .find(|selected| routes_overlap(&route, selected))
+                .find(|selected| segments_overlap(&segment, selected))
             {
                 AvailabilityStatus::Disabled {
                     reason: format!("overlaps {}", conflict.summary()),
@@ -376,33 +376,33 @@ pub fn route_availability(routes: &[Route], selected_ids: &[RouteId]) -> Vec<Rou
                 AvailabilityStatus::Selectable
             };
 
-            RouteAvailability { route, status }
+            SegmentAvailability { segment, status }
         })
         .collect()
 }
 
-pub fn build_plan_rows(routes: &[Route], selected_ids: &[RouteId]) -> Vec<PlanRow> {
-    let mut selected: Vec<Route> = routes
+pub fn build_plan_rows(segments: &[Segment], selected_ids: &[SegmentId]) -> Vec<PlanRow> {
+    let mut selected: Vec<Segment> = segments
         .iter()
-        .filter(|route| selected_ids.contains(&route.id))
+        .filter(|segment| selected_ids.contains(&segment.id))
         .cloned()
         .collect();
 
-    selected.sort_by_key(|route| route.departure.time);
+    selected.sort_by_key(|segment| segment.departure.time);
 
     let mut rows = Vec::new();
-    for (index, route) in selected.iter().enumerate() {
+    for (index, segment) in selected.iter().enumerate() {
         if index > 0 {
             let previous = &selected[index - 1];
-            rows.push(PlanRow::Gap(gap_between(previous, route)));
+            rows.push(PlanRow::Gap(gap_between(previous, segment)));
         }
-        rows.push(PlanRow::Route(route.clone()));
+        rows.push(PlanRow::Segment(segment.clone()));
     }
 
     rows
 }
 
-pub fn gap_between(previous: &Route, next: &Route) -> GapInfo {
+pub fn gap_between(previous: &Segment, next: &Segment) -> GapInfo {
     let duration = next.departure.time - previous.arrival.time;
     let distance_km = previous
         .arrival
@@ -412,26 +412,26 @@ pub fn gap_between(previous: &Route, next: &Route) -> GapInfo {
         .map(|(from, to)| from.distance_to_km(to));
 
     GapInfo {
-        from_route: previous.id,
-        to_route: next.id,
+        from_segment: previous.id,
+        to_segment: next.id,
         duration,
         distance_km,
     }
 }
 
-pub fn selected_routes_are_non_overlapping(
-    routes: &[Route],
-    selected_ids: &[RouteId],
+pub fn selected_segments_are_non_overlapping(
+    segments: &[Segment],
+    selected_ids: &[SegmentId],
 ) -> Result<(), PlanError> {
-    let selected: Vec<_> = routes
+    let selected: Vec<_> = segments
         .iter()
-        .filter(|route| selected_ids.contains(&route.id))
+        .filter(|segment| selected_ids.contains(&segment.id))
         .collect();
 
     for (left_index, left) in selected.iter().enumerate() {
         for right in selected.iter().skip(left_index + 1) {
-            if routes_overlap(left, right) {
-                return Err(PlanError::OverlappingRoutes {
+            if segments_overlap(left, right) {
+                return Err(PlanError::OverlappingSegments {
                     left: left.id,
                     right: right.id,
                 });
@@ -465,8 +465,8 @@ fn non_empty_string(value: String) -> Option<String> {
 pub enum ValidationError {
     #[error("missing required field `{field}`")]
     MissingField { field: String },
-    #[error("route departure must be before arrival")]
-    NonChronologicalRoute,
+    #[error("segment departure must be before arrival")]
+    NonChronologicalSegment,
     #[error("invalid coordinates: {reason}")]
     InvalidCoordinates { reason: String },
     #[error("invalid money: {0}")]
@@ -477,10 +477,10 @@ pub enum ValidationError {
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PlanError {
-    #[error("selected routes overlap: {left} and {right}")]
-    OverlappingRoutes { left: RouteId, right: RouteId },
-    #[error("route is not available for selection: {0}")]
-    RouteUnavailable(RouteId),
+    #[error("selected segments overlap: {left} and {right}")]
+    OverlappingSegments { left: SegmentId, right: SegmentId },
+    #[error("segment is not available for selection: {0}")]
+    SegmentUnavailable(SegmentId),
 }
 
 #[cfg(test)]
@@ -491,8 +491,8 @@ mod tests {
         DateTime::parse_from_rfc3339(value).unwrap()
     }
 
-    fn route(departure: &str, arrival: &str, dep_city: &str, arr_city: &str) -> Route {
-        Route::new(
+    fn segment(departure: &str, arrival: &str, dep_city: &str, arr_city: &str) -> Segment {
+        Segment::new(
             Stop {
                 place: Place::new(dep_city, "airport"),
                 time: time(departure),
@@ -509,8 +509,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_chronological_routes() {
-        let result = Route::new(
+    fn rejects_non_chronological_segments() {
+        let result = Segment::new(
             Stop {
                 place: Place::new("Paris", "CDG"),
                 time: time("2026-05-01T12:00:00+02:00"),
@@ -524,36 +524,36 @@ mod tests {
             Money::new(1, "EUR").unwrap(),
         );
 
-        assert_eq!(result.unwrap_err(), ValidationError::NonChronologicalRoute);
+        assert_eq!(result.unwrap_err(), ValidationError::NonChronologicalSegment);
     }
 
     #[test]
     fn detects_overlap() {
-        let left = route(
+        let left = segment(
             "2026-05-01T12:00:00+02:00",
             "2026-05-01T14:00:00+02:00",
             "Marseille",
             "Paris",
         );
-        let right = route(
+        let right = segment(
             "2026-05-01T13:30:00+02:00",
             "2026-05-01T16:00:00+02:00",
             "Paris",
             "Madrid",
         );
 
-        assert!(routes_overlap(&left, &right));
+        assert!(segments_overlap(&left, &right));
     }
 
     #[test]
     fn builds_plan_with_gap_rows() {
-        let first = route(
+        let first = segment(
             "2026-05-01T12:00:00+02:00",
             "2026-05-01T14:00:00+02:00",
             "Marseille",
             "Paris",
         );
-        let second = route(
+        let second = segment(
             "2026-05-01T16:00:00+02:00",
             "2026-05-01T18:00:00+02:00",
             "Paris",
@@ -561,14 +561,14 @@ mod tests {
         );
         let rows = build_plan_rows(&[second.clone(), first.clone()], &[first.id, second.id]);
 
-        assert!(matches!(rows[0], PlanRow::Route(_)));
+        assert!(matches!(rows[0], PlanRow::Segment(_)));
         assert!(matches!(rows[1], PlanRow::Gap(_)));
-        assert!(matches!(rows[2], PlanRow::Route(_)));
+        assert!(matches!(rows[2], PlanRow::Segment(_)));
         assert_eq!(
             rows[1],
             PlanRow::Gap(GapInfo {
-                from_route: first.id,
-                to_route: second.id,
+                from_segment: first.id,
+                to_segment: second.id,
                 duration: Duration::hours(2),
                 distance_km: None,
             })
@@ -576,20 +576,20 @@ mod tests {
     }
 
     #[test]
-    fn disables_routes_overlapping_selected_route() {
-        let selected = route(
+    fn disables_segments_overlapping_selected_segment() {
+        let selected = segment(
             "2026-05-01T12:00:00+02:00",
             "2026-05-01T14:00:00+02:00",
             "Marseille",
             "Paris",
         );
-        let conflict = route(
+        let conflict = segment(
             "2026-05-01T13:00:00+02:00",
             "2026-05-01T15:00:00+02:00",
             "Lyon",
             "Paris",
         );
-        let later = route(
+        let later = segment(
             "2026-05-01T16:00:00+02:00",
             "2026-05-01T18:00:00+02:00",
             "Paris",
@@ -597,7 +597,7 @@ mod tests {
         );
 
         let availability =
-            route_availability(&[selected.clone(), conflict.clone(), later], &[selected.id]);
+            segment_availability(&[selected.clone(), conflict.clone(), later], &[selected.id]);
 
         assert_eq!(availability[0].status, AvailabilityStatus::Selected);
         assert!(matches!(

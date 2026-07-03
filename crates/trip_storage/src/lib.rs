@@ -2,22 +2,22 @@ use chrono::{DateTime, FixedOffset};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use std::path::Path;
 use std::sync::Mutex;
-use trip_core::{Coordinates, Money, Place, Route, RouteId, Stop, Transport, ValidationError};
+use trip_core::{Coordinates, Money, Place, Segment, SegmentId, Stop, Transport, ValidationError};
 use uuid::Uuid;
 
-pub trait RouteRepository {
-    fn add(&self, route: &Route) -> Result<(), StorageError>;
-    fn update(&self, route: &Route) -> Result<(), StorageError>;
-    fn remove(&self, id: RouteId) -> Result<(), StorageError>;
-    fn get(&self, id: RouteId) -> Result<Option<Route>, StorageError>;
-    fn list(&self) -> Result<Vec<Route>, StorageError>;
+pub trait SegmentRepository {
+    fn add(&self, segment: &Segment) -> Result<(), StorageError>;
+    fn update(&self, segment: &Segment) -> Result<(), StorageError>;
+    fn remove(&self, id: SegmentId) -> Result<(), StorageError>;
+    fn get(&self, id: SegmentId) -> Result<Option<Segment>, StorageError>;
+    fn list(&self) -> Result<Vec<Segment>, StorageError>;
 }
 
-pub struct SqliteRouteRepository {
+pub struct SqliteSegmentRepository {
     connection: Mutex<Connection>,
 }
 
-impl SqliteRouteRepository {
+impl SqliteSegmentRepository {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let connection = Connection::open(path)?;
         let repository = Self {
@@ -42,7 +42,7 @@ impl SqliteRouteRepository {
                 r#"
                 PRAGMA foreign_keys = ON;
 
-                CREATE TABLE IF NOT EXISTS routes (
+                CREATE TABLE IF NOT EXISTS segments (
                     id TEXT PRIMARY KEY NOT NULL,
                     departure_city TEXT NOT NULL,
                     departure_address TEXT NOT NULL,
@@ -61,9 +61,9 @@ impl SqliteRouteRepository {
                     currency TEXT NOT NULL
                 );
 
-                CREATE TABLE IF NOT EXISTS route_screenshots (
+                CREATE TABLE IF NOT EXISTS segment_screenshots (
                     id TEXT PRIMARY KEY NOT NULL,
-                    route_id TEXT NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+                    segment_id TEXT NOT NULL REFERENCES segments(id) ON DELETE CASCADE,
                     path TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 );
@@ -85,14 +85,14 @@ impl SqliteRouteRepository {
     }
 }
 
-impl RouteRepository for SqliteRouteRepository {
-    fn add(&self, route: &Route) -> Result<(), StorageError> {
-        route.validate()?;
+impl SegmentRepository for SqliteSegmentRepository {
+    fn add(&self, segment: &Segment) -> Result<(), StorageError> {
+        segment.validate()?;
         self.with_connection(|connection| {
-            insert_or_update_route(
+            insert_or_update_segment(
                 connection,
                 r#"
-                INSERT INTO routes (
+                INSERT INTO segments (
                     id,
                     departure_city, departure_address, departure_time,
                     departure_latitude, departure_longitude,
@@ -104,19 +104,19 @@ impl RouteRepository for SqliteRouteRepository {
                     ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16
                 )
                 "#,
-                route,
+                segment,
             )?;
             Ok(())
         })
     }
 
-    fn update(&self, route: &Route) -> Result<(), StorageError> {
-        route.validate()?;
+    fn update(&self, segment: &Segment) -> Result<(), StorageError> {
+        segment.validate()?;
         self.with_connection(|connection| {
-            let changed = insert_or_update_route(
+            let changed = insert_or_update_segment(
                 connection,
                 r#"
-                UPDATE routes SET
+                UPDATE segments SET
                     departure_city = ?2,
                     departure_address = ?3,
                     departure_time = ?4,
@@ -134,21 +134,21 @@ impl RouteRepository for SqliteRouteRepository {
                     currency = ?16
                 WHERE id = ?1
                 "#,
-                route,
+                segment,
             )?;
 
             if changed == 0 {
-                return Err(StorageError::NotFound(route.id));
+                return Err(StorageError::NotFound(segment.id));
             }
 
             Ok(())
         })
     }
 
-    fn remove(&self, id: RouteId) -> Result<(), StorageError> {
+    fn remove(&self, id: SegmentId) -> Result<(), StorageError> {
         self.with_connection(|connection| {
             let changed =
-                connection.execute("DELETE FROM routes WHERE id = ?1", [id.to_string()])?;
+                connection.execute("DELETE FROM segments WHERE id = ?1", [id.to_string()])?;
             if changed == 0 {
                 return Err(StorageError::NotFound(id));
             }
@@ -156,65 +156,65 @@ impl RouteRepository for SqliteRouteRepository {
         })
     }
 
-    fn get(&self, id: RouteId) -> Result<Option<Route>, StorageError> {
+    fn get(&self, id: SegmentId) -> Result<Option<Segment>, StorageError> {
         self.with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT * FROM routes WHERE id = ?1",
+                    "SELECT * FROM segments WHERE id = ?1",
                     [id.to_string()],
-                    route_from_row,
+                    segment_from_row,
                 )
                 .optional()
                 .map_err(StorageError::from)
         })
     }
 
-    fn list(&self) -> Result<Vec<Route>, StorageError> {
+    fn list(&self) -> Result<Vec<Segment>, StorageError> {
         self.with_connection(|connection| {
             let mut statement =
-                connection.prepare("SELECT * FROM routes ORDER BY departure_time, arrival_time")?;
-            let rows = statement.query_map([], route_from_row)?;
-            let mut routes = Vec::new();
+                connection.prepare("SELECT * FROM segments ORDER BY departure_time, arrival_time")?;
+            let rows = statement.query_map([], segment_from_row)?;
+            let mut segments = Vec::new();
 
             for row in rows {
-                routes.push(row?);
+                segments.push(row?);
             }
 
-            Ok(routes)
+            Ok(segments)
         })
     }
 }
 
-fn insert_or_update_route(
+fn insert_or_update_segment(
     connection: &Connection,
     sql: &str,
-    route: &Route,
+    segment: &Segment,
 ) -> Result<usize, StorageError> {
-    let id = route.id.to_string();
-    let departure_time = route.departure.time.to_rfc3339();
-    let arrival_time = route.arrival.time.to_rfc3339();
-    let departure_latitude = route
+    let id = segment.id.to_string();
+    let departure_time = segment.departure.time.to_rfc3339();
+    let arrival_time = segment.arrival.time.to_rfc3339();
+    let departure_latitude = segment
         .departure
         .place
         .coordinates
         .map(|coordinates| coordinates.latitude);
-    let departure_longitude = route
+    let departure_longitude = segment
         .departure
         .place
         .coordinates
         .map(|coordinates| coordinates.longitude);
-    let arrival_latitude = route
+    let arrival_latitude = segment
         .arrival
         .place
         .coordinates
         .map(|coordinates| coordinates.latitude);
-    let arrival_longitude = route
+    let arrival_longitude = segment
         .arrival
         .place
         .coordinates
         .map(|coordinates| coordinates.longitude);
-    let transport_kind = route.transport.kind();
-    let transport_other = match &route.transport {
+    let transport_kind = segment.transport.kind();
+    let transport_other = match &segment.transport {
         Transport::Other(value) => Some(value.as_str()),
         _ => None,
     };
@@ -223,32 +223,32 @@ fn insert_or_update_route(
         sql,
         params![
             id,
-            &route.departure.place.city,
-            &route.departure.place.address,
+            &segment.departure.place.city,
+            &segment.departure.place.address,
             departure_time,
             departure_latitude,
             departure_longitude,
-            &route.arrival.place.city,
-            &route.arrival.place.address,
+            &segment.arrival.place.city,
+            &segment.arrival.place.address,
             arrival_time,
             arrival_latitude,
             arrival_longitude,
             transport_kind,
             transport_other,
-            route.company.as_deref(),
-            route.cost.amount_minor,
-            &route.cost.currency,
+            segment.company.as_deref(),
+            segment.cost.amount_minor,
+            &segment.cost.currency,
         ],
     )?)
 }
 
-fn route_from_row(row: &Row<'_>) -> Result<Route, rusqlite::Error> {
+fn segment_from_row(row: &Row<'_>) -> Result<Segment, rusqlite::Error> {
     let id: String = row.get("id")?;
     let transport_kind: String = row.get("transport_kind")?;
     let transport_other: Option<String> = row.get("transport_other")?;
 
-    let route = Route {
-        id: RouteId::from_uuid(parse_uuid(&id)?),
+    let segment = Segment {
+        id: SegmentId::from_uuid(parse_uuid(&id)?),
         departure: Stop {
             place: Place {
                 city: row.get("departure_city")?,
@@ -278,8 +278,8 @@ fn route_from_row(row: &Row<'_>) -> Result<Route, rusqlite::Error> {
             .map_err(to_sql_conversion_error)?,
     };
 
-    route.validate().map_err(to_sql_conversion_error)?;
-    Ok(route)
+    segment.validate().map_err(to_sql_conversion_error)?;
+    Ok(segment)
 }
 
 fn parse_uuid(value: &str) -> Result<Uuid, rusqlite::Error> {
@@ -326,10 +326,10 @@ impl std::error::Error for SimpleConversionError {}
 pub enum StorageError {
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    #[error("route validation failed: {0}")]
+    #[error("segment validation failed: {0}")]
     Validation(#[from] ValidationError),
-    #[error("route not found: {0}")]
-    NotFound(RouteId),
+    #[error("segment not found: {0}")]
+    NotFound(SegmentId),
     #[error("sqlite connection lock is poisoned")]
     PoisonedConnection,
 }
@@ -343,8 +343,8 @@ mod tests {
         DateTime::parse_from_rfc3339(value).unwrap()
     }
 
-    fn sample_route() -> Route {
-        Route::new(
+    fn sample_segment() -> Segment {
+        Segment::new(
             Stop {
                 place: Place::new("Marseille", "airport")
                     .with_coordinates(Coordinates::new(43.4393, 5.2214).unwrap()),
@@ -363,24 +363,24 @@ mod tests {
     }
 
     #[test]
-    fn stores_and_loads_route() {
-        let repository = SqliteRouteRepository::in_memory().unwrap();
-        let route = sample_route();
+    fn stores_and_loads_segment() {
+        let repository = SqliteSegmentRepository::in_memory().unwrap();
+        let segment = sample_segment();
 
-        repository.add(&route).unwrap();
-        let stored = repository.get(route.id).unwrap().unwrap();
+        repository.add(&segment).unwrap();
+        let stored = repository.get(segment.id).unwrap().unwrap();
 
-        assert_eq!(stored, route);
+        assert_eq!(stored, segment);
     }
 
     #[test]
-    fn removes_route() {
-        let repository = SqliteRouteRepository::in_memory().unwrap();
-        let route = sample_route();
+    fn removes_segment() {
+        let repository = SqliteSegmentRepository::in_memory().unwrap();
+        let segment = sample_segment();
 
-        repository.add(&route).unwrap();
-        repository.remove(route.id).unwrap();
+        repository.add(&segment).unwrap();
+        repository.remove(segment.id).unwrap();
 
-        assert!(repository.get(route.id).unwrap().is_none());
+        assert!(repository.get(segment.id).unwrap().is_none());
     }
 }

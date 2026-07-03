@@ -3,12 +3,12 @@ use iced::widget::{button, column, container, row, scrollable, text, text_input}
 use iced::{Element, Length, Task};
 use trip_app::{AppError, TripPlanner};
 use trip_core::{
-    AvailabilityStatus, Money, Place, PlanRow, Route, RouteAvailability, RouteId, Stop, Transport,
+    AvailabilityStatus, Money, Place, PlanRow, Segment, SegmentAvailability, SegmentId, Stop, Transport,
 };
 use trip_geo::NominatimGeocoder;
-use trip_storage::SqliteRouteRepository;
+use trip_storage::SqliteSegmentRepository;
 
-type Planner = TripPlanner<SqliteRouteRepository, NominatimGeocoder>;
+type Planner = TripPlanner<SqliteSegmentRepository, NominatimGeocoder>;
 
 fn main() -> iced::Result {
     iced::application(
@@ -22,24 +22,24 @@ fn main() -> iced::Result {
 
 struct TripPlannerGui {
     planner: Option<Planner>,
-    selected_route: Option<RouteId>,
-    form: RouteForm,
+    selected_segment: Option<SegmentId>,
+    form: SegmentForm,
     status: String,
 }
 
 impl TripPlannerGui {
     fn boot() -> (Self, Task<Message>) {
-        let mut state = match SqliteRouteRepository::open("trip_planner.sqlite3") {
+        let mut state = match SqliteSegmentRepository::open("trip_planner.sqlite3") {
             Ok(repository) => Self {
                 planner: Some(TripPlanner::new(repository, NominatimGeocoder::new())),
-                selected_route: None,
-                form: RouteForm::default(),
+                selected_segment: None,
+                form: SegmentForm::default(),
                 status: "Ready".to_owned(),
             },
             Err(error) => Self {
                 planner: None,
-                selected_route: None,
-                form: RouteForm::default(),
+                selected_segment: None,
+                form: SegmentForm::default(),
                 status: format!("Could not open storage: {error}"),
             },
         };
@@ -60,31 +60,31 @@ impl TripPlannerGui {
             Message::CompanyChanged(value) => self.form.company = value,
             Message::CostChanged(value) => self.form.cost = value,
             Message::CurrencyChanged(value) => self.form.currency = value,
-            Message::NewRoute => {
-                self.selected_route = None;
-                self.form = RouteForm::default();
-                self.status = "Creating a new route".to_owned();
+            Message::NewSegment => {
+                self.selected_segment = None;
+                self.form = SegmentForm::default();
+                self.status = "Creating a new segment".to_owned();
             }
-            Message::SelectRoute(id) => {
-                self.selected_route = Some(id);
+            Message::SelectSegment(id) => {
+                self.selected_segment = Some(id);
                 if let Some(planner) = &self.planner {
-                    match planner.route(id) {
-                        Ok(Some(route)) => {
-                            self.form = RouteForm::from_route(&route);
-                            self.status = format!("Selected {}", route.summary());
+                    match planner.segment(id) {
+                        Ok(Some(segment)) => {
+                            self.form = SegmentForm::from_segment(&segment);
+                            self.status = format!("Selected {}", segment.summary());
                         }
-                        Ok(None) => self.status = "Route no longer exists".to_owned(),
+                        Ok(None) => self.status = "Segment no longer exists".to_owned(),
                         Err(error) => self.status = error.to_string(),
                     }
                 }
             }
-            Message::SaveRoute => self.save_route(),
+            Message::SaveSegment => self.save_segment(),
             Message::DeleteSelected => self.delete_selected(),
             Message::AddSelectedToPlan => self.add_selected_to_plan(),
             Message::RemoveFromPlan(id) => {
                 if let Some(planner) = &mut self.planner {
                     planner.remove_from_plan(id);
-                    self.status = "Removed route from plan".to_owned();
+                    self.status = "Removed segment from plan".to_owned();
                 }
             }
             Message::ClearPlan => {
@@ -101,14 +101,14 @@ impl TripPlannerGui {
     fn view(&self) -> Element<'_, Message> {
         let header = row![
             text("Trip Planner").size(32),
-            button("Add route").on_press(Message::NewRoute),
+            button("Add segment").on_press(Message::NewSegment),
             button("Geocode all").on_press(Message::GeocodeAll),
             text(&self.status),
         ]
         .spacing(16)
         .align_y(iced::Alignment::Center);
 
-        let body = row![self.routes_panel(), self.plan_panel(), self.map_panel(),]
+        let body = row![self.segments_panel(), self.plan_panel(), self.map_panel(),]
             .spacing(16)
             .height(Length::FillPortion(3));
 
@@ -122,24 +122,24 @@ impl TripPlannerGui {
         .into()
     }
 
-    fn routes_panel(&self) -> Element<'_, Message> {
-        let mut routes = column![text("Routes").size(24)].spacing(8);
+    fn segments_panel(&self) -> Element<'_, Message> {
+        let mut segments = column![text("Segments").size(24)].spacing(8);
 
         match self.availability() {
             Ok(availability) if availability.is_empty() => {
-                routes = routes.push(text("No routes yet. Use the editor below."));
+                segments = segments.push(text("No segments yet. Use the editor below."));
             }
             Ok(availability) => {
                 for item in availability {
-                    routes = routes.push(route_list_item(&item));
+                    segments = segments.push(segment_list_item(&item));
                 }
             }
             Err(error) => {
-                routes = routes.push(text(format!("Could not load routes: {error}")));
+                segments = segments.push(text(format!("Could not load segments: {error}")));
             }
         }
 
-        panel(scrollable(routes), 2)
+        panel(scrollable(segments), 2)
     }
 
     fn plan_panel(&self) -> Element<'_, Message> {
@@ -156,7 +156,7 @@ impl TripPlannerGui {
 
         match self.plan_rows() {
             Ok(rows) if rows.is_empty() => {
-                plan = plan.push(text("Select a route and add it to the plan."));
+                plan = plan.push(text("Select a segment and add it to the plan."));
             }
             Ok(rows) => {
                 for row in rows {
@@ -174,14 +174,14 @@ impl TripPlannerGui {
     fn map_panel(&self) -> Element<'_, Message> {
         let mut map = column![
             text("Map").size(24),
-            text("Geocoded route markers and lines")
+            text("Geocoded segment markers and lines")
         ]
         .spacing(8);
 
         if let Some(planner) = &self.planner {
             match planner.map_snapshot() {
                 Ok(snapshot) if snapshot.lines.is_empty() => {
-                    map = map.push(text("No route coordinates available yet."));
+                    map = map.push(text("No segment coordinates available yet."));
                 }
                 Ok(snapshot) => {
                     for line in snapshot.lines {
@@ -211,7 +211,7 @@ impl TripPlannerGui {
 
     fn editor_panel(&self) -> Element<'_, Message> {
         let editor = column![
-            text("Route details").size(24),
+            text("Segment details").size(24),
             row![
                 text_input("Departure city", &self.form.departure_city)
                     .on_input(Message::DepartureCityChanged),
@@ -242,43 +242,43 @@ impl TripPlannerGui {
             ]
             .spacing(8),
             row![
-                button("Save").on_press(Message::SaveRoute),
+                button("Save").on_press(Message::SaveSegment),
                 button("Delete selected").on_press(Message::DeleteSelected),
                 button("Geocode selected").on_press(Message::GeocodeSelected),
             ]
             .spacing(8),
-            text("Screenshots: planned as route attachments for the next drag-and-drop step."),
+            text("Screenshots: planned as segment attachments for the next drag-and-drop step."),
         ]
         .spacing(8);
 
         panel(editor, 1)
     }
 
-    fn save_route(&mut self) {
+    fn save_segment(&mut self) {
         let Some(planner) = &mut self.planner else {
             self.status = "Storage is not available".to_owned();
             return;
         };
 
-        match self.form.to_route(self.selected_route) {
-            Ok(mut route) => {
-                if let Some(existing_id) = self.selected_route {
-                    if let Ok(Some(existing)) = planner.route(existing_id) {
-                        preserve_coordinates(&existing, &mut route);
+        match self.form.to_segment(self.selected_segment) {
+            Ok(mut segment) => {
+                if let Some(existing_id) = self.selected_segment {
+                    if let Ok(Some(existing)) = planner.segment(existing_id) {
+                        preserve_coordinates(&existing, &mut segment);
                     }
                 }
 
-                let result = if self.selected_route.is_some() {
-                    planner.update_route(route.clone())
+                let result = if self.selected_segment.is_some() {
+                    planner.update_segment(segment.clone())
                 } else {
-                    planner.add_route(route.clone())
+                    planner.add_segment(segment.clone())
                 };
 
                 match result {
                     Ok(()) => {
-                        self.selected_route = Some(route.id);
-                        self.form = RouteForm::from_route(&route);
-                        self.status = "Route saved".to_owned();
+                        self.selected_segment = Some(segment.id);
+                        self.form = SegmentForm::from_segment(&segment);
+                        self.status = "Segment saved".to_owned();
                     }
                     Err(error) => self.status = error.to_string(),
                 }
@@ -288,8 +288,8 @@ impl TripPlannerGui {
     }
 
     fn delete_selected(&mut self) {
-        let Some(id) = self.selected_route else {
-            self.status = "No route selected".to_owned();
+        let Some(id) = self.selected_segment else {
+            self.status = "No segment selected".to_owned();
             return;
         };
 
@@ -298,19 +298,19 @@ impl TripPlannerGui {
             return;
         };
 
-        match planner.remove_route(id) {
+        match planner.remove_segment(id) {
             Ok(()) => {
-                self.selected_route = None;
-                self.form = RouteForm::default();
-                self.status = "Route deleted".to_owned();
+                self.selected_segment = None;
+                self.form = SegmentForm::default();
+                self.status = "Segment deleted".to_owned();
             }
             Err(error) => self.status = error.to_string(),
         }
     }
 
     fn add_selected_to_plan(&mut self) {
-        let Some(id) = self.selected_route else {
-            self.status = "No route selected".to_owned();
+        let Some(id) = self.selected_segment else {
+            self.status = "No segment selected".to_owned();
             return;
         };
 
@@ -320,14 +320,14 @@ impl TripPlannerGui {
         };
 
         match planner.add_to_plan(id) {
-            Ok(()) => self.status = "Route added to plan".to_owned(),
+            Ok(()) => self.status = "Segment added to plan".to_owned(),
             Err(error) => self.status = error.to_string(),
         }
     }
 
     fn geocode_selected(&mut self) {
-        let Some(id) = self.selected_route else {
-            self.status = "No route selected".to_owned();
+        let Some(id) = self.selected_segment else {
+            self.status = "No segment selected".to_owned();
             return;
         };
 
@@ -336,10 +336,10 @@ impl TripPlannerGui {
             return;
         };
 
-        match planner.geocode_route(id) {
-            Ok(route) => {
-                self.form = RouteForm::from_route(&route);
-                self.status = "Selected route geocoded".to_owned();
+        match planner.geocode_segment(id) {
+            Ok(segment) => {
+                self.form = SegmentForm::from_segment(&segment);
+                self.status = "Selected segment geocoded".to_owned();
             }
             Err(error) => self.status = error.to_string(),
         }
@@ -352,7 +352,7 @@ impl TripPlannerGui {
         };
 
         match planner.geocode_all() {
-            Ok(()) => self.status = "All routes geocoded".to_owned(),
+            Ok(()) => self.status = "All segments geocoded".to_owned(),
             Err(error) => self.status = error.to_string(),
         }
     }
@@ -362,19 +362,19 @@ impl TripPlannerGui {
             return;
         };
 
-        if !matches!(planner.routes(), Ok(routes) if routes.is_empty()) {
+        if !matches!(planner.segments(), Ok(segments) if segments.is_empty()) {
             return;
         }
 
-        for route in example_routes() {
-            if let Err(error) = planner.add_route(route) {
+        for segment in example_segments() {
+            if let Err(error) = planner.add_segment(segment) {
                 self.status = format!("Could not seed examples: {error}");
                 break;
             }
         }
     }
 
-    fn availability(&self) -> Result<Vec<RouteAvailability>, AppError> {
+    fn availability(&self) -> Result<Vec<SegmentAvailability>, AppError> {
         self.planner
             .as_ref()
             .ok_or_else(storage_unavailable)?
@@ -389,18 +389,18 @@ impl TripPlannerGui {
     }
 }
 
-fn route_list_item(item: &RouteAvailability) -> Element<'static, Message> {
+fn segment_list_item(item: &SegmentAvailability) -> Element<'static, Message> {
     let status = match &item.status {
         AvailabilityStatus::Selected => "selected".to_owned(),
         AvailabilityStatus::Selectable => "selectable".to_owned(),
         AvailabilityStatus::Disabled { reason } => format!("disabled: {reason}"),
     };
 
-    let label = format!("{}\n{}", item.route.summary(), status);
+    let label = format!("{}\n{}", item.segment.summary(), status);
     match item.status {
         AvailabilityStatus::Disabled { .. } => container(text(label)).padding(8).into(),
         _ => button(text(label))
-            .on_press(Message::SelectRoute(item.route.id))
+            .on_press(Message::SelectSegment(item.segment.id))
             .width(Length::Fill)
             .into(),
     }
@@ -408,9 +408,9 @@ fn route_list_item(item: &RouteAvailability) -> Element<'static, Message> {
 
 fn plan_row(row: PlanRow) -> Element<'static, Message> {
     match row {
-        PlanRow::Route(route) => row![
-            text(route.summary()).width(Length::Fill),
-            button("Remove").on_press(Message::RemoveFromPlan(route.id)),
+        PlanRow::Segment(segment) => row![
+            text(segment.summary()).width(Length::Fill),
+            button("Remove").on_press(Message::RemoveFromPlan(segment.id)),
         ]
         .spacing(8)
         .into(),
@@ -432,7 +432,7 @@ fn format_coordinates(coordinates: trip_core::Coordinates) -> String {
     format!("{:.4}, {:.4}", coordinates.latitude, coordinates.longitude)
 }
 
-fn preserve_coordinates(existing: &Route, updated: &mut Route) {
+fn preserve_coordinates(existing: &Segment, updated: &mut Segment) {
     if same_place(&existing.departure.place, &updated.departure.place) {
         updated.departure.place.coordinates = existing.departure.place.coordinates;
     }
@@ -452,12 +452,12 @@ fn storage_unavailable() -> AppError {
 
 #[derive(Debug, Clone)]
 enum Message {
-    NewRoute,
-    SelectRoute(RouteId),
-    SaveRoute,
+    NewSegment,
+    SelectSegment(SegmentId),
+    SaveSegment,
     DeleteSelected,
     AddSelectedToPlan,
-    RemoveFromPlan(RouteId),
+    RemoveFromPlan(SegmentId),
     ClearPlan,
     GeocodeSelected,
     GeocodeAll,
@@ -473,7 +473,7 @@ enum Message {
     CurrencyChanged(String),
 }
 
-struct RouteForm {
+struct SegmentForm {
     departure_city: String,
     departure_address: String,
     departure_time: String,
@@ -486,7 +486,7 @@ struct RouteForm {
     currency: String,
 }
 
-impl Default for RouteForm {
+impl Default for SegmentForm {
     fn default() -> Self {
         Self {
             departure_city: String::new(),
@@ -503,30 +503,30 @@ impl Default for RouteForm {
     }
 }
 
-impl RouteForm {
-    fn from_route(route: &Route) -> Self {
+impl SegmentForm {
+    fn from_segment(segment: &Segment) -> Self {
         Self {
-            departure_city: route.departure.place.city.clone(),
-            departure_address: route.departure.place.address.clone(),
-            departure_time: route.departure.time.to_rfc3339(),
-            arrival_city: route.arrival.place.city.clone(),
-            arrival_address: route.arrival.place.address.clone(),
-            arrival_time: route.arrival.time.to_rfc3339(),
-            transport: route.transport.to_string(),
-            company: route.company.clone().unwrap_or_default(),
-            cost: format_amount(route.cost.amount_minor),
-            currency: route.cost.currency.clone(),
+            departure_city: segment.departure.place.city.clone(),
+            departure_address: segment.departure.place.address.clone(),
+            departure_time: segment.departure.time.to_rfc3339(),
+            arrival_city: segment.arrival.place.city.clone(),
+            arrival_address: segment.arrival.place.address.clone(),
+            arrival_time: segment.arrival.time.to_rfc3339(),
+            transport: segment.transport.to_string(),
+            company: segment.company.clone().unwrap_or_default(),
+            cost: format_amount(segment.cost.amount_minor),
+            currency: segment.cost.currency.clone(),
         }
     }
 
-    fn to_route(&self, existing_id: Option<RouteId>) -> Result<Route, String> {
+    fn to_segment(&self, existing_id: Option<SegmentId>) -> Result<Segment, String> {
         let departure_time = parse_time(&self.departure_time)?;
         let arrival_time = parse_time(&self.arrival_time)?;
         let transport = parse_transport(&self.transport)?;
         let cost = Money::new(parse_amount_minor(&self.cost)?, self.currency.clone())
             .map_err(|error| error.to_string())?;
 
-        let mut route = Route::new(
+        let mut segment = Segment::new(
             Stop {
                 place: Place::new(&self.departure_city, &self.departure_address),
                 time: departure_time,
@@ -542,10 +542,10 @@ impl RouteForm {
         .map_err(|error| error.to_string())?;
 
         if let Some(id) = existing_id {
-            route.id = id;
+            segment.id = id;
         }
 
-        Ok(route)
+        Ok(segment)
     }
 }
 
@@ -594,9 +594,9 @@ fn format_amount(amount_minor: i64) -> String {
     format!("{}.{:02}", amount_minor / 100, amount_minor.abs() % 100)
 }
 
-fn example_routes() -> Vec<Route> {
+fn example_segments() -> Vec<Segment> {
     vec![
-        Route::new(
+        Segment::new(
             Stop {
                 place: Place::new("Marseille", "airport"),
                 time: parse_time("2026-05-01T12:00:00+02:00").unwrap(),
@@ -610,7 +610,7 @@ fn example_routes() -> Vec<Route> {
             Money::new(10_000, "EUR").unwrap(),
         )
         .unwrap(),
-        Route::new(
+        Segment::new(
             Stop {
                 place: Place::new("Paris", "Orly"),
                 time: parse_time("2026-05-01T16:00:00+02:00").unwrap(),

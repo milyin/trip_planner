@@ -1,19 +1,19 @@
 use trip_core::{
-    AvailabilityStatus, Coordinates, PlanError, PlanRow, Route, RouteAvailability, RouteId,
-    build_plan_rows, route_availability, routes_overlap, selected_routes_are_non_overlapping,
+    AvailabilityStatus, Coordinates, PlanError, PlanRow, Segment, SegmentAvailability, SegmentId,
+    build_plan_rows, segment_availability, segments_overlap, selected_segments_are_non_overlapping,
 };
 use trip_geo::{GeoError, Geocoder};
-use trip_storage::{RouteRepository, StorageError};
+use trip_storage::{SegmentRepository, StorageError};
 
 pub struct TripPlanner<R, G> {
     repository: R,
     geocoder: G,
-    selected_plan: Vec<RouteId>,
+    selected_plan: Vec<SegmentId>,
 }
 
 impl<R, G> TripPlanner<R, G>
 where
-    R: RouteRepository,
+    R: SegmentRepository,
     G: Geocoder,
 {
     pub fn new(repository: R, geocoder: G) -> Self {
@@ -24,69 +24,69 @@ where
         }
     }
 
-    pub fn add_route(&mut self, route: Route) -> Result<(), AppError> {
-        self.repository.add(&route)?;
+    pub fn add_segment(&mut self, segment: Segment) -> Result<(), AppError> {
+        self.repository.add(&segment)?;
         Ok(())
     }
 
-    pub fn update_route(&mut self, route: Route) -> Result<(), AppError> {
-        let mut routes = self.routes()?;
-        if let Some(existing) = routes.iter_mut().find(|candidate| candidate.id == route.id) {
-            *existing = route.clone();
+    pub fn update_segment(&mut self, segment: Segment) -> Result<(), AppError> {
+        let mut segments = self.segments()?;
+        if let Some(existing) = segments.iter_mut().find(|candidate| candidate.id == segment.id) {
+            *existing = segment.clone();
         }
 
-        if self.selected_plan.contains(&route.id) {
-            selected_routes_are_non_overlapping(&routes, &self.selected_plan)?;
+        if self.selected_plan.contains(&segment.id) {
+            selected_segments_are_non_overlapping(&segments, &self.selected_plan)?;
         }
 
-        self.repository.update(&route)?;
+        self.repository.update(&segment)?;
         self.selected_plan
             .retain(|id| matches!(self.repository.get(*id), Ok(Some(_))));
         Ok(())
     }
 
-    pub fn remove_route(&mut self, id: RouteId) -> Result<(), AppError> {
+    pub fn remove_segment(&mut self, id: SegmentId) -> Result<(), AppError> {
         self.repository.remove(id)?;
         self.selected_plan.retain(|selected| *selected != id);
         Ok(())
     }
 
-    pub fn routes(&self) -> Result<Vec<Route>, AppError> {
+    pub fn segments(&self) -> Result<Vec<Segment>, AppError> {
         Ok(self.repository.list()?)
     }
 
-    pub fn route(&self, id: RouteId) -> Result<Option<Route>, AppError> {
+    pub fn segment(&self, id: SegmentId) -> Result<Option<Segment>, AppError> {
         Ok(self.repository.get(id)?)
     }
 
-    pub fn availability(&self) -> Result<Vec<RouteAvailability>, AppError> {
-        Ok(route_availability(&self.routes()?, &self.selected_plan))
+    pub fn availability(&self) -> Result<Vec<SegmentAvailability>, AppError> {
+        Ok(segment_availability(&self.segments()?, &self.selected_plan))
     }
 
-    pub fn add_to_plan(&mut self, id: RouteId) -> Result<(), AppError> {
+    pub fn add_to_plan(&mut self, id: SegmentId) -> Result<(), AppError> {
         if self.selected_plan.contains(&id) {
             return Ok(());
         }
 
-        let routes = self.routes()?;
-        let route = routes
+        let segments = self.segments()?;
+        let segment = segments
             .iter()
             .find(|candidate| candidate.id == id)
-            .ok_or(AppError::RouteNotFound(id))?;
+            .ok_or(AppError::SegmentNotFound(id))?;
 
-        if routes
+        if segments
             .iter()
             .filter(|candidate| self.selected_plan.contains(&candidate.id))
-            .any(|selected| routes_overlap(route, selected))
+            .any(|selected| segments_overlap(segment, selected))
         {
-            return Err(AppError::Plan(PlanError::RouteUnavailable(id)));
+            return Err(AppError::Plan(PlanError::SegmentUnavailable(id)));
         }
 
         self.selected_plan.push(id);
         Ok(())
     }
 
-    pub fn remove_from_plan(&mut self, id: RouteId) {
+    pub fn remove_from_plan(&mut self, id: SegmentId) {
         self.selected_plan.retain(|selected| *selected != id);
     }
 
@@ -95,34 +95,34 @@ where
     }
 
     pub fn plan_rows(&self) -> Result<Vec<PlanRow>, AppError> {
-        Ok(build_plan_rows(&self.routes()?, &self.selected_plan))
+        Ok(build_plan_rows(&self.segments()?, &self.selected_plan))
     }
 
-    pub fn selected_plan(&self) -> &[RouteId] {
+    pub fn selected_plan(&self) -> &[SegmentId] {
         &self.selected_plan
     }
 
-    pub fn geocode_route(&mut self, id: RouteId) -> Result<Route, AppError> {
-        let Some(mut route) = self.repository.get(id)? else {
-            return Err(AppError::RouteNotFound(id));
+    pub fn geocode_segment(&mut self, id: SegmentId) -> Result<Segment, AppError> {
+        let Some(mut segment) = self.repository.get(id)? else {
+            return Err(AppError::SegmentNotFound(id));
         };
 
-        if route.departure.place.coordinates.is_none() {
-            route.departure.place.coordinates = self.geocoder.geocode(&route.departure.place)?;
+        if segment.departure.place.coordinates.is_none() {
+            segment.departure.place.coordinates = self.geocoder.geocode(&segment.departure.place)?;
         }
 
-        if route.arrival.place.coordinates.is_none() {
-            route.arrival.place.coordinates = self.geocoder.geocode(&route.arrival.place)?;
+        if segment.arrival.place.coordinates.is_none() {
+            segment.arrival.place.coordinates = self.geocoder.geocode(&segment.arrival.place)?;
         }
 
-        self.repository.update(&route)?;
-        Ok(route)
+        self.repository.update(&segment)?;
+        Ok(segment)
     }
 
     pub fn geocode_all(&mut self) -> Result<(), AppError> {
-        let ids: Vec<_> = self.routes()?.into_iter().map(|route| route.id).collect();
+        let ids: Vec<_> = self.segments()?.into_iter().map(|segment| segment.id).collect();
         for id in ids {
-            self.geocode_route(id)?;
+            self.geocode_segment(id)?;
         }
         Ok(())
     }
@@ -132,12 +132,12 @@ where
             .availability()?
             .into_iter()
             .map(|availability| MapLine {
-                route_id: availability.route.id,
-                label: availability.route.summary(),
-                from_label: availability.route.departure.place.short_label(),
-                to_label: availability.route.arrival.place.short_label(),
-                from: availability.route.departure.place.coordinates,
-                to: availability.route.arrival.place.coordinates,
+                segment_id: availability.segment.id,
+                label: availability.segment.summary(),
+                from_label: availability.segment.departure.place.short_label(),
+                to_label: availability.segment.arrival.place.short_label(),
+                from: availability.segment.departure.place.coordinates,
+                to: availability.segment.arrival.place.coordinates,
                 selected: matches!(availability.status, AvailabilityStatus::Selected),
                 disabled: matches!(availability.status, AvailabilityStatus::Disabled { .. }),
             })
@@ -154,7 +154,7 @@ pub struct MapSnapshot {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapLine {
-    pub route_id: RouteId,
+    pub segment_id: SegmentId,
     pub label: String,
     pub from_label: String,
     pub to_label: String,
@@ -172,8 +172,8 @@ pub enum AppError {
     Geo(#[from] GeoError),
     #[error("plan error: {0}")]
     Plan(#[from] PlanError),
-    #[error("route not found: {0}")]
-    RouteNotFound(RouteId),
+    #[error("segment not found: {0}")]
+    SegmentNotFound(SegmentId),
 }
 
 #[cfg(test)]
@@ -182,7 +182,7 @@ mod tests {
     use chrono::DateTime;
     use trip_core::{Money, Place, Stop, Transport};
     use trip_geo::GeoError;
-    use trip_storage::SqliteRouteRepository;
+    use trip_storage::SqliteSegmentRepository;
 
     struct FakeGeocoder;
 
@@ -192,8 +192,8 @@ mod tests {
         }
     }
 
-    fn route(departure: &str, arrival: &str) -> Route {
-        Route::new(
+    fn segment(departure: &str, arrival: &str) -> Segment {
+        Segment::new(
             Stop {
                 place: Place::new("Marseille", "airport"),
                 time: DateTime::parse_from_rfc3339(departure).unwrap(),
@@ -210,30 +210,30 @@ mod tests {
     }
 
     #[test]
-    fn prevents_adding_overlapping_routes_to_plan() {
-        let repository = SqliteRouteRepository::in_memory().unwrap();
+    fn prevents_adding_overlapping_segments_to_plan() {
+        let repository = SqliteSegmentRepository::in_memory().unwrap();
         let mut planner = TripPlanner::new(repository, FakeGeocoder);
-        let first = route("2026-05-01T12:00:00+02:00", "2026-05-01T14:00:00+02:00");
-        let conflict = route("2026-05-01T13:00:00+02:00", "2026-05-01T15:00:00+02:00");
+        let first = segment("2026-05-01T12:00:00+02:00", "2026-05-01T14:00:00+02:00");
+        let conflict = segment("2026-05-01T13:00:00+02:00", "2026-05-01T15:00:00+02:00");
 
-        planner.add_route(first.clone()).unwrap();
-        planner.add_route(conflict.clone()).unwrap();
+        planner.add_segment(first.clone()).unwrap();
+        planner.add_segment(conflict.clone()).unwrap();
         planner.add_to_plan(first.id).unwrap();
 
         assert!(matches!(
             planner.add_to_plan(conflict.id),
-            Err(AppError::Plan(PlanError::RouteUnavailable(_)))
+            Err(AppError::Plan(PlanError::SegmentUnavailable(_)))
         ));
     }
 
     #[test]
-    fn geocodes_missing_route_coordinates() {
-        let repository = SqliteRouteRepository::in_memory().unwrap();
+    fn geocodes_missing_segment_coordinates() {
+        let repository = SqliteSegmentRepository::in_memory().unwrap();
         let mut planner = TripPlanner::new(repository, FakeGeocoder);
-        let route = route("2026-05-01T12:00:00+02:00", "2026-05-01T14:00:00+02:00");
+        let segment = segment("2026-05-01T12:00:00+02:00", "2026-05-01T14:00:00+02:00");
 
-        planner.add_route(route.clone()).unwrap();
-        let geocoded = planner.geocode_route(route.id).unwrap();
+        planner.add_segment(segment.clone()).unwrap();
+        let geocoded = planner.geocode_segment(segment.id).unwrap();
 
         assert!(geocoded.departure.place.coordinates.is_some());
         assert!(geocoded.arrival.place.coordinates.is_some());
