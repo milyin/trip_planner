@@ -81,7 +81,7 @@
   .scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:3px solid var(--panel)}
 
   .card{border:1px solid var(--border); background:var(--card); border-radius:var(--radius);
-    padding:12px; cursor:grab; transition:.15s; position:relative; overflow:hidden}
+    padding:12px; cursor:grab; transition:.15s; position:relative; overflow:hidden; flex:0 0 auto}
   .card:active{cursor:grabbing}
   .card.dragging{opacity:.4}
   .card:hover{background:var(--card-hover); border-color:var(--line)}
@@ -112,7 +112,7 @@
   .warn{color:var(--danger); font-size:11.5px; margin:8px 0 0 6px; display:flex; gap:6px; align-items:center}
 
   .gap{display:flex; align-items:center; gap:10px; margin:2px 0 2px 22px; padding:8px 12px;
-    color:var(--muted); font-size:12.5px; position:relative; flex-wrap:wrap}
+    color:var(--muted); font-size:12.5px; position:relative; flex-wrap:wrap; flex:0 0 auto}
   .gap::before{content:""; position:absolute; left:-6px; top:-6px; bottom:-6px; width:2px;
     background:repeating-linear-gradient(to bottom, var(--line) 0 6px, transparent 6px 12px)}
   .gap.long::before{background:repeating-linear-gradient(to bottom, var(--warn) 0 6px, transparent 6px 12px)}
