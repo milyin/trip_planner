@@ -11,6 +11,13 @@ the look, layout, and interactions can be evaluated quickly in a browser.
 - **Day / night theme** toggle (also swaps the map tiles).
 - **Add / edit / delete** routes through a modal dialog.
 - **Move routes** between Routes and Plan (buttons, drag-and-drop, double-click to edit).
+- **Boarding-pass cards**: a three-column card — departure city/address/time on the
+  left, the transport icon + name (and company, trip duration) in the centre, arrival
+  city/address/time on the right, and the fare on the far right. Cards are quiet by
+  default; **hovering or selecting** a card reveals compact action buttons pinned to
+  the top-right corner without changing the card's size, and truncated fields show
+  their full text on hover. **Clicking outside** any card (empty panel or map
+  background) clears the selection.
 - **Map drawing rules**: transport-colored lines; plan legs solid with a halo,
   available legs dashed, overlapping legs hidden (drawn thin/dashed/red only when
   selected); the legend auto-relocates to the emptiest map corner.

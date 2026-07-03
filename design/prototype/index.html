@@ -88,22 +88,24 @@
   .card.sel{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
   .card .stripe{position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--faint)}
   .card.disabled{opacity:.5}
-  .route-title{display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    font-weight:700; font-size:14px; margin-left:6px}
-  .route-title .arrow{color:var(--faint); margin:0 5px}
-  .card.sel .route-title{padding-right:66px}
-  .chips{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 0 6px}
-  .chip{font-size:11px; color:var(--muted); background:var(--panel-2); border:1px solid var(--border);
-    padding:2px 8px; border-radius:999px; display:inline-flex; align-items:center; gap:5px}
-  .chip .ti{font-size:12px; font-weight:700}
-  .chip.cost{color:var(--ok)}
-  .times{display:flex; gap:14px; margin:8px 0 0 6px; color:var(--muted); font-size:12px}
-  .times span{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .times b{color:var(--text); font-weight:600}
-  .card-actions{display:none; position:absolute; top:8px; right:8px; z-index:3;
-    align-items:center; gap:6px; padding:3px; border-radius:10px;
-    background:color-mix(in srgb,var(--card) 78%, transparent); box-shadow:0 2px 10px rgba(0,0,0,.18)}
-  .card.sel .card-actions{display:flex; animation:reveal .16s ease}
+  /* boarding-pass card grid: departure | transport | arrival | cost */
+  .rt-grid{display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) minmax(50px,auto);
+    grid-template-rows:auto auto auto; column-gap:8px; row-gap:3px; margin-left:6px; align-items:center}
+  .rt-grid > .c1{grid-column:1; justify-self:stretch; text-align:left; min-width:0}
+  .rt-grid > .c2{grid-column:2; justify-self:center; text-align:center; white-space:nowrap}
+  .rt-grid > .c3{grid-column:3; justify-self:stretch; text-align:right; min-width:0}
+  .rt-grid > .r1{grid-row:1} .rt-grid > .r2{grid-row:2} .rt-grid > .r3{grid-row:3}
+  .rt-city{font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .rt-tr .ti{font-size:14px}
+  .rt-tr{font-weight:700; font-size:13px; white-space:nowrap}
+  .rt-sub{color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .rt-cost{grid-column:4; grid-row:2; align-self:center; justify-self:end;
+    color:var(--ok); font-weight:700; font-size:15px; white-space:nowrap; padding-left:4px}
+  .card-actions{display:none; position:absolute; top:6px; right:6px; z-index:3;
+    align-items:center; gap:4px; padding:2px; border-radius:9px;
+    background:color-mix(in srgb,var(--card) 82%, transparent); box-shadow:0 2px 10px rgba(0,0,0,.18)}
+  .card-actions .btn.icon{width:22px; height:22px; padding:0; font-size:12px; border-radius:7px}
+  .card.sel .card-actions, .card:hover .card-actions{display:flex; animation:reveal .16s ease}
   @keyframes reveal{from{opacity:0; transform:translateY(-3px)}to{opacity:1; transform:none}}
   .scroll.drop{outline:2px dashed var(--accent); outline-offset:-6px; border-radius:12px;
     background:color-mix(in srgb,var(--accent) 9%, transparent)}
@@ -327,15 +329,18 @@ function routeCard(r,mode){
   el.className="card "+(mode==="plan"?"plan ":"")+(disabled?"disabled ":"")+(selected===r.id?"sel":"");
   el.innerHTML=`
     <div class="stripe" style="background:${col}"></div>
-    <div class="route-title" title="${esc(r.dep.city+' → '+r.arr.city)}">${r.dep.city} <span class="arrow">→</span> ${r.arr.city}</div>
-    <div class="chips">
-      <span class="chip"><span class="ti" style="color:${col}">${TICON[r.transport]||"•"}</span> ${r.transport}</span>
-      <span class="chip">⏱ ${tripDur(r)}</span>
-      ${r.company?`<span class="chip">🏷 ${r.company}</span>`:""}
-      <span class="chip cost">${money(r)}</span>
+    <div class="rt-grid">
+      <div class="rt-city c1 r1" title="${esc(r.dep.city)}">${r.dep.city}</div>
+      <div class="rt-tr c2 r1"><span class="ti" style="color:${col}">${TICON[r.transport]||"•"}</span> ${r.transport}</div>
+      <div class="rt-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
+      <div class="rt-cost" title="cost">${money(r)}</div>
+      <div class="rt-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr||"—"}</div>
+      <div class="rt-sub c2 r2" title="${esc(r.company||'')}">${r.company||"—"}</div>
+      <div class="rt-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr||"—"}</div>
+      <div class="rt-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
+      <div class="rt-sub c2 r3">${tripDur(r)}</div>
+      <div class="rt-sub c3 r3" title="${esc(fmtTime(r.arr.time))}">${fmtTime(r.arr.time)}</div>
     </div>
-    <div class="times"><span title="${esc('Depart '+fmtTime(r.dep.time)+' · '+r.dep.city+', '+r.dep.addr)}"><b>${fmtTime(r.dep.time)}</b> · ${r.dep.addr}</span>
-      <span title="${esc('Arrive '+fmtTime(r.arr.time)+' · '+r.arr.city+', '+r.arr.addr)}"><b>${fmtTime(r.arr.time)}</b> · ${r.arr.addr}</span></div>
     ${disabled?`<div class="warn">⚠ Overlaps plan: ${conflict.dep.city} → ${conflict.arr.city}</div>`:""}
     <div class="card-actions"></div>`;
   const a=el.querySelector(".card-actions");
@@ -406,6 +411,7 @@ function initMap(){
     {subdomains:"abcd",maxZoom:19,attribution:"© OpenStreetMap · © CARTO"});
   routeLayer=L.layerGroup().addTo(map); applyTiles();
   map.on("moveend zoomend",()=>placeLegend());
+  map.on("click",()=>{ if(selected!==null){ selected=null; render(); } });   // click empty map unselects
   window.addEventListener("resize",()=>{ if(map){ map.invalidateSize(); placeLegend(); } });
 }
 function applyTiles(){ const light=document.body.dataset.theme==="light";
@@ -504,6 +510,12 @@ document.getElementById("fTransport").onchange=bufHint;
 document.getElementById("overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
 document.getElementById("fitBtn").onclick=()=>{ const b=[]; routes.forEach(r=>{if(r.dep.ll)b.push(r.dep.ll);if(r.arr.ll)b.push(r.arr.ll);}); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+
+/* click outside any card (and outside the map / modal / buttons) unselects */
+document.addEventListener("click",e=>{
+  if(e.target.closest(".card") || e.target.closest("#map") || e.target.closest(".overlay") || e.target.closest("button")) return;
+  if(selected!==null){ selected=null; render(); }
+});
 
 function clearDrop(){ ["routesList","planList"].forEach(id=>document.getElementById(id).classList.remove("drop","drop-bad")); }
 function setupDrop(id,target){ const c=document.getElementById(id);
