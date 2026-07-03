@@ -19,7 +19,7 @@
     --radius:14px;
     /* transport palette (line + icon share these) */
     --t-plane:#38bdf8; --t-train:#22c55e; --t-bus:#fb923c;
-    --t-taxi:#f472b6; --t-car:#a78bfa; --t-other:#94a3b8;
+    --t-taxi:#f472b6; --t-car:#a78bfa; --t-other:#94a3b8; --t-hotel:#eab308;
   }
   body[data-theme="light"]{
     --bg1:#dfe8f6; --bg2:#f4f7fc;
@@ -31,7 +31,7 @@
     --halo:#ffffff;
     --shadow:0 10px 26px rgba(30,50,90,.14);
     --t-plane:#0ea5e9; --t-train:#16a34a; --t-bus:#ea580c;
-    --t-taxi:#db2777; --t-car:#7c3aed; --t-other:#64748b;
+    --t-taxi:#db2777; --t-car:#7c3aed; --t-other:#64748b; --t-hotel:#ca8a04;
   }
   *{box-sizing:border-box}
   html,body{height:100%}
@@ -112,6 +112,19 @@
     background:color-mix(in srgb,var(--danger) 9%, transparent)}
   .warn{color:var(--danger); font-size:11.5px; margin:8px 0 0 6px; display:flex; gap:6px; align-items:center}
 
+  /* hotel (stay) card: name | price on top, location · link, dates | nights */
+  .hotel-grid{display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:10px; row-gap:3px; margin-left:6px; align-items:center}
+  .hotel-grid > .hc1{grid-column:1; min-width:0; text-align:left; justify-self:start}
+  .hotel-grid > .hc2{grid-column:2; justify-self:end; text-align:right; white-space:nowrap}
+  .hotel-grid > .hr1{grid-row:1} .hotel-grid > .hr2{grid-row:2} .hotel-grid > .hr3{grid-row:3}
+  .hotel-name{font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px; min-width:0}
+  .hotel-name .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .hotel-loc{color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .hotel-dates{color:var(--muted); font-size:12px; white-space:nowrap}
+  .hotel-nights{color:var(--muted); font-size:12px; white-space:nowrap}
+  .hotel-link{color:var(--accent); text-decoration:none; font-size:12px; white-space:nowrap}
+  .hotel-link:hover{text-decoration:underline}
+
   .gap{display:flex; align-items:center; gap:10px; margin:2px 0 2px 22px; padding:8px 12px;
     color:var(--muted); font-size:12.5px; position:relative; flex-wrap:wrap; flex:0 0 auto}
   .gap::before{content:""; position:absolute; left:-6px; top:-6px; bottom:-6px; width:2px;
@@ -151,6 +164,10 @@
   .leaflet-container{font-family:inherit}
   .segment-tip{background:var(--panel)!important; color:var(--text)!important; border:1px solid var(--line)!important; border-radius:8px!important}
   .place-tip{background:var(--panel)!important;color:var(--text)!important;border:1px solid var(--line)!important;border-radius:6px!important;font-weight:600}
+  .hotel-pin{display:grid; place-items:center; width:26px; height:26px; border-radius:8px; font-size:14px;
+    background:var(--panel); border:2px solid var(--t-hotel); box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .hotel-pin.plan{background:var(--t-hotel)}
+  .hotel-pin.sel{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%, transparent)}
 
   .overlay{position:fixed; inset:0; background:rgba(6,10,18,.6); backdrop-filter:blur(4px);
     display:none; align-items:center; justify-content:center; z-index:1000}
@@ -185,8 +202,9 @@
       <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
     <div class="spacer"></div>
     <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
-    <button class="btn ghost sm" id="fitBtn" title="Zoom map to all segments">🗺 Fit map</button>
-    <button class="btn primary" id="newBtn">＋ New segment</button>
+    <button class="btn ghost sm" id="fitBtn" title="Zoom map to all segments &amp; hotels">🗺 Fit map</button>
+    <button class="btn" id="newHotelBtn" title="Add a hotel stay">🏨 Hotel</button>
+    <button class="btn primary" id="newBtn">＋ Segment</button>
   </div>
 
   <div class="layout">
@@ -224,7 +242,7 @@
 <div class="overlay" id="overlay">
   <div class="modal">
     <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
-    <div class="modal-body">
+    <div class="modal-body" id="segBody">
       <div class="leg">Departure</div>
       <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
       <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
@@ -242,6 +260,18 @@
       <div class="field"><label>Cost</label><input id="fCost" type="number" min="0" step="0.01" placeholder="100.00"></div>
       <div class="field"><label>Currency</label>
         <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+    </div>
+    <div class="modal-body" id="hotelBody" style="display:none">
+      <div class="leg">Stay</div>
+      <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
+      <div class="field"><label>City</label><input id="hCity" placeholder="Paris"></div>
+      <div class="field"><label>Address</label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
+      <div class="field"><label>Check-in</label><input id="hIn" type="datetime-local"></div>
+      <div class="field"><label>Check-out</label><input id="hOut" type="datetime-local"></div>
+      <div class="field"><label>Price</label><input id="hCost" type="number" min="0" step="0.01" placeholder="240.00"></div>
+      <div class="field"><label>Currency</label>
+        <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+      <div class="field full"><label>Link (optional)</label><input id="hLink" type="url" placeholder="https://…"></div>
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
@@ -276,25 +306,38 @@ const CUR={EUR:"€",USD:"$",GBP:"£",CHF:"CHF "};
 
 /* ---------- seed data ---------- */
 let idSeq=1; const nid=()=>"r"+(idSeq++);
-let segments=[
+let items=[
   mk("Marseille","Airport","2026-05-01T12:00","Paris","CDG","2026-05-01T13:30","Plane","AirFrance",100,"EUR",true),
   mk("Paris","Orly","2026-05-01T16:00","Madrid","Airport","2026-05-01T18:00","Plane","Iberia",150,"EUR",true),
   mk("Paris","CDG","2026-05-01T13:00","Lyon","Part-Dieu","2026-05-01T14:30","Train","SNCF",60,"EUR",false),
   mk("Madrid","Airport","2026-05-02T09:00","Barcelona","El Prat","2026-05-02T10:15","Plane","Vueling",80,"EUR",false),
   mk("Marseille","St-Charles","2026-05-01T08:00","Nice","Ville","2026-05-01T09:00","Train","SNCF",30,"EUR",false),
   mk("Nice","Port","2026-05-01T10:00","Marseille","Old Port","2026-05-01T13:20","Bus","FlixBus",20,"EUR",false),
+  mkHotel("Madrid","Hostal Central","Gran Vía 8","2026-05-01T20:00","2026-05-02T08:00",90,"EUR",null,true),
+  mkHotel("Paris","Hôtel Le Marais","12 Rue de Rivoli","2026-05-02T15:00","2026-05-04T11:00",240,"EUR","https://example.com/le-marais",false),
 ];
 function mk(dc,da,dt,ac,aa,at,tr,co,cost,cur,inPlan){
-  return {id:nid(), dep:{city:dc,addr:da,time:dt,ll:geocode(dc,da)},
+  return {id:nid(), kind:"segment", dep:{city:dc,addr:da,time:dt,ll:geocode(dc,da)},
           arr:{city:ac,addr:aa,time:at,ll:geocode(ac,aa)},
           transport:tr, company:co, cost:cost, currency:cur, inPlan:!!inPlan}; }
+function mkHotel(city,name,addr,ci,co,cost,cur,link,inPlan){
+  return {id:nid(), kind:"hotel", city, name, addr, checkIn:ci, checkOut:co,
+          cost, currency:cur, link:link||null, ll:geocode(city,addr), inPlan:!!inPlan}; }
 
 /* ---------- helpers ---------- */
 const T=s=>new Date(s).getTime();
+const startT=x=>x.kind==="hotel"?T(x.checkIn):T(x.dep.time);
+const endT  =x=>x.kind==="hotel"?T(x.checkOut):T(x.arr.time);
+const startLL=x=>x.kind==="hotel"?x.ll:x.dep.ll;
+const endLL  =x=>x.kind==="hotel"?x.ll:x.arr.ll;
+const startCity=x=>x.kind==="hotel"?x.city:x.dep.city;
+const endCity  =x=>x.kind==="hotel"?x.city:x.arr.city;
+const nights=h=>Math.max(1,Math.round((T(h.checkOut)-T(h.checkIn))/86400000));
 const overlaps=(a,b)=>T(a.dep.time)<T(b.arr.time)&&T(b.dep.time)<T(a.arr.time);
-const planSegments=()=>segments.filter(r=>r.inPlan).sort((a,b)=>T(a.dep.time)-T(b.dep.time));
-const listSegments=()=>segments.filter(r=>!r.inPlan).sort((a,b)=>T(a.dep.time)-T(b.dep.time));
-function conflictOf(r){ if(r.inPlan)return null; return planSegments().find(p=>overlaps(r,p))||null; }
+const planItems=()=>items.filter(r=>r.inPlan).sort((a,b)=>startT(a)-startT(b));
+const listItems=()=>items.filter(r=>!r.inPlan).sort((a,b)=>startT(a)-startT(b));
+function conflictOf(r){ if(r.kind!=="segment"||r.inPlan)return null;
+  return planItems().find(p=>p.kind==="segment"&&overlaps(r,p))||null; }
 function haversine(a,b){ if(!a||!b)return null; const R=6371,rad=x=>x*Math.PI/180;
   const dLat=rad(b[0]-a[0]),dLon=rad(b[1]-a[1]);
   const s=Math.sin(dLat/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;
@@ -310,10 +353,11 @@ function tripDur(r){ return fmtDur(T(r.arr.time)-T(r.dep.time)); }
 const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
 /* classify gap between prev and next plan legs */
 function classifyGap(prev,next){
-  const availMin=(T(next.dep.time)-T(prev.arr.time))/60000;
-  const need=BUFFER[next.transport]??30;
+  const availMin=(startT(next)-endT(prev))/60000;
+  const need=next.kind==="segment"?(BUFFER[next.transport]??30):0;
   if(availMin<need) return {kind:"bad", availMin, need};
-  if(availMin>LONG_GAP) return {kind:"long", availMin, need};
+  const hotelSide=prev.kind==="hotel"||next.kind==="hotel";
+  if(!hotelSide && availMin>LONG_GAP) return {kind:"long", availMin, need};
   return {kind:"ok", availMin, need};
 }
 
@@ -321,6 +365,27 @@ let selected=null, draggedId=null;
 
 /* ---------- cards ---------- */
 function btn(t,c){ const b=document.createElement("button"); b.className=c; b.textContent=t; return b; }
+function itemCard(r,mode){ return r.kind==="hotel"?hotelCard(r,mode):segmentCard(r,mode); }
+function openEditor(r){ r.kind==="hotel"?openHotelModal(r.id):openModal(r.id); }
+function cardActions(el,r,mode){
+  const a=el.querySelector(".card-actions");
+  if(mode==="list"){ const conflict=r.kind==="segment"?conflictOf(r):null, disabled=!!conflict;
+    const add=btn(disabled?"⊘":"＋","btn icon "+(disabled?"":"primary"));
+    add.title=disabled?"Overlaps plan — can't add":"Add to plan"; add.disabled=disabled;
+    add.onclick=e=>{e.stopPropagation(); r.inPlan=true; selected=r.id; render();}; a.appendChild(add);
+  }else{ const rm=btn("↩","btn icon"); rm.title="Remove from plan";
+    rm.onclick=e=>{e.stopPropagation(); r.inPlan=false; selected=r.id; render();}; a.appendChild(rm); }
+  const ed=btn("✎","btn icon ghost"); ed.title="Edit"; ed.onclick=e=>{e.stopPropagation(); openEditor(r);}; a.appendChild(ed);
+}
+function makeDraggable(el,r){
+  el.onclick=()=>{ selected=r.id; render(); };
+  el.ondblclick=e=>{ e.stopPropagation(); openEditor(r); };
+  el.draggable=true;
+  el.addEventListener("dragstart",e=>{ draggedId=r.id; e.dataTransfer.effectAllowed="move";
+    try{e.dataTransfer.setData("text/plain",r.id);}catch(_){}
+    requestAnimationFrame(()=>el.classList.add("dragging")); });
+  el.addEventListener("dragend",()=>{ el.classList.remove("dragging"); clearDrop(); draggedId=null; });
+}
 function segmentCard(r,mode){
   const conflict = mode==="list"?conflictOf(r):null, disabled=!!conflict;
   const col=tcolor(r.transport);
@@ -341,46 +406,56 @@ function segmentCard(r,mode){
     </div>
     ${disabled?`<div class="warn">⚠ Overlaps plan: ${conflict.dep.city} → ${conflict.arr.city}</div>`:""}
     <div class="card-actions"></div>`;
-  const a=el.querySelector(".card-actions");
-  if(mode==="list"){ const add=btn(disabled?"⊘":"＋","btn icon "+(disabled?"":"primary")); add.title=disabled?"Overlaps plan — can't add":"Add to plan";
-    add.disabled=disabled; add.onclick=e=>{e.stopPropagation(); r.inPlan=true; selected=r.id; render();}; a.appendChild(add);
-  }else{ const rm=btn("↩","btn icon"); rm.title="Remove from plan"; rm.onclick=e=>{e.stopPropagation(); r.inPlan=false; selected=r.id; render();}; a.appendChild(rm); }
-  const ed=btn("✎","btn icon ghost"); ed.title="Edit segment"; ed.onclick=e=>{e.stopPropagation(); openModal(r.id);}; a.appendChild(ed);
   el.title=`${r.dep.city} → ${r.arr.city}  ·  ${r.transport}${r.company?' · '+r.company:''}  ·  ${money(r)}  ·  ⏱ ${tripDur(r)}\nDepart: ${fmtTime(r.dep.time)} — ${r.dep.city}, ${r.dep.addr}\nArrive: ${fmtTime(r.arr.time)} — ${r.arr.city}, ${r.arr.addr}\n(Click to select · double-click to edit · drag to move)`;
-  el.onclick=()=>{ selected=r.id; render(); };
-  el.ondblclick=e=>{ e.stopPropagation(); openModal(r.id); };
-  el.draggable=true;
-  el.addEventListener("dragstart",e=>{ draggedId=r.id; e.dataTransfer.effectAllowed="move";
-    try{e.dataTransfer.setData("text/plain",r.id);}catch(_){}
-    requestAnimationFrame(()=>el.classList.add("dragging")); });
-  el.addEventListener("dragend",()=>{ el.classList.remove("dragging"); clearDrop(); draggedId=null; });
+  cardActions(el,r,mode); makeDraggable(el,r);
+  return el;
+}
+function hotelCard(r,mode){
+  const col=cssv("--t-hotel"), n=nights(r);
+  const el=document.createElement("div");
+  el.className="card hotel "+(mode==="plan"?"plan ":"")+(selected===r.id?"sel":"");
+  el.innerHTML=`
+    <div class="stripe" style="background:${col}"></div>
+    <div class="hotel-grid">
+      <div class="hotel-name hc1 hr1"><span class="ti" style="color:${col}">🏨</span><span class="nm" title="${esc(r.name)}">${r.name||"Hotel"}</span></div>
+      <div class="seg-cost hc2 hr1" title="Price">${money(r)}</div>
+      <div class="hotel-loc hc1 hr2" title="${esc(r.city+(r.addr?' · '+r.addr:''))}">${r.city}${r.addr?' · '+r.addr:''}</div>
+      <div class="hc2 hr2">${r.link?`<a class="hotel-link" href="${esc(r.link)}" target="_blank" rel="noopener" title="Open booking link" onclick="event.stopPropagation()">🔗 Link</a>`:""}</div>
+      <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn)+' → '+fmtTime(r.checkOut))}">${fmtTime(r.checkIn)} → ${fmtTime(r.checkOut)}</div>
+      <div class="hotel-nights hc2 hr3">${n} night${n>1?"s":""}</div>
+    </div>
+    <div class="card-actions"></div>`;
+  el.title=`🏨 ${r.name} — ${r.city}${r.addr?', '+r.addr:''}  ·  ${money(r)}  ·  ${n} night${n>1?"s":""}\nCheck-in:  ${fmtTime(r.checkIn)}\nCheck-out: ${fmtTime(r.checkOut)}${r.link?'\nLink: '+r.link:''}\n(Click to select · double-click to edit · drag to move)`;
+  cardActions(el,r,mode); makeDraggable(el,r);
   return el;
 }
 
 function render(){
   const rl=document.getElementById("segmentsList"); rl.innerHTML="";
-  const list=listSegments(); document.getElementById("segmentsCount").textContent=list.length;
-  if(!list.length) rl.innerHTML=`<div class="empty"><span class="big">🧭</span>No segments here.<br>Add one with ＋ New segment.</div>`;
-  list.forEach(r=>rl.appendChild(segmentCard(r,"list")));
+  const list=listItems(); document.getElementById("segmentsCount").textContent=list.length;
+  if(!list.length) rl.innerHTML=`<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a segment or hotel above.</div>`;
+  list.forEach(r=>rl.appendChild(itemCard(r,"list")));
 
   const pl=document.getElementById("planList"); pl.innerHTML="";
-  const plan=planSegments(); document.getElementById("planCount").textContent=plan.length;
-  if(!plan.length) pl.innerHTML=`<div class="empty"><span class="big">🧩</span>Empty plan.<br>Press <b>Add →</b> on a segment.</div>`;
+  const plan=planItems(); document.getElementById("planCount").textContent=plan.length;
+  if(!plan.length) pl.innerHTML=`<div class="empty"><span class="big">🧩</span>Empty plan.<br>Press <b>Add →</b> on a segment or hotel.</div>`;
   let badCount=0;
   plan.forEach((r,i)=>{
     if(i>0){ const prev=plan[i-1], c=classifyGap(prev,r);
       if(c.kind==="bad") badCount++;
-      const dist=haversine(prev.arr.ll,r.dep.ll);
+      const dist=haversine(endLL(prev),startLL(r));
       const g=document.createElement("div"); g.className="gap "+c.kind;
       let status="";
-      if(c.kind==="bad") status=`<span class="status">⛔ ${c.availMin<0?"Arrives after next departure":"Too tight"} · needs ≥ ${fmtDur(c.need*60000)} before ${r.transport}</span>`;
-      else if(c.kind==="long") status=`<span class="status">⚠ Long layover</span>`;
-      g.innerHTML=`<span class="pill">⏱ <b>${fmtDur(T(r.dep.time)-T(prev.arr.time))}</b></span>
+      if(c.kind==="bad"){ const lead=c.availMin<0?"Overlaps previous item":"Too tight";
+        const suf=r.kind==="segment"?` · needs ≥ ${fmtDur(c.need*60000)} before ${r.transport}`:"";
+        status=`<span class="status">⛔ ${lead}${suf}</span>`;
+      } else if(c.kind==="long") status=`<span class="status">⚠ Long layover</span>`;
+      g.innerHTML=`<span class="pill">⏱ <b>${fmtDur(startT(r)-endT(prev))}</b></span>
         <span class="pill">📏 <b>${dist!=null?Math.round(dist)+" km":"—"}</b></span>
-        <span style="color:var(--faint)">${prev.arr.city} → ${r.dep.city}</span> ${status}`;
+        <span style="color:var(--faint)">${endCity(prev)} → ${startCity(r)}</span> ${status}`;
       pl.appendChild(g);
     }
-    pl.appendChild(segmentCard(r,"plan"));
+    pl.appendChild(itemCard(r,"plan"));
   });
   renderPlanFoot(plan,badCount);
   drawMap();
@@ -388,12 +463,15 @@ function render(){
 
 function renderPlanFoot(plan,badCount){
   const foot=document.getElementById("planFoot");
-  if(!plan.length){ foot.innerHTML=`<span style="color:var(--faint)">Add segments to see totals.</span>`; return; }
+  if(!plan.length){ foot.innerHTML=`<span style="color:var(--faint)">Add segments or hotels to see totals.</span>`; return; }
   const totals={}; plan.forEach(r=>{ totals[r.currency]=(totals[r.currency]||0)+Number(r.cost); });
   const totalStr=Object.entries(totals).map(([c,v])=>(CUR[c]||c+" ")+v.toFixed(0)).join(" + ");
-  const span=fmtDur(T(plan[plan.length-1].arr.time)-T(plan[0].dep.time));
+  const span=fmtDur(endT(plan[plan.length-1])-startT(plan[0]));
+  const legs=plan.filter(p=>p.kind==="segment").length;
+  const nightsTotal=plan.filter(p=>p.kind==="hotel").reduce((s,h)=>s+nights(h),0);
   foot.innerHTML=`
-    <div class="stat"><small>Legs</small><b>${plan.length}</b></div>
+    <div class="stat"><small>Legs</small><b>${legs}</b></div>
+    ${nightsTotal?`<div class="stat"><small>Nights</small><b>${nightsTotal}</b></div>`:""}
     <div class="stat"><small>Total time</small><b>${span}</b></div>
     <div class="stat total"><small>Total cost</small><b>${totalStr}</b></div>
     <div class="flag ${badCount?'':'ok'}">${badCount?('⛔ '+badCount+' impossible connection'+(badCount>1?'s':'')):'✓ all connections OK'}</div>`;
@@ -416,7 +494,16 @@ function applyTiles(){ const light=document.body.dataset.theme==="light";
   map.removeLayer(light?darkTiles:lightTiles); (light?lightTiles:darkTiles).addTo(map); }
 function drawMap(){
   segmentLayer.clearLayers(); const bounds=[]; const halo=cssv("--halo"), accent=cssv("--accent"), danger=cssv("--danger");
-  segments.forEach(r=>{
+  items.forEach(r=>{
+    if(r.kind==="hotel"){
+      if(!r.ll)return; const isSel=selected===r.id;
+      const cls="hotel-pin"+(r.inPlan?" plan":"")+(isSel?" sel":"");
+      const m=L.marker(r.ll,{icon:L.divIcon({html:"🏨",className:cls,iconSize:[26,26],iconAnchor:[13,13]}),
+        opacity:r.inPlan?1:.65, zIndexOffset:r.inPlan?600:300}).addTo(segmentLayer);
+      m.bindTooltip(`🏨 ${r.name}<br><small>${r.city} · ${money(r)} · ${nights(r)} night${nights(r)>1?"s":""}</small>`,{className:"segment-tip",direction:"top"});
+      m.on("click",()=>{selected=r.id; render();});
+      bounds.push(r.ll); return;
+    }
     if(!r.dep.ll||!r.arr.ll)return;
     const col=tcolor(r.transport), conflict=conflictOf(r), isSel=selected===r.id;
     if(conflict && !isSel) return;                                 // overlapped: not drawn unless selected
@@ -448,7 +535,9 @@ function placeLegend(){
   if(!W||!H||!lw) return;
   const corners={ bl:{left:m,top:H-lh-m}, br:{left:W-lw-m,top:H-lh-m}, tl:{left:m,top:m}, tr:{left:W-lw-m,top:m} };
   const pts=[];
-  segments.forEach(r=>{ if(!r.dep.ll||!r.arr.ll)return; const conflict=conflictOf(r), isSel=selected===r.id;
+  items.forEach(r=>{
+    if(r.kind==="hotel"){ if(!r.ll)return; try{const p=map.latLngToContainerPoint(r.ll); pts.push([p.x,p.y]);}catch(_){} return; }
+    if(!r.dep.ll||!r.arr.ll)return; const conflict=conflictOf(r), isSel=selected===r.id;
     if(conflict&&!isSel)return;                                    // only sample drawn segments
     let a,b; try{ a=map.latLngToContainerPoint(r.dep.ll); b=map.latLngToContainerPoint(r.arr.ll); }catch(_){return;}
     for(let t=0;t<=1.0001;t+=0.06) pts.push([a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t]); });
@@ -467,29 +556,49 @@ function buildLegend(){ const el=document.getElementById("legTransport");
     `<div class="lrow"><span class="lg-line" style="border-top-color:${tcolor(t)}"></span> ${t}</div>`).join(""); }
 
 /* ---------- modal ---------- */
-let editingId=null;
+let editingId=null, editKind="segment";
 const set=(id,v)=>document.getElementById(id).value=v; const get=id=>document.getElementById(id).value;
 function bufHint(){ const t=get("fTransport");
   document.getElementById("bufHint").textContent=`Needs ≥ ${fmtDur((BUFFER[t]??30)*60000)} to connect before this leg`; }
-function openModal(id){ editingId=id||null;
+function showBody(kind){ editKind=kind;
+  document.getElementById("segBody").style.display=kind==="segment"?"grid":"none";
+  document.getElementById("hotelBody").style.display=kind==="hotel"?"grid":"none";
+  document.getElementById("saveBtn").textContent=kind==="hotel"?"Save hotel":"Save segment"; }
+function openModal(id){ editingId=id||null; showBody("segment");
   document.getElementById("modalTitle").textContent=id?"Edit segment":"New segment";
   document.getElementById("delBtn").style.display=id?"inline-flex":"none";
-  const r=id?segments.find(x=>x.id===id):null;
+  const r=id?items.find(x=>x.id===id):null;
   set("fDepCity",r?r.dep.city:""); set("fDepAddr",r?r.dep.addr:""); set("fDepTime",r?r.dep.time:"2026-05-01T12:00");
   set("fArrCity",r?r.arr.city:""); set("fArrAddr",r?r.arr.addr:""); set("fArrTime",r?r.arr.time:"2026-05-01T14:00");
   set("fTransport",r?r.transport:"Plane"); set("fCompany",r?r.company:"");
   set("fCost",r?r.cost:""); set("fCur",r?r.currency:"EUR"); bufHint();
   document.getElementById("overlay").classList.add("open"); }
+function openHotelModal(id){ editingId=id||null; showBody("hotel");
+  document.getElementById("modalTitle").textContent=id?"Edit hotel":"New hotel";
+  document.getElementById("delBtn").style.display=id?"inline-flex":"none";
+  const h=id?items.find(x=>x.id===id):null;
+  set("hName",h?h.name:""); set("hCity",h?h.city:""); set("hAddr",h?h.addr:"");
+  set("hIn",h?h.checkIn:"2026-05-01T15:00"); set("hOut",h?h.checkOut:"2026-05-03T11:00");
+  set("hCost",h?h.cost:""); set("hCur",h?h.currency:"EUR"); set("hLink",h?(h.link||""):"");
+  document.getElementById("overlay").classList.add("open"); }
 function closeModal(){ document.getElementById("overlay").classList.remove("open"); }
-function saveModal(){ const dc=get("fDepCity"),ac=get("fArrCity");
+function saveModal(){ if(editKind==="hotel") return saveHotel();
+  const dc=get("fDepCity"),ac=get("fArrCity");
   if(!dc||!ac){ alert("Departure and arrival city are required."); return; }
-  const data={dep:{city:dc,addr:get("fDepAddr"),time:get("fDepTime"),ll:geocode(dc,get("fDepAddr"))},
+  const data={kind:"segment",dep:{city:dc,addr:get("fDepAddr"),time:get("fDepTime"),ll:geocode(dc,get("fDepAddr"))},
     arr:{city:ac,addr:get("fArrAddr"),time:get("fArrTime"),ll:geocode(ac,get("fArrAddr"))},
     transport:get("fTransport"),company:get("fCompany"),cost:Number(get("fCost")||0),currency:get("fCur")};
-  if(editingId){ Object.assign(segments.find(x=>x.id===editingId),data); selected=editingId; }
-  else { const r={id:nid(),inPlan:false,...data}; segments.push(r); selected=r.id; }
+  if(editingId){ Object.assign(items.find(x=>x.id===editingId),data); selected=editingId; }
+  else { const r={id:nid(),inPlan:false,...data}; items.push(r); selected=r.id; }
   closeModal(); render(); }
-function deleteSegment(){ if(editingId){ segments=segments.filter(x=>x.id!==editingId); selected=null; } closeModal(); render(); }
+function saveHotel(){ const name=get("hName"), city=get("hCity");
+  if(!name||!city){ alert("Hotel name and city are required."); return; }
+  const data={kind:"hotel",name,city,addr:get("hAddr"),checkIn:get("hIn"),checkOut:get("hOut"),
+    cost:Number(get("hCost")||0),currency:get("hCur"),link:get("hLink").trim()||null,ll:geocode(city,get("hAddr"))};
+  if(editingId){ Object.assign(items.find(x=>x.id===editingId),data); selected=editingId; }
+  else { const h={id:nid(),inPlan:false,...data}; items.push(h); selected=h.id; }
+  closeModal(); render(); }
+function deleteItem(){ if(editingId){ items=items.filter(x=>x.id!==editingId); selected=null; } closeModal(); render(); }
 
 /* ---------- theme ---------- */
 function toggleTheme(){ const light=document.body.dataset.theme!=="light";
@@ -499,14 +608,15 @@ function toggleTheme(){ const light=document.body.dataset.theme!=="light";
 
 /* ---------- wire up ---------- */
 document.getElementById("newBtn").onclick=()=>openModal(null);
+document.getElementById("newHotelBtn").onclick=()=>openHotelModal(null);
 document.getElementById("closeModal").onclick=closeModal;
 document.getElementById("cancelBtn").onclick=closeModal;
 document.getElementById("saveBtn").onclick=saveModal;
-document.getElementById("delBtn").onclick=deleteSegment;
+document.getElementById("delBtn").onclick=deleteItem;
 document.getElementById("themeBtn").onclick=toggleTheme;
 document.getElementById("fTransport").onchange=bufHint;
 document.getElementById("overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
-document.getElementById("fitBtn").onclick=()=>{ const b=[]; segments.forEach(r=>{if(r.dep.ll)b.push(r.dep.ll);if(r.arr.ll)b.push(r.arr.ll);}); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); };
+document.getElementById("fitBtn").onclick=()=>{ const b=[]; items.forEach(r=>{ if(r.kind==="hotel"){ if(r.ll)b.push(r.ll); return; } if(r.dep.ll)b.push(r.dep.ll); if(r.arr.ll)b.push(r.arr.ll); }); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
 
 /* click outside any card (and outside the map / modal / buttons) unselects */
@@ -517,11 +627,11 @@ document.addEventListener("click",e=>{
 
 function clearDrop(){ ["segmentsList","planList"].forEach(id=>document.getElementById(id).classList.remove("drop","drop-bad")); }
 function setupDrop(id,target){ const c=document.getElementById(id);
-  c.addEventListener("dragover",e=>{ if(!draggedId)return; const r=segments.find(x=>x.id===draggedId); if(!r)return;
+  c.addEventListener("dragover",e=>{ if(!draggedId)return; const r=items.find(x=>x.id===draggedId); if(!r)return;
     e.preventDefault(); const bad = target==="plan" && !r.inPlan && !!conflictOf(r);
     c.classList.toggle("drop",!bad); c.classList.toggle("drop-bad",bad); e.dataTransfer.dropEffect=bad?"none":"move"; });
   c.addEventListener("dragleave",e=>{ if(e.target===c) clearDrop(); });
-  c.addEventListener("drop",e=>{ e.preventDefault(); const r=segments.find(x=>x.id===draggedId); clearDrop(); if(!r)return;
+  c.addEventListener("drop",e=>{ e.preventDefault(); const r=items.find(x=>x.id===draggedId); clearDrop(); if(!r)return;
     if(target==="plan"){ if(!r.inPlan && !conflictOf(r)){ r.inPlan=true; selected=r.id; } }
     else { if(r.inPlan){ r.inPlan=false; selected=r.id; } }
     draggedId=null; render(); }); }
