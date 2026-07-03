@@ -7,16 +7,16 @@ the look, layout, and interactions can be evaluated quickly in a browser.
 
 ## What it demonstrates
 
-- **Three-panel layout**: Segments · Plan · zoomable world map (Leaflet).
+- **Three-panel layout**: Segments · Plan (equal width) · zoomable world map (Leaflet).
 - **Day / night theme** toggle (also swaps the map tiles).
 - **Add / edit / delete** segments through a modal dialog.
 - **Move segments** between Segments and Plan (buttons, drag-and-drop, double-click to edit).
 - **Boarding-pass cards**: each segment is a compact three-column card. Row 1 shows
-  the departure city, the fare (centred), and the arrival city; row 2 the departure
-  address, the transport icon + company, and the arrival address; row 3 the departure
-  time, the trip duration, and the arrival time. Cards are quiet by default;
+  the departure city, the transport icon + company (centred), and the arrival city;
+  row 2 the departure address, the fare (centred), and the arrival address; row 3 the
+  departure time, the trip duration, and the arrival time. Cards are quiet by default;
   **hovering or selecting** one reveals compact action buttons as a pill pinned to the
-  top-right corner without changing the card's size, and truncated fields show their
+  bottom-right corner without changing the card's size, and truncated fields show their
   full text on hover. **Clicking outside** any card (empty panel or map background)
   clears the selection.
 - **Map drawing rules**: transport-colored lines; plan legs solid with a halo,
