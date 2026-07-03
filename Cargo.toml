@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "crates/trip_app",
+    "crates/trip_core",
+    "crates/trip_geo",
+    "crates/trip_iced",
+    "crates/trip_storage",
+]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+repository = "https://github.com/milyin/trip_planner"
+
+[workspace.dependencies]
+chrono = { version = "0.4.42", features = ["serde"] }
+geocoding = { version = "0.4.0", default-features = false, features = ["rustls-tls"] }
+iced = "0.14.0"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.17"
+uuid = { version = "1.18.1", features = ["v4", "serde"] }
+

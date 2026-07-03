@@ -1,0 +1,13 @@
+[package]
+name = "trip_storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono.workspace = true
+rusqlite.workspace = true
+thiserror.workspace = true
+trip_core = { path = "../trip_core" }
+uuid.workspace = true
