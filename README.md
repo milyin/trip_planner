@@ -68,6 +68,6 @@ The desktop shell uses a three-panel layout (Routes | Plan | Map) with a top bar
 - **Plan**: selected non-overlapping route rows plus generated gap rows, with a totals footer (legs, span, cost per currency); a `↩ Remove` button moves a route back.
 - **Map**: a zoomable world map. Every route is drawn and color-coded by transport type (the line matches its transport icon color); plan legs are solid with a halo, available legs faded, overlapping legs dashed.
 
-Routes are created and edited through a **modal dialog** (add/edit/delete). A **day/night theme toggle** switches both the UI palette and the map tiles. Screenshot drag-and-drop is intentionally not mixed into the core route model yet; the storage schema already has a route screenshot table for the next implementation step.
+Routes are created and edited through a **modal dialog** (add/edit/delete). Cards reveal their action buttons (`Add →` / `↩ Remove` and `Edit`, bottom-right) only when selected; **double-click** opens the edit modal, and cards can be **dragged** between the Routes and Plan panels to add/remove them (a drop that would time-overlap the plan is rejected with a red indicator). A **day/night theme toggle** switches both the UI palette and the map tiles. Screenshot drag-and-drop is intentionally not mixed into the core route model yet; the storage schema already has a route screenshot table for the next implementation step.
 
 A clickable HTML/Leaflet prototype of this design is used to validate look-and-feel before the `iced` implementation.
