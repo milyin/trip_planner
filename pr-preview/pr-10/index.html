@@ -4,29 +4,25 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
-  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-10/assets/index-Bisq35Ho.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-10/assets/index-IAzR5dld.css">
+  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-10/assets/index--LYnRl-E.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-10/assets/index-D2EMeNNH.css">
 </head>
 <body data-theme="dark">
 <div class="app">
   <div class="topbar">
     <div class="brand"><div class="logo">✈</div>
-      <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
+      <div><h1>Trip Planner</h1><small>trip plan designer</small></div></div>
     <div class="spacer"></div>
-    <div class="menu-wrap">
-      <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
-      <div class="menu" id="addMenu" role="menu">
-        <button type="button" role="menuitem" data-add="segment"><span class="mi">✈</span> Segment</button>
-        <button type="button" role="menuitem" data-add="hotel"><span class="mi">🏨</span> Hotel</button>
-      </div>
-    </div>
     <div class="menu-wrap">
       <button class="btn ghost icon" id="hamBtn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
       <div class="menu" id="hamMenu" role="menu">
+        <button type="button" role="menuitem" id="addLegBtn"><span class="mi">✈</span> Add leg</button>
+        <button type="button" role="menuitem" id="addHotelBtn"><span class="mi">🏨</span> Add hotel</button>
+        <hr>
         <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
         <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
         <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> LLM configuration</button>
-        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi">🗑</span> Clear all</button>
+        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi">🗑</span> Clear segments</button>
       </div>
     </div>
   </div>
@@ -48,7 +44,7 @@
     <section class="panel" data-tab="map">
       <div class="panel-head"><span class="title">Map</span>
         <span class="count" id="mapHint">drag to pan · scroll to zoom</span>
-        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments &amp; hotels" aria-label="Zoom map to all segments &amp; hotels">🗺</button></div>
+        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments" aria-label="Zoom map to all segments">🗺</button></div>
       <div class="map-wrap">
         <div id="map"></div>
         <div class="map-legend">
@@ -72,16 +68,16 @@
 
 <div class="overlay" id="overlay">
   <div class="modal">
-    <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
+    <div class="modal-head"><h3 id="modalTitle">New leg</h3><div class="x" id="closeModal">✕</div></div>
     <div class="modal-tabs" id="modalTabs">
       <button type="button" class="mtab active" id="mtabForm">Details</button>
       <button type="button" class="mtab" id="mtabLlm">LLM exchange</button>
     </div>
-    <div class="seg-import" id="segImport">
+    <div class="leg-import" id="legImport">
       <div class="import-zone" id="importZone" title="Click to choose an image or PDF, or drop one here (replaces the current one)">
         <div class="file-preview" id="filePreview" style="display:none"></div>
         <div class="drop-hint" id="dropHint">📎 Drop a screenshot of a flight / train listing here, or click to choose</div>
-        <input type="file" id="segFile" accept="application/pdf,image/*" style="display:none">
+        <input type="file" id="legFile" accept="application/pdf,image/*" style="display:none">
       </div>
       <div class="import-controls">
         <input id="fNote" placeholder="Optional note for the model — e.g. “the 20:09 direct train”">
@@ -90,7 +86,7 @@
         <button class="btn" id="recogniseBtn" title="Extract the fields below from the image and note">Recognise</button>
       </div>
     </div>
-    <div class="modal-body" id="segBody">
+    <div class="modal-body" id="legBody">
       <div class="leg col">Departure</div>
       <div class="leg col">Arrival</div>
       <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
@@ -126,7 +122,7 @@
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
       <button class="btn ghost" id="cancelBtn">Cancel</button>
-      <button class="btn primary" id="saveBtn">Save segment</button>
+      <button class="btn primary" id="saveBtn">Save leg</button>
     </div>
   </div>
 </div>
