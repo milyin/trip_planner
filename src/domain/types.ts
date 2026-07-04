@@ -17,15 +17,17 @@ export interface Place {
 }
 
 /** A transport leg between two places (the record formerly called a "route"). */
-export interface Segment {
+export interface Leg {
   id: string;
-  kind: 'segment';
+  kind: 'leg';
   dep: Place;
   arr: Place;
   transport: TransportKind;
   company: string;
   cost: number;
   currency: CurrencyCode;
+  /** `attachment:<id>` reference to the locally stored ticket image, if any. */
+  attachment: string | null;
   inPlan: boolean;
 }
 
@@ -48,4 +50,4 @@ export interface Hotel {
 }
 
 /** Any record the planner manages. */
-export type TripItem = Segment | Hotel;
+export type Segment = Leg | Hotel;

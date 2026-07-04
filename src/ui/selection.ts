@@ -1,4 +1,4 @@
-import type { LatLng, TripItem } from '../domain/types';
+import type { LatLng, Segment } from '../domain/types';
 import { panMapTo } from '../map/mapView';
 import { emitChange, select, state } from '../state/store';
 import { setTab } from './tabbar';
@@ -16,7 +16,7 @@ export function scrollSelectedIntoView(): void {
  * switch is deferred one tick so the global "click outside" handler still sees
  * the map under the tap and keeps the fresh selection.
  */
-export function selectFromMap(r: TripItem): void {
+export function selectFromMap(r: Segment): void {
   select(r.id);
   emitChange();
   if (document.body.classList.contains('mobile')) {
@@ -32,7 +32,7 @@ export function selectFromMap(r: TripItem): void {
  * Select a record and reveal it on the Map tab, centring the map on it — the
  * inverse of {@link selectFromMap}, triggered by tapping a card's transport chip.
  */
-export function selectAndShowOnMap(r: TripItem): void {
+export function selectAndShowOnMap(r: Segment): void {
   select(r.id);
   emitChange();
   setTab('map');

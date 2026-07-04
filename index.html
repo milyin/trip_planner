@@ -9,15 +9,18 @@
 <div class="app">
   <div class="topbar">
     <div class="brand"><div class="logo">✈</div>
-      <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
+      <div><h1>Trip Planner</h1><small>trip plan designer</small></div></div>
     <div class="spacer"></div>
-    <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
-    <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
     <div class="menu-wrap">
-      <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
-      <div class="menu" id="addMenu" role="menu">
-        <button type="button" role="menuitem" data-add="segment"><span class="mi">✈</span> Segment</button>
-        <button type="button" role="menuitem" data-add="hotel"><span class="mi">🏨</span> Hotel</button>
+      <button class="btn ghost icon" id="hamBtn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+      <div class="menu" id="hamMenu" role="menu">
+        <button type="button" role="menuitem" id="addLegBtn"><span class="mi">✈</span> Add leg</button>
+        <button type="button" role="menuitem" id="addHotelBtn"><span class="mi">🏨</span> Add hotel</button>
+        <hr>
+        <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
+        <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
+        <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> LLM configuration</button>
+        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi">🗑</span> Clear segments</button>
       </div>
     </div>
   </div>
@@ -39,7 +42,7 @@
     <section class="panel" data-tab="map">
       <div class="panel-head"><span class="title">Map</span>
         <span class="count" id="mapHint">drag to pan · scroll to zoom</span>
-        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments &amp; hotels" aria-label="Zoom map to all segments &amp; hotels">🗺</button></div>
+        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments" aria-label="Zoom map to all segments">🗺</button></div>
       <div class="map-wrap">
         <div id="map"></div>
         <div class="map-legend">
@@ -63,8 +66,25 @@
 
 <div class="overlay" id="overlay">
   <div class="modal">
-    <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
-    <div class="modal-body" id="segBody">
+    <div class="modal-head"><h3 id="modalTitle">New leg</h3><div class="x" id="closeModal">✕</div></div>
+    <div class="modal-tabs" id="modalTabs">
+      <button type="button" class="mtab active" id="mtabForm">Details</button>
+      <button type="button" class="mtab" id="mtabLlm">LLM exchange</button>
+    </div>
+    <div class="leg-import" id="legImport">
+      <div class="import-zone" id="importZone" title="Click to choose an image or PDF, or drop one here (replaces the current one)">
+        <div class="file-preview" id="filePreview" style="display:none"></div>
+        <div class="drop-hint" id="dropHint">📎 Drop a screenshot of a flight / train listing here, or click to choose</div>
+        <input type="file" id="legFile" accept="application/pdf,image/*" style="display:none">
+      </div>
+      <div class="import-controls">
+        <input id="fNote" placeholder="Optional note for the model — e.g. “the 20:09 direct train”">
+        <select id="fParser" title="Image parser"></select>
+        <button class="btn icon ghost" id="cfgParsersBtn" title="Configure LLM accounts &amp; parsers">⚙</button>
+        <button class="btn" id="recogniseBtn" title="Extract the fields below from the image and note">Recognise</button>
+      </div>
+    </div>
+    <div class="modal-body" id="legBody">
       <div class="leg col">Departure</div>
       <div class="leg col">Arrival</div>
       <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
@@ -95,13 +115,38 @@
         <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
       <div class="field full"><label>Link (optional)</label><input id="hLink" type="url" placeholder="https://…"></div>
     </div>
+    <div class="modal-body llm" id="llmBody" style="display:none"><pre id="llmDump"></pre></div>
     <div class="modal-foot">
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
       <button class="btn ghost" id="cancelBtn">Cancel</button>
-      <button class="btn primary" id="saveBtn">Save segment</button>
+      <button class="btn primary" id="saveBtn">Save leg</button>
     </div>
   </div>
+</div>
+
+<div class="overlay" id="parserOverlay">
+  <div class="modal narrow">
+    <div class="modal-head"><h3>LLM configuration</h3><div class="x" id="closeParsers">✕</div></div>
+    <div class="modal-body single">
+      <div class="leg">Accounts — provider + API key</div>
+      <div id="accountList" class="parser-list"></div>
+      <button class="btn ghost" id="addAccountBtn">＋ Add account</button>
+      <div class="leg">Parsers — account + model</div>
+      <div id="parserList" class="parser-list"></div>
+      <button class="btn ghost" id="addParserBtn">＋ Add parser</button>
+      <p class="hint-block">Keys: aistudio.google.com (Gemini) · openrouter.ai/keys (OpenRouter).
+        Stored only in this browser (note: any app hosted on this GitHub Pages origin could read them).</p>
+    </div>
+    <div class="modal-foot">
+      <div class="spacer"></div>
+      <button class="btn primary" id="parserDoneBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="busy" id="importBusy" style="display:none">
+  <div class="busy-box"><span class="spinner"></span><span id="importBusyText">Reading ticket…</span></div>
 </div>
 
 <script type="module" src="/src/main.ts"></script>

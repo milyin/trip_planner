@@ -1,6 +1,7 @@
 import type { TransportKind } from '../domain/types';
 import { TRANSPORT_COLOR_VAR } from '../domain/transport';
 import { applyTiles } from '../map/mapView';
+import { saveSettings, settings } from '../state/settings';
 import { emitChange } from '../state/store';
 import { byId } from './dom';
 
@@ -15,9 +16,17 @@ export const hotelColor = (): string => cssv('--t-hotel');
 
 /** Toggle between the day and night palettes (and swap map tiles + legend colours). */
 export function toggleTheme(): void {
-  const light = document.body.dataset.theme !== 'light';
-  document.body.dataset.theme = light ? 'light' : 'dark';
-  byId('themeBtn').textContent = light ? '☀️' : '🌙';
+  applyTheme(document.body.dataset.theme !== 'light' ? 'light' : 'dark');
+  settings.theme = document.body.dataset.theme as 'dark' | 'light';
+  saveSettings();
+}
+
+/** Set the theme (used by the toggle and by startup restore). */
+export function applyTheme(theme: 'dark' | 'light'): void {
+  document.body.dataset.theme = theme;
+  // The menu item offers the theme you'd switch TO.
+  byId('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️';
+  byId('themeLabel').textContent = theme === 'light' ? 'Night theme' : 'Day theme';
   applyTiles();
   emitChange();
 }

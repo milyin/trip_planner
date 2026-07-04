@@ -1,4 +1,4 @@
-import type { TripItem } from '../domain/types';
+import type { Segment } from '../domain/types';
 import { fmtDur } from '../domain/format';
 import { haversine } from '../domain/geo';
 import {
@@ -19,7 +19,7 @@ export function renderSegments(): void {
   byId('segmentsCount').textContent = String(list.length);
   byId('tabSegCount').textContent = String(list.length);
   if (!list.length) {
-    rl.innerHTML = `<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a segment or hotel above.</div>`;
+    rl.innerHTML = `<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a leg or hotel via the ☰ menu.</div>`;
   }
   list.forEach((r) => rl.appendChild(itemCard(r, 'list')));
 }
@@ -32,7 +32,7 @@ export function renderPlan(): void {
   byId('planCount').textContent = String(plan.length);
   byId('tabPlanCount').textContent = String(plan.length);
   if (!plan.length) {
-    pl.innerHTML = `<div class="empty"><span class="big">🧩</span>Your plan is empty.<br>In the <b>Segments</b> list, press <b>→</b> on a segment or hotel to add it here.</div>`;
+    pl.innerHTML = `<div class="empty"><span class="big">🧩</span>Your plan is empty.<br>In the <b>Segments</b> list, press <b>→</b> on a segment to add it here.</div>`;
   }
   let badCount = 0;
   plan.forEach((r, i) => {
@@ -46,7 +46,7 @@ export function renderPlan(): void {
       let status = '';
       if (c.kind === 'bad') {
         const lead = c.availMin < 0 ? 'Overlaps previous item' : 'Too tight';
-        const suf = r.kind === 'segment' ? ` · needs ≥ ${fmtDur(c.need * 60000)} before ${r.transport}` : '';
+        const suf = r.kind === 'leg' ? ` · needs ≥ ${fmtDur(c.need * 60000)} before ${r.transport}` : '';
         status = `<span class="status">⛔ ${lead}${suf}</span>`;
       } else if (c.kind === 'long') {
         status = `<span class="status">⚠ Long layover</span>`;
@@ -70,8 +70,8 @@ export function renderPlan(): void {
           acts.appendChild(b);
         }
         if (wantSeg) {
-          const b = mkBtn('🧭 Add segment', 'gap-btn');
-          b.title = `${endCity(prev)} → ${startCity(r)}${dist != null ? ` (${Math.round(dist)} km apart)` : ''}. Add a connecting segment.`;
+          const b = mkBtn('🧭 Add leg', 'gap-btn');
+          b.title = `${endCity(prev)} → ${startCity(r)}${dist != null ? ` (${Math.round(dist)} km apart)` : ''}. Add a connecting leg.`;
           b.onclick = (e) => {
             e.stopPropagation();
             openModal(null, {
@@ -91,10 +91,10 @@ export function renderPlan(): void {
   renderPlanFoot(plan, badCount);
 }
 
-function renderPlanFoot(plan: TripItem[], badCount: number): void {
+function renderPlanFoot(plan: Segment[], badCount: number): void {
   const foot = byId('planFoot');
   if (!plan.length) {
-    foot.innerHTML = `<span style="color:var(--faint)">Add segments or hotels to see totals.</span>`;
+    foot.innerHTML = `<span style="color:var(--faint)">Add segments to see totals.</span>`;
     return;
   }
   const { legs, nightsTotal, spanMs, byCurrency } = planTotals(plan);

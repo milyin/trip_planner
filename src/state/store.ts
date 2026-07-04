@@ -1,9 +1,9 @@
-import type { TripItem } from '../domain/types';
-import { seedItems } from './seed';
+import type { Segment } from '../domain/types';
+import { loadItems, saveItems } from './persist';
 
 /** Mutable application state. UI reads this directly and re-renders on change. */
 export interface AppState {
-  items: TripItem[];
+  items: Segment[];
   /** Currently selected record id, or `null`. */
   selected: string | null;
   /** Id of the card being dragged (cross-panel drag-and-drop), or `null`. */
@@ -11,7 +11,7 @@ export interface AppState {
 }
 
 export const state: AppState = {
-  items: seedItems(),
+  items: loadItems(),
   selected: null,
   draggedId: null,
 };
@@ -24,8 +24,10 @@ export const subscribe = (fn: Listener): void => {
   listeners.push(fn);
 };
 
-/** Notify subscribers that state changed (synchronous, mirrors the prototype's `render()`). */
+/** Notify subscribers that state changed (synchronous, mirrors the prototype's `render()`).
+ * Also persists the items — every mutation goes through here. */
 export const emitChange = (): void => {
+  saveItems(state.items);
   for (const fn of listeners) fn();
 };
 
@@ -33,7 +35,7 @@ export const select = (id: string | null): void => {
   state.selected = id;
 };
 
-export const findItem = (id: string): TripItem | undefined => state.items.find((x) => x.id === id);
+export const findItem = (id: string): Segment | undefined => state.items.find((x) => x.id === id);
 
 export function addToPlan(id: string): void {
   const r = findItem(id);
@@ -52,7 +54,7 @@ export function removeFromPlan(id: string): void {
 }
 
 /** Insert a new record or replace an existing one with the same id. */
-export function upsertItem(item: TripItem): void {
+export function upsertItem(item: Segment): void {
   const i = state.items.findIndex((x) => x.id === item.id);
   if (i >= 0) state.items[i] = item;
   else state.items.push(item);

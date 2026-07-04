@@ -1,35 +1,45 @@
 import { fitAll } from '../map/mapView';
+import { clearAllStored } from '../state/attachments';
+import { emitChange, state } from '../state/store';
 import { byId } from './dom';
 import { openHotelModal, openModal } from './modal';
 import { toggleTheme } from './theme';
 
-/** Close the ＋ Add dropdown menu. */
-export function closeAddMenu(): void {
-  byId('addMenu').classList.remove('open');
-  byId('addBtn').setAttribute('aria-expanded', 'false');
+/** Close the ☰ dropdown menu. */
+export function closeMenus(): void {
+  byId('hamMenu').classList.remove('open');
+  byId('hamBtn').setAttribute('aria-expanded', 'false');
 }
 
-/** Wire the top bar (＋ Add menu, theme toggle) and the Map panel's Fit button. */
+function clearSegments(): void {
+  if (!confirm('Remove ALL segments (legs and hotels, including stored images)? This cannot be undone.')) return;
+  state.items = [];
+  state.selected = null;
+  void clearAllStored();
+  emitChange();
+}
+
+/** Wire the top bar (☰ menu) and the Map panel's Fit button. */
 export function wireTopbar(): void {
-  const addBtn = byId('addBtn');
-  const addMenu = byId('addMenu');
-  addBtn.onclick = (e) => {
+  const btn = byId('hamBtn');
+  const menu = byId('hamMenu');
+  btn.onclick = (e) => {
     e.stopPropagation();
-    const open = !addMenu.classList.contains('open');
-    addMenu.classList.toggle('open', open);
-    addBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const open = !menu.classList.contains('open');
+    menu.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
-  addMenu.querySelectorAll('button').forEach((b) => {
-    b.onclick = (e) => {
-      e.stopPropagation();
-      closeAddMenu();
-      if (b.dataset.add === 'hotel') openHotelModal(null);
-      else openModal(null);
-    };
+  // Every menu item closes the menu; the item actions themselves are wired
+  // here or elsewhere (preview in tabbar.ts, settings in parserSettings.ts).
+  menu.querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', closeMenus);
   });
+  byId('addLegBtn').addEventListener('click', () => openModal(null));
+  byId('addHotelBtn').addEventListener('click', () => openHotelModal(null));
+  byId('themeBtn').addEventListener('click', toggleTheme);
+  byId('clearBtn').addEventListener('click', clearSegments);
   document.addEventListener('click', (e) => {
-    if (!(e.target as HTMLElement).closest('.menu-wrap')) closeAddMenu();
+    if (!(e.target as HTMLElement).closest('.menu-wrap')) closeMenus();
   });
-  byId('themeBtn').onclick = toggleTheme;
   byId('fitBtn').onclick = fitAll;
 }
