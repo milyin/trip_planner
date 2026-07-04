@@ -236,10 +236,13 @@
     font-size:10px; font-weight:700; display:grid; place-items:center; line-height:1}
   body.mobile .tabbar button.active .tbadge{border-color:var(--accent); color:var(--accent)}
 
-  /* touch: keep the action pill visible and enlarge hit targets */
-  body.mobile .card-actions{display:flex}
+  /* touch: action buttons always visible, stacked vertically in a reserved
+     right-hand column so they never overlap the card text */
+  body.mobile .card{cursor:pointer; padding-right:48px}
+  body.mobile .card-actions{display:flex; flex-direction:column; justify-content:center;
+    inset:0 0 0 auto; bottom:0; right:0; width:40px; gap:6px; padding:0;
+    background:transparent; box-shadow:none; border-radius:0; border-left:1px solid var(--border)}
   body.mobile .card-actions .btn.icon{width:30px; height:30px; font-size:14px}
-  body.mobile .card{cursor:pointer}
   body.mobile .map-legend{font-size:11px; gap:12px; padding:8px 10px}
 
   /* modal becomes a bottom sheet; dep|arr stay paired in two columns */
