@@ -1,10 +1,10 @@
 import type { ResolvedParser } from '../state/settings';
 import { beginExchange } from './debugLog';
-import { AuthError, type ExtractInput, type ExtractedSegment, type SegmentExtractor } from './extractor';
+import { AuthError, type ExtractInput, type ExtractedLeg, type LegExtractor } from './extractor';
 import { assertFileSize, buildPrompt, CURRENCIES, fileToBase64, TRANSPORTS } from './shared';
 
-export const geminiExtractor: SegmentExtractor = {
-  async extract({ file, note }: ExtractInput, parser: ResolvedParser): Promise<ExtractedSegment[]> {
+export const geminiExtractor: LegExtractor = {
+  async extract({ file, note }: ExtractInput, parser: ResolvedParser): Promise<ExtractedLeg[]> {
     if (file) assertFileSize(file);
     const ex = beginExchange({
       provider: parser.provider,
@@ -86,7 +86,7 @@ export const geminiExtractor: SegmentExtractor = {
         throw e;
       }
       if (!text) throw new Error('Gemini returned an empty response.');
-      const legs = (JSON.parse(text) as { legs?: ExtractedSegment[] }).legs;
+      const legs = (JSON.parse(text) as { legs?: ExtractedLeg[] }).legs;
       if (!legs?.length) throw new Error('No transport legs found in the input.');
       ex.legs = legs;
       return legs;

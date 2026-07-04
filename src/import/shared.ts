@@ -6,7 +6,7 @@ export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const TRANSPORTS = ['Plane', 'Train', 'Bus', 'Taxi', 'Car', 'Other'];
 export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 
-export const PROMPT = `You help fill in a segment form of a trip-planning app.
+export const PROMPT = `You help fill in the leg form (one transport ride) of a trip-planning app.
 The user provides a screenshot and/or a free-form note. The screenshot is usually a list of flights or trains from a booking site or search engine — not a bought ticket — though it can also be a booking confirmation.
 Extract the transport legs of ONE itinerary:
 - If the input shows several alternatives, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.

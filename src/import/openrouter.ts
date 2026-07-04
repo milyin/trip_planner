@@ -1,6 +1,6 @@
 import type { ResolvedParser } from '../state/settings';
 import { beginExchange } from './debugLog';
-import { AuthError, type ExtractInput, type ExtractedSegment, type SegmentExtractor } from './extractor';
+import { AuthError, type ExtractInput, type ExtractedLeg, type LegExtractor } from './extractor';
 import { assertFileSize, buildPrompt, CURRENCIES, fileToDataUrl, TRANSPORTS } from './shared';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
@@ -26,8 +26,8 @@ interface ChatCompletion {
   error?: { message?: string };
 }
 
-export const openrouterExtractor: SegmentExtractor = {
-  async extract({ file, note }: ExtractInput, parser: ResolvedParser): Promise<ExtractedSegment[]> {
+export const openrouterExtractor: LegExtractor = {
+  async extract({ file, note }: ExtractInput, parser: ResolvedParser): Promise<ExtractedLeg[]> {
     if (file) assertFileSize(file);
     const ex = beginExchange({
       provider: parser.provider,
@@ -98,7 +98,7 @@ export const openrouterExtractor: SegmentExtractor = {
       if (!content) throw new Error('OpenRouter returned an empty response.');
       // Models without structured-output support may wrap the JSON in a fence.
       const json = content.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');
-      const legs = (JSON.parse(json) as { legs?: ExtractedSegment[] }).legs;
+      const legs = (JSON.parse(json) as { legs?: ExtractedLeg[] }).legs;
       if (!legs?.length) throw new Error('No transport legs found in the input.');
       ex.legs = legs;
       return legs;

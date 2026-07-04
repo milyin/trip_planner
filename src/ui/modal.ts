@@ -1,9 +1,9 @@
-import type { CurrencyCode, Hotel, Segment, TransportKind } from '../domain/types';
+import type { CurrencyCode, Hotel, Leg, TransportKind } from '../domain/types';
 import { geocode } from '../domain/geo';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
-import type { ExtractedSegment } from '../import/extractor';
+import type { ExtractedLeg } from '../import/extractor';
 import { runRecognition } from '../import/recognise';
 import {
   deleteAttachment, deleteExchange, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
@@ -14,7 +14,7 @@ import { nextId } from '../state/id';
 import { byId, getVal, setVal } from './dom';
 import { openParserSettings } from './parserSettings';
 
-export interface SegmentPrefill {
+export interface LegPrefill {
   inPlan?: boolean;
   depCity?: string; depAddr?: string; depTime?: string;
   arrCity?: string; arrAddr?: string; arrTime?: string;
@@ -30,28 +30,28 @@ export interface HotelPrefill {
 }
 
 let editingId: string | null = null;
-let editKind: 'segment' | 'hotel' = 'segment';
+let editKind: 'leg' | 'hotel' = 'leg';
 let newInPlan = false;
 let activeTab: 'form' | 'llm' = 'form';
 let previewUrl: string | null = null;
 let hasPreview = false;
 /** Image picked/dropped in this dialog, not yet saved to IndexedDB. */
 let pendingFile: File | null = null;
-/** Attachment of the segment being edited (kept unless replaced). */
+/** Attachment of the leg being edited (kept unless replaced). */
 let existingAttachment: string | null = null;
 /** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
-let queuedLegs: ExtractedSegment[] = [];
+let queuedLegs: ExtractedLeg[] = [];
 let queuedFile: File | null = null;
 /** Exchange shown in this dialog: loaded from storage when editing, replaced
- * by a fresh recognition. Saved with the segment. */
+ * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
 
 /** Show/hide the modal sections for the active tab (Details / LLM exchange). */
 function applyTabs(): void {
   const form = activeTab === 'form';
-  byId('segBody').style.display = form && editKind === 'segment' ? 'grid' : 'none';
+  byId('legBody').style.display = form && editKind === 'leg' ? 'grid' : 'none';
   byId('hotelBody').style.display = form && editKind === 'hotel' ? 'grid' : 'none';
-  byId('segImport').style.display = form && editKind === 'segment' ? 'block' : 'none';
+  byId('legImport').style.display = form && editKind === 'leg' ? 'block' : 'none';
   byId('filePreview').style.display = hasPreview ? 'block' : 'none';
   byId('dropHint').style.display = hasPreview ? 'none' : 'flex';
   byId('llmBody').style.display = form ? 'none' : 'block';
@@ -93,12 +93,12 @@ function setPendingFile(f: File): void {
   renderPreview(f);
 }
 
-function showBody(kind: 'segment' | 'hotel'): void {
+function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
-  // Recognition and the LLM exchange tab only apply to segments.
-  byId('modalTabs').style.display = kind === 'segment' ? 'flex' : 'none';
-  byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save segment';
+  // Recognition and the LLM exchange tab only apply to legs.
+  byId('modalTabs').style.display = kind === 'leg' ? 'flex' : 'none';
+  byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   applyTabs();
 }
 
@@ -126,8 +126,8 @@ function refreshParserCombo(): void {
   sel.value = String(Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1));
 }
 
-/** Fill the segment form from an extracted leg (only fields the model set). */
-function fillSegmentFields(leg: ExtractedSegment): void {
+/** Fill the leg form from an extracted leg (only fields the model set). */
+function fillLegFields(leg: ExtractedLeg): void {
   const set = (id: string, v: unknown): void => {
     if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
   };
@@ -171,25 +171,25 @@ async function recognise(): Promise<void> {
   const legs = await runRecognition(file, note, parser);
   dialogExchange = lastExchange();
   if (!legs) return;
-  fillSegmentFields(legs[0]);
+  fillLegFields(legs[0]);
   queuedLegs = legs.slice(1);
   queuedFile = queuedLegs.length ? file : null;
 }
 
-/** Open the segment dialog (new when `id` is null), optionally pre-filled. */
-export function openModal(id: string | null, prefill?: SegmentPrefill): void {
+/** Open the leg dialog (new when `id` is null), optionally pre-filled. */
+export function openModal(id: string | null, prefill?: LegPrefill): void {
   editingId = id || null;
-  showBody('segment');
+  showBody('leg');
   const P = prefill || {};
   newInPlan = P.inPlan === true;
-  byId('modalTitle').textContent = id ? 'Edit segment' : 'New segment';
+  byId('modalTitle').textContent = id ? 'Edit leg' : 'New leg';
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
-  const r = (id ? findItem(id) : null) as Segment | null;
+  const r = (id ? findItem(id) : null) as Leg | null;
   pendingFile = P.file ?? null;
   existingAttachment = r ? r.attachment : null;
   dialogExchange = null;
   if (id) {
-    // Show the exchange that produced this segment, if one was stored.
+    // Show the exchange that produced this leg, if one was stored.
     void getExchange(id).then((ex) => {
       if (ex && editingId === id) {
         dialogExchange = ex;
@@ -256,7 +256,7 @@ export function closeModal(): void {
   }
 }
 
-async function saveSegment(): Promise<void> {
+async function saveLeg(): Promise<void> {
   const dc = getVal('fDepCity');
   const ac = getVal('fArrCity');
   if (!dc || !ac) {
@@ -268,14 +268,14 @@ async function saveSegment(): Promise<void> {
   if (saveBtn.disabled) return;
   saveBtn.disabled = true;
   try {
-    await doSaveSegment(dc, ac);
+    await doSaveLeg(dc, ac);
   } finally {
     saveBtn.disabled = false;
   }
 }
 
-async function doSaveSegment(dc: string, ac: string): Promise<void> {
-  const existing = editingId ? (findItem(editingId) as Segment | undefined) : undefined;
+async function doSaveLeg(dc: string, ac: string): Promise<void> {
+  const existing = editingId ? (findItem(editingId) as Leg | undefined) : undefined;
   let attachment = existingAttachment;
   if (pendingFile) {
     // A newly picked image replaces the stored one.
@@ -283,11 +283,11 @@ async function doSaveSegment(dc: string, ac: string): Promise<void> {
     attachment = await putAttachment(pendingFile);
   }
   const segId = existing?.id ?? nextId();
-  // Persist the exchange that filled this segment, next to the image.
+  // Persist the exchange that filled this leg, next to the image.
   if (dialogExchange) void putExchange(segId, dialogExchange);
-  const seg: Segment = {
+  const seg: Leg = {
     id: segId,
-    kind: 'segment',
+    kind: 'leg',
     dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: geocode(dc, getVal('fDepAddr')) },
     arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: geocode(ac, getVal('fArrAddr')) },
     transport: getVal('fTransport') as TransportKind,
@@ -307,7 +307,7 @@ function saveModal(): void {
     saveHotel();
     return;
   }
-  void saveSegment();
+  void saveLeg();
 }
 
 function saveHotel(): void {
@@ -341,7 +341,7 @@ function deleteItem(): void {
   if (editingId) {
     const r = findItem(editingId);
     // Deleting the record deletes its locally stored image and exchange too.
-    if (r && r.kind === 'segment') {
+    if (r && r.kind === 'leg') {
       void deleteAttachment(r.attachment);
       void deleteExchange(r.id);
     }
@@ -368,9 +368,9 @@ export function wireModal(): void {
   };
   const zone = byId('importZone');
   zone.onclick = (e) => {
-    if ((e.target as HTMLElement).id !== 'segFile') byId<HTMLInputElement>('segFile').click();
+    if ((e.target as HTMLElement).id !== 'legFile') byId<HTMLInputElement>('legFile').click();
   };
-  byId<HTMLInputElement>('segFile').onchange = (e) => {
+  byId<HTMLInputElement>('legFile').onchange = (e) => {
     const input = e.target as HTMLInputElement;
     const f = input.files?.[0];
     input.value = ''; // allow re-selecting the same file

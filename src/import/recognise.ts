@@ -1,6 +1,6 @@
 import type { ResolvedParser } from '../state/settings';
 import { byId } from '../ui/dom';
-import { AuthError, getExtractor, type ExtractedSegment } from './extractor';
+import { AuthError, getExtractor, type ExtractedLeg } from './extractor';
 
 /** Run recognition with the busy indicator up; reports errors to the user and
  * returns `null` on failure (the LLM-exchange tab has the details). */
@@ -8,7 +8,7 @@ export async function runRecognition(
   file: File | null,
   note: string,
   parser: ResolvedParser,
-): Promise<ExtractedSegment[] | null> {
+): Promise<ExtractedLeg[] | null> {
   const name = `${parser.provider} ${parser.model}`;
   const busy = byId('importBusy');
   byId('importBusyText').textContent = `Reading ${file ? file.name || 'image' : 'note'} with ${name}…`;

@@ -1,4 +1,4 @@
-import type { Segment } from './types';
+import type { Leg } from './types';
 import { currencySymbol } from './transport';
 
 /** Parse a `datetime-local` string to epoch milliseconds. */
@@ -36,7 +36,7 @@ export function money(r: { cost: number; currency: string }): string {
 }
 
 /** Travel duration of a segment (departure → arrival). */
-export function tripDur(r: Segment): string {
+export function tripDur(r: Leg): string {
   return fmtDur(toMs(r.arr.time) - toMs(r.dep.time));
 }
 

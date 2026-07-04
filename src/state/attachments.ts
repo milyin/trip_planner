@@ -19,7 +19,7 @@ interface AttachmentRecord {
 }
 
 interface ExchangeRecord {
-  /** Segment id the recognition belongs to. */
+  /** Leg id the recognition belongs to. */
   id: string;
   exchange: LlmExchange;
 }
@@ -51,9 +51,18 @@ function txIn<T>(
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
-        const req = run(db.transaction(storeName, mode).objectStore(storeName));
-        req.onsuccess = () => resolve(req.result);
+        const txn = db.transaction(storeName, mode);
+        const req = run(txn.objectStore(storeName));
         req.onerror = () => reject(req.error);
+        if (mode === 'readwrite') {
+          // Resolve only once the write is durably committed — request
+          // success fires before the transaction completes, and a reload in
+          // that window would lose the write.
+          txn.oncomplete = () => resolve(req.result);
+          txn.onabort = () => reject(txn.error);
+        } else {
+          req.onsuccess = () => resolve(req.result);
+        }
       }),
   );
 }
@@ -66,7 +75,11 @@ export const isAttachmentLink = (link: string | null): boolean => !!link && link
 /** Store a file; returns the `attachment:<id>` link to put on the record. */
 export async function putAttachment(file: File): Promise<string> {
   const id = 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const rec: AttachmentRecord = { id, name: file.name, type: file.type, blob: file, createdAt: Date.now() };
+  // Copy the bytes: Chromium stores `File` objects by reference to the file
+  // on disk, so a dropped screenshot that is later deleted or moved would
+  // silently break the stored attachment.
+  const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+  const rec: AttachmentRecord = { id, name: file.name, type: file.type, blob, createdAt: Date.now() };
   await tx('readwrite', (s) => s.put(rec));
   return LINK_PREFIX + id;
 }

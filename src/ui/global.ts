@@ -1,6 +1,6 @@
 import { emitChange, select, state } from '../state/store';
 import { closeModal } from './modal';
-import { closeAddMenu } from './topbar';
+import { closeMenus } from './topbar';
 
 /**
  * Global handlers: Escape closes overlays; a click outside any card (and outside
@@ -12,7 +12,7 @@ export function wireGlobal(): void {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeModal();
-      closeAddMenu();
+      closeMenus();
     }
   });
   document.addEventListener('click', (e) => {

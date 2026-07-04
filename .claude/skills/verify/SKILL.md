@@ -25,24 +25,29 @@ import { chromium } from 'playwright';           // npm i playwright in a scratc
 const browser = await chromium.launch({ channel: 'chrome' });
 ```
 
+Terminology: a **segment** is any plan element (leg or hotel); a **leg** is one transport
+ride A→B. Types: `Segment = Leg | Hotel`, `Leg.kind === 'leg'`.
+
 Useful hooks in the app:
 - Cards render into `#segmentsList` / `#planList`; the shared edit dialog is `#overlay`
-  (`#segBody` / `#hotelBody`, `#saveBtn`, `#cancelBtn`, `#delBtn`); tabs `#mtabForm` /
+  (`#legBody` / `#hotelBody`, `#saveBtn`, `#cancelBtn`, `#delBtn`); tabs `#mtabForm` /
   `#mtabLlm` (LLM exchange dump in `#llmDump`).
-- Ticket recognition lives inside the segment dialog: drop zone `#importZone` (hidden input
-  `#segFile`, preview `#filePreview`, hint `#dropHint`), note `#fNote`, parser combo
+- Ticket recognition lives inside the leg dialog: drop zone `#importZone` (hidden input
+  `#legFile`, preview `#filePreview`, hint `#dropHint`), note `#fNote`, parser combo
   `#fParser`, config shortcut `#cfgParsersBtn`, button `#recogniseBtn`. LLM configuration:
-  ⚙ `#settingsBtn` → `#parserOverlay` with two inline-editable lists — `#accountList`
+  `#settingsBtn` menu item → `#parserOverlay` with two inline-editable lists — `#accountList`
   (provider select + key input per row) and `#parserList` (account select + model input per
   row), `#addAccountBtn` / `#addParserBtn` / `#parserDoneBtn`; rows `.parser-row`.
   Errors surface via `alert()` — capture with `page.on('dialog', ...)`.
 - Settings shape: `{accounts: [{id, provider, apiKey}], parsers: [{accountId, model}],
   activeParser, theme}`; older shapes migrate on load.
-- Topbar: ＋ Add (`#addBtn`/`#addMenu`) and ☰ (`#hamBtn`/`#hamMenu` with `#previewBtn`,
-  `#themeBtn`, `#settingsBtn`, `#clearBtn`). Clear all uses `confirm()` — Playwright's
-  dialog handler must accept/dismiss it.
-- IndexedDB v2 has stores `attachments` and `exchanges` (per-segment LLM exchange, keyed
-  by segment id — shown in the LLM tab when editing a saved segment).
+- Topbar: single ☰ menu (`#hamBtn`/`#hamMenu`) with `#addLegBtn`, `#addHotelBtn`,
+  `#previewBtn`, `#themeBtn`, `#settingsBtn`, `#clearBtn` (Clear segments). Clear uses
+  `confirm()` — Playwright's dialog handler must accept/dismiss it.
+- IndexedDB v2 has stores `attachments` (bytes copied at put — never store raw `File`s;
+  Chromium keeps them as on-disk references) and `exchanges` (per-leg LLM exchange, keyed
+  by leg id — shown in the LLM tab when editing a saved leg).
+- Stored items with old `kind: 'segment'` migrate to `'leg'` on load (persist.ts).
 - LLM endpoints: `generativelanguage.googleapis.com` (Gemini SDK) and
   `openrouter.ai/api/v1/chat/completions` (plain fetch — easy to mock with `ctx.route`
   fulfilling a canned `{choices:[{message:{content: JSON.stringify({legs:[...]})}}]}`).

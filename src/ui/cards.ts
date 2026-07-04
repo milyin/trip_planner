@@ -1,4 +1,4 @@
-import type { Hotel, Segment, TripItem } from '../domain/types';
+import type { Hotel, Leg, Segment } from '../domain/types';
 import { esc, fmtTime, money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
 import { conflictOf } from '../domain/plan';
@@ -14,17 +14,17 @@ import { hotelColor, transportColor } from './theme';
 export type CardMode = 'list' | 'plan';
 
 /** Build the card element for any record. */
-export const itemCard = (r: TripItem, mode: CardMode): HTMLDivElement =>
-  r.kind === 'hotel' ? hotelCard(r, mode) : segmentCard(r, mode);
+export const itemCard = (r: Segment, mode: CardMode): HTMLDivElement =>
+  r.kind === 'hotel' ? hotelCard(r, mode) : legCard(r, mode);
 
-const openEditor = (r: TripItem): void => (r.kind === 'hotel' ? openHotelModal(r.id) : openModal(r.id));
+const openEditor = (r: Segment): void => (r.kind === 'hotel' ? openHotelModal(r.id) : openModal(r.id));
 
 /** Populate a card's bottom-right action pill (send/remove + edit). */
-function cardActions(el: HTMLElement, r: TripItem, mode: CardMode): void {
+function cardActions(el: HTMLElement, r: Segment, mode: CardMode): void {
   const a = el.querySelector('.card-actions');
   if (!a) return;
   if (mode === 'list') {
-    const conflict = r.kind === 'segment' ? conflictOf(state.items, r) : null;
+    const conflict = r.kind === 'leg' ? conflictOf(state.items, r) : null;
     const disabled = !!conflict;
     const add = mkBtn(disabled ? '⊘' : '→', 'btn icon ' + (disabled ? '' : 'primary'));
     add.title = disabled ? "Overlaps plan — can't add" : 'Add to plan';
@@ -54,7 +54,7 @@ function cardActions(el: HTMLElement, r: TripItem, mode: CardMode): void {
   a.appendChild(ed);
 }
 
-/** Open a segment's stored ticket image in a new tab. */
+/** Open a leg's stored ticket image in a new tab. */
 function openAttachment(att: string): void {
   void resolveLink(att).then((r) => {
     if (r) window.open(r.url, '_blank', 'noopener');
@@ -63,7 +63,7 @@ function openAttachment(att: string): void {
 }
 
 /** Wire select / edit / drag interactions shared by every card. */
-function makeDraggable(el: HTMLElement, r: TripItem): void {
+function makeDraggable(el: HTMLElement, r: Segment): void {
   el.onclick = () => {
     select(r.id);
     emitChange();
@@ -90,7 +90,7 @@ function makeDraggable(el: HTMLElement, r: TripItem): void {
   });
 }
 
-function segmentCard(r: Segment, mode: CardMode): HTMLDivElement {
+function legCard(r: Leg, mode: CardMode): HTMLDivElement {
   const conflict = mode === 'list' ? conflictOf(state.items, r) : null;
   const disabled = !!conflict;
   const col = transportColor(r.transport);
@@ -99,16 +99,16 @@ function segmentCard(r: Segment, mode: CardMode): HTMLDivElement {
     'card ' + (mode === 'plan' ? 'plan ' : '') + (disabled ? 'disabled ' : '') + (state.selected === r.id ? 'sel' : '');
   el.innerHTML = `
     <div class="stripe" style="background:${col}"></div>
-    <div class="seg-grid">
-      <div class="seg-city c1 r1" title="${esc(r.dep.city)}">${r.dep.city}</div>
-      <div class="seg-tr c2 r1" title="${esc(r.transport + (r.company ? ' · ' + r.company : ''))}"><span class="ti" style="color:${col}">${TRANSPORT_ICON[r.transport] || '•'}</span> <span class="co">${r.company || r.transport}</span></div>
-      <div class="seg-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
-      <div class="seg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr || '—'}</div>
-      <div class="seg-cost c2 r2" title="Fare">${money(r)}${r.attachment ? ' <span class="seg-link" title="Open attached ticket image">🎫</span>' : ''}</div>
-      <div class="seg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr || '—'}</div>
-      <div class="seg-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
-      <div class="seg-sub c2 r3">${tripDur(r)}</div>
-      <div class="seg-sub c3 r3" title="${esc(fmtTime(r.arr.time))}">${fmtTime(r.arr.time)}</div>
+    <div class="leg-grid">
+      <div class="leg-city c1 r1" title="${esc(r.dep.city)}">${r.dep.city}</div>
+      <div class="leg-tr c2 r1" title="${esc(r.transport + (r.company ? ' · ' + r.company : ''))}"><span class="ti" style="color:${col}">${TRANSPORT_ICON[r.transport] || '•'}</span> <span class="co">${r.company || r.transport}</span></div>
+      <div class="leg-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
+      <div class="leg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr || '—'}</div>
+      <div class="card-cost c2 r2" title="Fare">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached ticket image">🎫</span>' : ''}</div>
+      <div class="leg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr || '—'}</div>
+      <div class="leg-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
+      <div class="leg-sub c2 r3">${tripDur(r)}</div>
+      <div class="leg-sub c3 r3" title="${esc(fmtTime(r.arr.time))}">${fmtTime(r.arr.time)}</div>
     </div>
     ${disabled ? `<div class="warn">⚠ Overlaps plan: ${conflict!.dep.city} → ${conflict!.arr.city}</div>` : ''}
     <div class="card-actions"></div>`;
@@ -119,7 +119,7 @@ function segmentCard(r: Segment, mode: CardMode): HTMLDivElement {
     `(Click to select · double-click to edit · drag to move)`;
   cardActions(el, r, mode);
   makeDraggable(el, r);
-  const linkEl = el.querySelector<HTMLElement>('.seg-link');
+  const linkEl = el.querySelector<HTMLElement>('.leg-link');
   if (linkEl && r.attachment) {
     const att = r.attachment;
     linkEl.onclick = (e) => {
@@ -127,7 +127,7 @@ function segmentCard(r: Segment, mode: CardMode): HTMLDivElement {
       openAttachment(att);
     };
   }
-  const trEl = el.querySelector<HTMLElement>('.seg-tr');
+  const trEl = el.querySelector<HTMLElement>('.leg-tr');
   if (trEl) {
     trEl.title = 'Show on map';
     trEl.addEventListener('click', (e) => {
@@ -148,7 +148,7 @@ function hotelCard(r: Hotel, mode: CardMode): HTMLDivElement {
     <div class="stripe" style="background:${col}"></div>
     <div class="hotel-grid">
       <div class="hotel-name hc1 hr1"><span class="ti" style="color:${col}">🏨</span><span class="nm" title="${esc(r.name)}">${r.name || 'Hotel'}</span></div>
-      <div class="seg-cost hc2 hr1" title="Price">${money(r)}</div>
+      <div class="card-cost hc2 hr1" title="Price">${money(r)}</div>
       <div class="hotel-loc hc1 hr2" title="${esc(r.city + (r.addr ? ' · ' + r.addr : ''))}">${r.city}${r.addr ? ' · ' + r.addr : ''}</div>
       <div class="hc2 hr2">${r.link ? `<a class="hotel-link" href="${esc(r.link)}" target="_blank" rel="noopener" title="Open booking link" onclick="event.stopPropagation()">🔗 Link</a>` : ''}</div>
       <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn) + ' → ' + fmtTime(r.checkOut))}">${fmtTime(r.checkIn)} → ${fmtTime(r.checkOut)}</div>

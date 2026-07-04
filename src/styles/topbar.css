@@ -31,4 +31,5 @@
 .menu button .mi{font-size:15px; width:18px; text-align:center}
 .menu button.primary{color:var(--accent); background:transparent; box-shadow:none}
 .menu button.danger-item{color:var(--danger)}
+.menu hr{border:none; border-top:1px solid var(--border); margin:4px 8px}
 .btn:disabled{opacity:.45; cursor:not-allowed}

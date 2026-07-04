@@ -5,7 +5,7 @@ import { openrouterExtractor } from './openrouter';
 
 /** One transport leg extracted from the user's screenshot and/or note. All
  * fields are optional — the user reviews them in the segment dialog. */
-export interface ExtractedSegment {
+export interface ExtractedLeg {
   depCity?: string;
   depAddr?: string;
   /** `datetime-local` string (`YYYY-MM-DDTHH:MM`), local to the departure place. */
@@ -28,16 +28,16 @@ export interface ExtractInput {
 }
 
 /** A pluggable LLM backend that turns the input into segment legs. */
-export interface SegmentExtractor {
-  extract(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedSegment[]>;
+export interface LegExtractor {
+  extract(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedLeg[]>;
 }
 
 /** Thrown when the provider rejects the parser's API key. */
 export class AuthError extends Error {}
 
-const extractors: Record<LlmProvider, SegmentExtractor> = {
+const extractors: Record<LlmProvider, LegExtractor> = {
   gemini: geminiExtractor,
   openrouter: openrouterExtractor,
 };
 
-export const getExtractor = (parser: ResolvedParser): SegmentExtractor => extractors[parser.provider];
+export const getExtractor = (parser: ResolvedParser): LegExtractor => extractors[parser.provider];
