@@ -494,6 +494,7 @@ function applyTiles(){ const light=document.body.dataset.theme==="light";
   map.removeLayer(light?darkTiles:lightTiles); (light?lightTiles:darkTiles).addTo(map); }
 function drawMap(){
   segmentLayer.clearLayers(); const bounds=[]; const halo=cssv("--halo"), accent=cssv("--accent"), danger=cssv("--danger");
+  const HITW=14;   // uniform transparent click/hover width (≈ the bold in-plan leg's halo) so thin dashed legs are as easy to grab as thick ones
   items.forEach(r=>{
     if(r.kind==="hotel"){
       if(!r.ll)return; const isSel=selected===r.id;
@@ -515,11 +516,14 @@ function drawMap(){
     if(drawHalo){ L.polyline([r.dep.ll,r.arr.ll],
       {color:isSel?accent:halo, weight:weight+4, opacity:isSel?.35:.6, interactive:false}).addTo(segmentLayer); }  // decorative glow: never capture clicks
     const mainW = (isSel && !conflict) ? weight+1 : weight;        // don't thicken conflicting legs
-    // bubblingMouseEvents:false → a click on the line selects it without also firing the map's "click empty → unselect" handler
-    const line=L.polyline([r.dep.ll,r.arr.ll],{color:lineCol,weight:mainW,opacity,dashArray:dash,bubblingMouseEvents:false}).addTo(segmentLayer);
+    // Visible line is purely decorative (interactive:false); a fat transparent "hit line" on top
+    // carries click + hover, so thin dashed legs get the same wide hot area as thick ones.
+    L.polyline([r.dep.ll,r.arr.ll],{color:lineCol,weight:mainW,opacity,dashArray:dash,interactive:false}).addTo(segmentLayer);
     const tip = conflict?`<br><small style="color:${danger}">⚠ overlaps plan</small>`:"";
-    line.bindTooltip(`${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,{className:"segment-tip",sticky:true});
-    line.on("click",()=>{selected=r.id; render();});
+    // bubblingMouseEvents:false → clicking selects without also firing the map's "click empty → unselect" handler
+    const hit=L.polyline([r.dep.ll,r.arr.ll],{color:"#000",opacity:0,weight:HITW,lineCap:"round",bubblingMouseEvents:false}).addTo(segmentLayer);
+    hit.bindTooltip(`${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,{className:"segment-tip",sticky:true});
+    hit.on("click",()=>{selected=r.id; render();});
     [r.dep,r.arr].forEach(p=>{ L.circleMarker(p.ll,{radius:r.inPlan?6:4,color:halo,weight:2,
       fillColor:isSel?(conflict?danger:accent):col,fillOpacity:1,bubblingMouseEvents:false})
       .bindTooltip(p.city,{className:"place-tip",direction:"top"})
