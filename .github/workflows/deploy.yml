@@ -5,11 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Allow the workflow to publish to GitHub Pages.
+# Push the built site to the gh-pages branch, which GitHub Pages serves.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # Allow one concurrent deployment; don't cancel an in-progress production deploy.
 concurrency:
@@ -17,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,18 +33,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to gh-pages branch
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          folder: dist
+          branch: gh-pages
+          # PR previews live under pr-preview/ on the same branch; a main
+          # deploy must not delete them.
+          clean-exclude: pr-preview/
+          force: false
