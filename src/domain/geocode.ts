@@ -37,20 +37,42 @@ function saveCache(): void {
   }
 }
 
-// Serialize network lookups: each queued task starts ≥ MIN_SPACING_MS after
-// the previous one started.
-let queue: Promise<unknown> = Promise.resolve();
+// Serialize network lookups ≥ MIN_SPACING_MS apart. Two tiers: user-triggered
+// lookups (dialog) jump ahead of background backfill, so the dialog is never
+// starved by a long backfill queue.
+interface QueueItem {
+  task: () => Promise<unknown>;
+  resolve: (v: unknown) => void;
+  reject: (e: unknown) => void;
+}
+
+const highQ: QueueItem[] = [];
+const lowQ: QueueItem[] = [];
+let pumping = false;
 let lastRequestAt = 0;
 
-function enqueue<T>(task: () => Promise<T>): Promise<T> {
-  const run = queue.then(async () => {
+async function pump(): Promise<void> {
+  if (pumping) return;
+  pumping = true;
+  while (highQ.length || lowQ.length) {
+    const item = (highQ.shift() ?? lowQ.shift())!;
     const wait = lastRequestAt + MIN_SPACING_MS - Date.now();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     lastRequestAt = Date.now();
-    return task();
+    try {
+      item.resolve(await item.task());
+    } catch (e) {
+      item.reject(e);
+    }
+  }
+  pumping = false;
+}
+
+function enqueue<T>(task: () => Promise<T>, priority: boolean): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    (priority ? highQ : lowQ).push({ task, resolve: resolve as (v: unknown) => void, reject });
+    void pump();
   });
-  queue = run.catch(() => {});
-  return run;
 }
 
 interface NominatimHit {
@@ -71,9 +93,16 @@ async function search(q: string): Promise<LatLng | null> {
   return Number.isFinite(ll[0]) && Number.isFinite(ll[1]) ? ll : null;
 }
 
+export interface GeocodeOptions {
+  /** User-triggered lookup: jumps ahead of background backfill in the queue. */
+  priority?: boolean;
+  /** Retry even if this key already failed this session (explicit user retry). */
+  force?: boolean;
+}
+
 /** Resolve a city (+ optional airport/station/address) to coordinates.
  * Never rejects — a failed lookup returns `null` and the record still saves. */
-export async function geocodePlace(city: string, addr?: string): Promise<LatLng | null> {
+export async function geocodePlace(city: string, addr?: string, opts?: GeocodeOptions): Promise<LatLng | null> {
   const c = (city || '').trim();
   const a = (addr || '').trim();
   if (!c && !a) return null;
@@ -81,12 +110,16 @@ export async function geocodePlace(city: string, addr?: string): Promise<LatLng 
   if (cache[key]) return cache[key];
   const offline = gazetteer(c, a);
   if (offline) return offline;
-  if (misses.has(key)) return null;
+  if (misses.has(key) && !opts?.force) return null;
+  const priority = !!opts?.priority;
   try {
     // Try the specific place first ("CDG, Paris"), then the bare city.
-    const ll = (a ? await enqueue(() => search(`${a}, ${c}`)) : null) ?? (c ? await enqueue(() => search(c)) : null);
+    const ll =
+      (a ? await enqueue(() => search(`${a}, ${c}`), priority) : null) ??
+      (c ? await enqueue(() => search(c), priority) : null);
     if (ll) {
       cache[key] = ll;
+      misses.delete(key);
       saveCache();
       return ll;
     }

@@ -22,8 +22,22 @@
 .modal-head .x{margin-left:auto; cursor:pointer; color:var(--muted); font-size:20px; line-height:1}
 .modal-body{padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px 16px}
 .leg{grid-column:1/-1; color:var(--accent); font-size:11px; font-weight:700; letter-spacing:1px;
-  text-transform:uppercase; margin-top:4px}
+  text-transform:uppercase; margin-top:4px; display:flex; align-items:center; min-height:22px;
+  white-space:nowrap}
 .leg.col{grid-column:auto}
+
+/* Per-place geocoding status chip in the section headers. State changes must
+ * not shift layout (a moving Save button eats clicks), so the chip keeps its
+ * box when empty and headers have a fixed min-height. */
+.geo-chip{display:inline-flex; align-items:center; height:18px; margin-left:8px; padding:0 8px;
+  border-radius:999px; border:1px solid var(--border); background:var(--panel-2);
+  color:var(--muted); font:inherit; font-size:10px; font-weight:600; letter-spacing:normal;
+  text-transform:none; cursor:pointer; white-space:nowrap}
+.geo-chip:hover{border-color:var(--accent)}
+.geo-chip.ok{color:var(--ok); border-color:color-mix(in srgb, var(--ok) 40%, var(--border))}
+.geo-chip.fail{color:var(--danger); border-color:color-mix(in srgb, var(--danger) 40%, var(--border))}
+.geo-chip.busy{color:var(--muted)}
+
 .field{display:flex; flex-direction:column; gap:6px}
 .field.full{grid-column:1/-1}
 .field label{font-size:12px; color:var(--muted)}

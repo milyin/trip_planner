@@ -1,4 +1,4 @@
-import type { CurrencyCode, Hotel, Leg, TransportKind } from '../domain/types';
+import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/types';
 import { geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
@@ -102,6 +102,91 @@ function showBody(kind: 'leg' | 'hotel'): void {
   applyTabs();
 }
 
+// --- per-place geocoding, explicit in the dialog ---------------------------
+
+type GeoStatus = 'empty' | 'stale' | 'busy' | 'ok' | 'fail';
+type PlaceKey = 'dep' | 'arr' | 'hot';
+
+const GEO_FIELDS: Record<PlaceKey, { chip: string; city: string; addr: string }> = {
+  dep: { chip: 'depGeo', city: 'fDepCity', addr: 'fDepAddr' },
+  arr: { chip: 'arrGeo', city: 'fArrCity', addr: 'fArrAddr' },
+  hot: { chip: 'hotGeo', city: 'hCity', addr: 'hAddr' },
+};
+
+interface PlaceGeo {
+  ll: LatLng | null;
+  status: GeoStatus;
+  /** Invalidates in-flight lookups when fields change or the dialog reopens. */
+  token: number;
+}
+
+const geo: Record<PlaceKey, PlaceGeo> = {
+  dep: { ll: null, status: 'empty', token: 0 },
+  arr: { ll: null, status: 'empty', token: 0 },
+  hot: { ll: null, status: 'empty', token: 0 },
+};
+
+function renderGeoChip(key: PlaceKey): void {
+  const chip = byId<HTMLButtonElement>(GEO_FIELDS[key].chip);
+  const g = geo[key];
+  chip.className = 'geo-chip ' + g.status;
+  const label: Record<GeoStatus, string> = {
+    empty: '',
+    stale: '📍 locate',
+    busy: '⏳ locating…',
+    ok: '✓ located',
+    fail: '✗ not found — retry',
+  };
+  chip.textContent = label[g.status] || '·';
+  // visibility (not display) so an appearing chip never shifts the layout.
+  chip.style.visibility = g.status === 'empty' ? 'hidden' : 'visible';
+  if (g.status === 'ok' && g.ll) {
+    chip.title = `Located at ${g.ll[0].toFixed(4)}, ${g.ll[1].toFixed(4)} — click to look up again`;
+  } else if (g.status === 'fail') {
+    chip.title = 'The geocoder could not find this place — check spelling and retry';
+  } else {
+    chip.title = 'Locate this place on the map';
+  }
+}
+
+/** Set a place's coordinates directly (record being edited). */
+function setPlaceGeo(key: PlaceKey, ll: LatLng | null, hasText: boolean): void {
+  geo[key].token++;
+  geo[key].ll = ll;
+  geo[key].status = ll ? 'ok' : hasText ? 'stale' : 'empty';
+  renderGeoChip(key);
+}
+
+/** Look up a place's fields and show the outcome on its chip. */
+function resolvePlace(key: PlaceKey, force = false): void {
+  const f = GEO_FIELDS[key];
+  const city = getVal(f.city).trim();
+  const addr = getVal(f.addr).trim();
+  const g = geo[key];
+  const token = ++g.token;
+  if (!city && !addr) {
+    g.ll = null;
+    g.status = 'empty';
+    renderGeoChip(key);
+    return;
+  }
+  g.status = 'busy';
+  renderGeoChip(key);
+  void geocodePlace(city, addr, { priority: true, force }).then((ll) => {
+    if (g.token !== token) return; // fields changed meanwhile
+    g.ll = ll;
+    g.status = ll ? 'ok' : 'fail';
+    renderGeoChip(key);
+  });
+}
+
+/** Mark a place unresolved after its fields were edited. */
+function stalePlace(key: PlaceKey): void {
+  const f = GEO_FIELDS[key];
+  const hasText = !!(getVal(f.city).trim() || getVal(f.addr).trim());
+  setPlaceGeo(key, null, hasText);
+}
+
 function bufHint(): void {
   const t = getVal('fTransport') as TransportKind;
   byId('bufHint').textContent = `Needs ≥ ${fmtDur(bufferMin(t) * 60000)} to connect before this leg`;
@@ -142,6 +227,9 @@ function fillLegFields(leg: ExtractedLeg): void {
   set('fCost', leg.cost);
   set('fCur', leg.currency);
   bufHint();
+  // The recognised places are new text — locate them right away.
+  resolvePlace('dep');
+  resolvePlace('arr');
 }
 
 async function recognise(): Promise<void> {
@@ -210,6 +298,19 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   setVal('fNote', '');
   refreshParserCombo();
   bufHint();
+  if (r) {
+    // Editing: adopt the stored coordinates; look up only what's missing.
+    setPlaceGeo('dep', r.dep.ll, !!(r.dep.city || r.dep.addr));
+    setPlaceGeo('arr', r.arr.ll, !!(r.arr.city || r.arr.addr));
+    if (!r.dep.ll) resolvePlace('dep');
+    if (!r.arr.ll) resolvePlace('arr');
+  } else {
+    // New leg: locate prefilled places right away, stay quiet when blank.
+    setPlaceGeo('dep', null, !!(P.depCity || P.depAddr));
+    setPlaceGeo('arr', null, !!(P.arrCity || P.arrAddr));
+    if (P.depCity || P.depAddr) resolvePlace('dep');
+    if (P.arrCity || P.arrAddr) resolvePlace('arr');
+  }
   byId('overlay').classList.add('open');
   renderPreview(pendingFile ?? existingAttachment);
 }
@@ -233,6 +334,13 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hCost', h ? h.cost : P.cost ?? '');
   setVal('hCur', h ? h.currency : P.currency ?? 'EUR');
   setVal('hLink', h ? h.link || '' : P.link ?? '');
+  if (h) {
+    setPlaceGeo('hot', h.ll, !!(h.city || h.addr));
+    if (!h.ll) resolvePlace('hot');
+  } else {
+    setPlaceGeo('hot', null, !!(P.city || P.addr));
+    if (P.city || P.addr) resolvePlace('hot');
+  }
   byId('overlay').classList.add('open');
   renderPreview(null);
 }
@@ -274,16 +382,6 @@ async function saveLeg(): Promise<void> {
   }
 }
 
-/** Show the full-screen busy overlay while a slow save step runs. */
-function busyWhile<T>(text: string, work: Promise<T>): Promise<T> {
-  const busy = byId('importBusy');
-  byId('importBusyText').textContent = text;
-  busy.style.display = 'flex';
-  return work.finally(() => {
-    busy.style.display = 'none';
-  });
-}
-
 async function doSaveLeg(dc: string, ac: string): Promise<void> {
   const existing = editingId ? (findItem(editingId) as Leg | undefined) : undefined;
   let attachment = existingAttachment;
@@ -296,16 +394,13 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
   // Persist the exchange that filled this leg, next to the image. Awaited so
   // a reload right after Save cannot lose the write.
   if (dialogExchange) await putExchange(segId, dialogExchange);
-  // A cold geocoder lookup can take a few seconds (rate-limited network).
-  const [depLl, arrLl] = await busyWhile(
-    'Locating places…',
-    Promise.all([geocodePlace(dc, getVal('fDepAddr')), geocodePlace(ac, getVal('fArrAddr'))]),
-  );
+  // Coordinates come from the dialog's explicit lookups (the chips); saving
+  // never geocodes. Unresolved places save as null and stay off the map.
   const seg: Leg = {
     id: segId,
     kind: 'leg',
-    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: depLl },
-    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: arrLl },
+    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: geo.dep.ll },
+    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: geo.arr.ll },
     transport: getVal('fTransport') as TransportKind,
     company: getVal('fCompany'),
     cost: Number(getVal('fCost') || 0),
@@ -320,45 +415,37 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
 
 function saveModal(): void {
   if (editKind === 'hotel') {
-    void saveHotel();
+    saveHotel();
     return;
   }
   void saveLeg();
 }
 
-async function saveHotel(): Promise<void> {
+function saveHotel(): void {
   const name = getVal('hName');
   const city = getVal('hCity');
   if (!name || !city) {
     alert('Hotel name and city are required.');
     return;
   }
-  const saveBtn = byId<HTMLButtonElement>('saveBtn');
-  if (saveBtn.disabled) return;
-  saveBtn.disabled = true;
-  try {
-    const existing = editingId ? findItem(editingId) : undefined;
-    const ll = await busyWhile('Locating places…', geocodePlace(city, getVal('hAddr')));
-    const h: Hotel = {
-      id: existing?.id ?? nextId(),
-      kind: 'hotel',
-      name,
-      city,
-      addr: getVal('hAddr'),
-      checkIn: getVal('hIn'),
-      checkOut: getVal('hOut'),
-      cost: Number(getVal('hCost') || 0),
-      currency: getVal('hCur') as CurrencyCode,
-      link: getVal('hLink').trim() || null,
-      ll,
-      inPlan: existing ? existing.inPlan : newInPlan,
-    };
-    upsertItem(h);
-    closeModal();
-    emitChange();
-  } finally {
-    saveBtn.disabled = false;
-  }
+  const existing = editingId ? findItem(editingId) : undefined;
+  const h: Hotel = {
+    id: existing?.id ?? nextId(),
+    kind: 'hotel',
+    name,
+    city,
+    addr: getVal('hAddr'),
+    checkIn: getVal('hIn'),
+    checkOut: getVal('hOut'),
+    cost: Number(getVal('hCost') || 0),
+    currency: getVal('hCur') as CurrencyCode,
+    link: getVal('hLink').trim() || null,
+    ll: geo.hot.ll,
+    inPlan: existing ? existing.inPlan : newInPlan,
+  };
+  upsertItem(h);
+  closeModal();
+  emitChange();
 }
 
 function deleteItem(): void {
@@ -390,6 +477,16 @@ export function wireModal(): void {
     activeTab = 'llm';
     applyTabs();
   };
+  // Geo chips: click retries the lookup; editing a place's fields marks it
+  // unresolved immediately and re-locates once the field loses focus.
+  for (const key of ['dep', 'arr', 'hot'] as PlaceKey[]) {
+    const f = GEO_FIELDS[key];
+    byId(f.chip).onclick = () => resolvePlace(key, true);
+    for (const id of [f.city, f.addr]) {
+      byId(id).addEventListener('input', () => stalePlace(key));
+      byId(id).addEventListener('change', () => resolvePlace(key));
+    }
+  }
   const zone = byId('importZone');
   zone.onclick = (e) => {
     if ((e.target as HTMLElement).id !== 'legFile') byId<HTMLInputElement>('legFile').click();
