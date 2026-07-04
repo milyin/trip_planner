@@ -1,25 +1,43 @@
 import { fitAll } from '../map/mapView';
+import { clearAllStored } from '../state/attachments';
+import { emitChange, state } from '../state/store';
 import { byId } from './dom';
 import { openHotelModal, openModal } from './modal';
 import { toggleTheme } from './theme';
 
-/** Close the ＋ Add dropdown menu. */
+/** Close the ＋ Add and ☰ dropdown menus. */
 export function closeAddMenu(): void {
-  byId('addMenu').classList.remove('open');
-  byId('addBtn').setAttribute('aria-expanded', 'false');
+  for (const [btn, menu] of [['addBtn', 'addMenu'], ['hamBtn', 'hamMenu']] as const) {
+    byId(menu).classList.remove('open');
+    byId(btn).setAttribute('aria-expanded', 'false');
+  }
 }
 
-/** Wire the top bar (＋ Add menu, theme toggle) and the Map panel's Fit button. */
-export function wireTopbar(): void {
-  const addBtn = byId('addBtn');
-  const addMenu = byId('addMenu');
-  addBtn.onclick = (e) => {
+function wireMenu(btnId: string, menuId: string): void {
+  const btn = byId(btnId);
+  const menu = byId(menuId);
+  btn.onclick = (e) => {
     e.stopPropagation();
-    const open = !addMenu.classList.contains('open');
-    addMenu.classList.toggle('open', open);
-    addBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    const open = !menu.classList.contains('open');
+    closeAddMenu(); // at most one menu open at a time
+    menu.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
-  addMenu.querySelectorAll('button').forEach((b) => {
+}
+
+function clearAll(): void {
+  if (!confirm('Remove ALL segments and hotels (including stored images)? This cannot be undone.')) return;
+  state.items = [];
+  state.selected = null;
+  void clearAllStored();
+  emitChange();
+}
+
+/** Wire the top bar (＋ Add and ☰ menus) and the Map panel's Fit button. */
+export function wireTopbar(): void {
+  wireMenu('addBtn', 'addMenu');
+  wireMenu('hamBtn', 'hamMenu');
+  byId('addMenu').querySelectorAll('button').forEach((b) => {
     b.onclick = (e) => {
       e.stopPropagation();
       closeAddMenu();
@@ -27,9 +45,15 @@ export function wireTopbar(): void {
       else openModal(null);
     };
   });
+  // Hamburger items: close the menu, then act (preview/settings wire their
+  // own onclick elsewhere — attach via listeners so we don't clobber them).
+  byId('hamMenu').querySelectorAll('button').forEach((b) => {
+    b.addEventListener('click', closeAddMenu);
+  });
+  byId('themeBtn').addEventListener('click', toggleTheme);
+  byId('clearBtn').addEventListener('click', clearAll);
   document.addEventListener('click', (e) => {
     if (!(e.target as HTMLElement).closest('.menu-wrap')) closeAddMenu();
   });
-  byId('themeBtn').onclick = toggleTheme;
   byId('fitBtn').onclick = fitAll;
 }

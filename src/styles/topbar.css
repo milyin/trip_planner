@@ -29,4 +29,6 @@
   font-size:13px; font-weight:600; cursor:pointer}
 .menu button:hover{background:var(--card-hover)}
 .menu button .mi{font-size:15px; width:18px; text-align:center}
+.menu button.primary{color:var(--accent); background:transparent; box-shadow:none}
+.menu button.danger-item{color:var(--danger)}
 .btn:disabled{opacity:.45; cursor:not-allowed}

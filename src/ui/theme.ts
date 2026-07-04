@@ -24,7 +24,9 @@ export function toggleTheme(): void {
 /** Set the theme (used by the toggle and by startup restore). */
 export function applyTheme(theme: 'dark' | 'light'): void {
   document.body.dataset.theme = theme;
-  byId('themeBtn').textContent = theme === 'light' ? '☀️' : '🌙';
+  // The menu item offers the theme you'd switch TO.
+  byId('themeIcon').textContent = theme === 'light' ? '🌙' : '☀️';
+  byId('themeLabel').textContent = theme === 'light' ? 'Night theme' : 'Day theme';
   applyTiles();
   emitChange();
 }

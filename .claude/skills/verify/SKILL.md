@@ -38,6 +38,11 @@ Useful hooks in the app:
   Errors surface via `alert()` — capture with `page.on('dialog', ...)`.
 - Settings shape: `{accounts: [{id, provider, apiKey}], parsers: [{accountId, model}],
   activeParser, theme}`; older shapes migrate on load.
+- Topbar: ＋ Add (`#addBtn`/`#addMenu`) and ☰ (`#hamBtn`/`#hamMenu` with `#previewBtn`,
+  `#themeBtn`, `#settingsBtn`, `#clearBtn`). Clear all uses `confirm()` — Playwright's
+  dialog handler must accept/dismiss it.
+- IndexedDB v2 has stores `attachments` and `exchanges` (per-segment LLM exchange, keyed
+  by segment id — shown in the LLM tab when editing a saved segment).
 - LLM endpoints: `generativelanguage.googleapis.com` (Gemini SDK) and
   `openrouter.ai/api/v1/chat/completions` (plain fetch — easy to mock with `ctx.route`
   fulfilling a canned `{choices:[{message:{content: JSON.stringify({legs:[...]})}}]}`).

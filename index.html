@@ -11,14 +11,20 @@
     <div class="brand"><div class="logo">✈</div>
       <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
     <div class="spacer"></div>
-    <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
-    <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
-    <button class="btn ghost icon" id="settingsBtn" title="Image parsers (LLM settings)">⚙️</button>
     <div class="menu-wrap">
       <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
       <div class="menu" id="addMenu" role="menu">
         <button type="button" role="menuitem" data-add="segment"><span class="mi">✈</span> Segment</button>
         <button type="button" role="menuitem" data-add="hotel"><span class="mi">🏨</span> Hotel</button>
+      </div>
+    </div>
+    <div class="menu-wrap">
+      <button class="btn ghost icon" id="hamBtn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
+      <div class="menu" id="hamMenu" role="menu">
+        <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
+        <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
+        <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> LLM configuration</button>
+        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi">🗑</span> Clear all</button>
       </div>
     </div>
   </div>

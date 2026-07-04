@@ -2,10 +2,12 @@ import type { CurrencyCode, Hotel, Segment, TransportKind } from '../domain/type
 import { geocode } from '../domain/geo';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
-import { formatExchange, lastExchange } from '../import/debugLog';
+import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedSegment } from '../import/extractor';
 import { runRecognition } from '../import/recognise';
-import { deleteAttachment, getAttachment, putAttachment, resolveLink } from '../state/attachments';
+import {
+  deleteAttachment, deleteExchange, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
+} from '../state/attachments';
 import { parserName, resolveParser, saveSettings, settings } from '../state/settings';
 import { deleteItemById, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
@@ -40,6 +42,9 @@ let existingAttachment: string | null = null;
 /** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
 let queuedLegs: ExtractedSegment[] = [];
 let queuedFile: File | null = null;
+/** Exchange shown in this dialog: loaded from storage when editing, replaced
+ * by a fresh recognition. Saved with the segment. */
+let dialogExchange: LlmExchange | null = null;
 
 /** Show/hide the modal sections for the active tab (Details / LLM exchange). */
 function applyTabs(): void {
@@ -52,7 +57,7 @@ function applyTabs(): void {
   byId('llmBody').style.display = form ? 'none' : 'block';
   byId('mtabForm').classList.toggle('active', form);
   byId('mtabLlm').classList.toggle('active', !form);
-  if (!form) byId('llmDump').textContent = formatExchange(lastExchange());
+  if (!form) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
 /** Render the ticket image (or PDF) preview inside the drop zone. */
@@ -164,6 +169,7 @@ async function recognise(): Promise<void> {
     return;
   }
   const legs = await runRecognition(file, note, parser);
+  dialogExchange = lastExchange();
   if (!legs) return;
   fillSegmentFields(legs[0]);
   queuedLegs = legs.slice(1);
@@ -181,6 +187,16 @@ export function openModal(id: string | null, prefill?: SegmentPrefill): void {
   const r = (id ? findItem(id) : null) as Segment | null;
   pendingFile = P.file ?? null;
   existingAttachment = r ? r.attachment : null;
+  dialogExchange = null;
+  if (id) {
+    // Show the exchange that produced this segment, if one was stored.
+    void getExchange(id).then((ex) => {
+      if (ex && editingId === id) {
+        dialogExchange = ex;
+        if (activeTab === 'llm') applyTabs();
+      }
+    });
+  }
   setVal('fDepCity', r ? r.dep.city : P.depCity ?? '');
   setVal('fDepAddr', r ? r.dep.addr : P.depAddr ?? '');
   setVal('fDepTime', r ? r.dep.time : P.depTime ?? '2026-05-01T12:00');
@@ -226,6 +242,8 @@ export function closeModal(): void {
   renderPreview(null);
   pendingFile = null;
   existingAttachment = null;
+  const ex = dialogExchange;
+  dialogExchange = null;
   if (queuedLegs.length) {
     const [leg, ...rest] = queuedLegs;
     queuedLegs = [];
@@ -233,6 +251,8 @@ export function closeModal(): void {
     if (!rest.length) queuedFile = null;
     openModal(null, { ...leg, file: f ?? undefined });
     queuedLegs = rest;
+    // Every leg of the itinerary came from the same recognition.
+    dialogExchange = ex;
   }
 }
 
@@ -262,8 +282,11 @@ async function doSaveSegment(dc: string, ac: string): Promise<void> {
     if (existingAttachment) void deleteAttachment(existingAttachment);
     attachment = await putAttachment(pendingFile);
   }
+  const segId = existing?.id ?? nextId();
+  // Persist the exchange that filled this segment, next to the image.
+  if (dialogExchange) void putExchange(segId, dialogExchange);
   const seg: Segment = {
-    id: existing?.id ?? nextId(),
+    id: segId,
     kind: 'segment',
     dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: geocode(dc, getVal('fDepAddr')) },
     arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: geocode(ac, getVal('fArrAddr')) },
@@ -317,8 +340,11 @@ function saveHotel(): void {
 function deleteItem(): void {
   if (editingId) {
     const r = findItem(editingId);
-    // Deleting the record deletes its locally stored image too.
-    if (r && r.kind === 'segment') void deleteAttachment(r.attachment);
+    // Deleting the record deletes its locally stored image and exchange too.
+    if (r && r.kind === 'segment') {
+      void deleteAttachment(r.attachment);
+      void deleteExchange(r.id);
+    }
     deleteItemById(editingId);
   }
   closeModal();
