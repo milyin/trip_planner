@@ -1,6 +1,6 @@
 .topbar{display:flex; align-items:center; gap:16px; padding:14px 20px;
   border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--panel) 78%, transparent);
-  backdrop-filter:blur(8px); z-index:5}
+  backdrop-filter:blur(8px); position:relative; z-index:10}
 .brand{display:flex; align-items:center; gap:12px; font-weight:700}
 .brand .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
   background:linear-gradient(135deg, var(--accent), #7c5cff); color:#08111c; font-size:18px;

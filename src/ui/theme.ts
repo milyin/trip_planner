@@ -17,7 +17,7 @@ export const hotelColor = (): string => cssv('--t-hotel');
 export function toggleTheme(): void {
   const light = document.body.dataset.theme !== 'light';
   document.body.dataset.theme = light ? 'light' : 'dark';
-  byId('themeBtn').textContent = light ? '☀' : '🌙';
+  byId('themeBtn').textContent = light ? '☀️' : '🌙';
   applyTiles();
   buildLegend();
   emitChange();
