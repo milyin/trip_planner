@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
-  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-10/assets/index-DnCbZaX2.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-10/assets/index-n8_l9YIT.css">
+  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-10/assets/index-CUxHNNLE.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-10/assets/index-n5cqVXLD.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -69,6 +69,10 @@
 <div class="overlay" id="overlay">
   <div class="modal">
     <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
+    <div class="modal-tabs" id="modalTabs">
+      <button type="button" class="mtab active" id="mtabForm">Details</button>
+      <button type="button" class="mtab" id="mtabLlm">LLM exchange</button>
+    </div>
     <div class="file-preview" id="filePreview" style="display:none"></div>
     <div class="modal-body" id="segBody">
       <div class="leg col">Departure</div>
@@ -102,6 +106,7 @@
         <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
       <div class="field full"><label>Link (optional)</label><input id="hLink" type="url" placeholder="https://…"></div>
     </div>
+    <div class="modal-body llm" id="llmBody" style="display:none"><pre id="llmDump"></pre></div>
     <div class="modal-foot">
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
