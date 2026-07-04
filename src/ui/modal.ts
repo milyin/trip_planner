@@ -2,6 +2,7 @@ import type { CurrencyCode, Hotel, Segment, TransportKind } from '../domain/type
 import { geocode } from '../domain/geo';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
+import { deleteAttachment, isAttachmentLink, resolveLink } from '../state/attachments';
 import { deleteItemById, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
 import { byId, getVal, setVal } from './dom';
@@ -11,6 +12,7 @@ export interface SegmentPrefill {
   depCity?: string; depAddr?: string; depTime?: string;
   arrCity?: string; arrAddr?: string; arrTime?: string;
   transport?: TransportKind; company?: string; cost?: number; currency?: CurrencyCode;
+  link?: string;
 }
 
 export interface HotelPrefill {
@@ -22,6 +24,35 @@ export interface HotelPrefill {
 let editingId: string | null = null;
 let editKind: 'segment' | 'hotel' = 'segment';
 let newInPlan = false;
+let onClosed: (() => void) | null = null;
+let previewUrl: string | null = null;
+
+/** One-shot hook fired after the dialog closes (save or cancel) — used by the
+ * ticket import flow to open the next leg's dialog. */
+export function setOnModalClosed(fn: () => void): void {
+  onClosed = fn;
+}
+
+/** Show the file/link preview above the form when the link is a stored
+ * attachment (PDF or image); hide it otherwise. */
+function renderPreview(link: string | null): void {
+  const box = byId('filePreview');
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+  }
+  box.style.display = 'none';
+  box.innerHTML = '';
+  if (!isAttachmentLink(link)) return;
+  void resolveLink(link).then((r) => {
+    if (!r || byId('overlay').classList.contains('open') === false) return;
+    previewUrl = r.url;
+    box.innerHTML = r.type.startsWith('image/')
+      ? `<img src="${r.url}" alt="Attached file preview">`
+      : `<embed src="${r.url}" type="${r.type}">`;
+    box.style.display = 'block';
+  });
+}
 
 function showBody(kind: 'segment' | 'hotel'): void {
   editKind = kind;
@@ -54,8 +85,10 @@ export function openModal(id: string | null, prefill?: SegmentPrefill): void {
   setVal('fCompany', r ? r.company : P.company ?? '');
   setVal('fCost', r ? r.cost : P.cost ?? '');
   setVal('fCur', r ? r.currency : P.currency ?? 'EUR');
+  setVal('fLink', r ? r.link || '' : P.link ?? '');
   bufHint();
   byId('overlay').classList.add('open');
+  renderPreview(r ? r.link : P.link ?? null);
 }
 
 /** Open the hotel dialog (new when `id` is null), optionally pre-filled. */
@@ -76,10 +109,15 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hCur', h ? h.currency : P.currency ?? 'EUR');
   setVal('hLink', h ? h.link || '' : P.link ?? '');
   byId('overlay').classList.add('open');
+  renderPreview(null);
 }
 
 export function closeModal(): void {
   byId('overlay').classList.remove('open');
+  renderPreview(null);
+  const fn = onClosed;
+  onClosed = null;
+  fn?.();
 }
 
 function saveModal(): void {
@@ -103,6 +141,7 @@ function saveModal(): void {
     company: getVal('fCompany'),
     cost: Number(getVal('fCost') || 0),
     currency: getVal('fCur') as CurrencyCode,
+    link: getVal('fLink').trim() || null,
     inPlan: existing ? existing.inPlan : newInPlan,
   };
   upsertItem(seg);
@@ -138,7 +177,12 @@ function saveHotel(): void {
 }
 
 function deleteItem(): void {
-  if (editingId) deleteItemById(editingId);
+  if (editingId) {
+    const r = findItem(editingId);
+    // Deleting the record deletes its locally stored file too.
+    if (r && r.kind === 'segment') void deleteAttachment(r.link);
+    deleteItemById(editingId);
+  }
   closeModal();
   emitChange();
 }

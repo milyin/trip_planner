@@ -1,5 +1,5 @@
 import type { TripItem } from '../domain/types';
-import { seedItems } from './seed';
+import { loadItems, saveItems } from './persist';
 
 /** Mutable application state. UI reads this directly and re-renders on change. */
 export interface AppState {
@@ -11,7 +11,7 @@ export interface AppState {
 }
 
 export const state: AppState = {
-  items: seedItems(),
+  items: loadItems(),
   selected: null,
   draggedId: null,
 };
@@ -24,8 +24,10 @@ export const subscribe = (fn: Listener): void => {
   listeners.push(fn);
 };
 
-/** Notify subscribers that state changed (synchronous, mirrors the prototype's `render()`). */
+/** Notify subscribers that state changed (synchronous, mirrors the prototype's `render()`).
+ * Also persists the items — every mutation goes through here. */
 export const emitChange = (): void => {
+  saveItems(state.items);
   for (const fn of listeners) fn();
 };
 

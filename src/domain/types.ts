@@ -26,6 +26,8 @@ export interface Segment {
   company: string;
   cost: number;
   currency: CurrencyCode;
+  /** Booking URL or an `attachment:<id>` reference to a locally stored file. */
+  link: string | null;
   inPlan: boolean;
 }
 

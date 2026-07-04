@@ -1,3 +1,4 @@
+import { pickTicketFile } from '../import/importFlow';
 import { fitAll } from '../map/mapView';
 import { byId } from './dom';
 import { openHotelModal, openModal } from './modal';
@@ -24,6 +25,7 @@ export function wireTopbar(): void {
       e.stopPropagation();
       closeAddMenu();
       if (b.dataset.add === 'hotel') openHotelModal(null);
+      else if (b.dataset.add === 'import') pickTicketFile();
       else openModal(null);
     };
   });
