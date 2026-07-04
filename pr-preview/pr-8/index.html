@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trip Planner</title>
+  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-8/assets/index-CtmsOcAI.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-8/assets/index-DvBYToV4.css">
+</head>
+<body data-theme="dark">
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><div class="logo">✈</div>
+      <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
+    <div class="spacer"></div>
+    <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
+    <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
+    <div class="menu-wrap">
+      <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
+      <div class="menu" id="addMenu" role="menu">
+        <button type="button" role="menuitem" data-add="segment"><span class="mi">✈</span> Segment</button>
+        <button type="button" role="menuitem" data-add="hotel"><span class="mi">🏨</span> Hotel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="panel" data-tab="segments">
+      <div class="panel-head"><span class="dot grey"></span><span class="title">Segments</span>
+        <span class="count" id="segmentsCount">0</span></div>
+      <div class="scroll" id="segmentsList"></div>
+    </section>
+
+    <section class="panel" data-tab="plan">
+      <div class="panel-head"><span class="dot white"></span><span class="title">Plan</span>
+        <span class="count" id="planCount">0</span></div>
+      <div class="scroll" id="planList"></div>
+      <div class="plan-foot" id="planFoot"></div>
+    </section>
+
+    <section class="panel" data-tab="map">
+      <div class="panel-head"><span class="title">Map</span>
+        <span class="count" id="mapHint">drag to pan · scroll to zoom</span>
+        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments &amp; hotels" aria-label="Zoom map to all segments &amp; hotels">🗺</button></div>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-legend">
+          <div class="legcol"><div class="h">Transport</div><div id="legTransport"></div></div>
+          <div class="legcol"><div class="h">State</div>
+            <div class="lrow"><span class="lg-line" style="border-top-color:var(--muted)"></span> In plan</div>
+            <div class="lrow"><span class="lg-line dashed" style="border-top-color:var(--muted)"></span> Available</div>
+            <div class="lrow"><span class="lg-line dashed" style="border-top-color:var(--danger); opacity:1"></span> Overlaps</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="segments"><span class="ti">🧭</span>Segments<span class="tbadge" id="tabSegCount">0</span></button>
+    <button data-tab="plan"><span class="ti">🧩</span>Plan<span class="tbadge" id="tabPlanCount">0</span></button>
+    <button data-tab="map"><span class="ti">🗺</span>Map</button>
+  </nav>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
+    <div class="modal-body" id="segBody">
+      <div class="leg col">Departure</div>
+      <div class="leg col">Arrival</div>
+      <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
+      <div class="field"><label>City</label><input id="fArrCity" placeholder="Paris"></div>
+      <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
+      <div class="field"><label>Address / stop</label><input id="fArrAddr" placeholder="CDG"></div>
+      <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
+      <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
+      <div class="leg">Details</div>
+      <div class="field"><label>Transport</label>
+        <select id="fTransport"><option>Plane</option><option>Train</option><option>Bus</option>
+          <option>Taxi</option><option>Car</option><option>Other</option></select>
+        <span class="hint" id="bufHint"></span></div>
+      <div class="field"><label>Company (optional)</label><input id="fCompany" placeholder="AirFrance"></div>
+      <div class="field"><label>Cost</label><input id="fCost" type="number" min="0" step="0.01" placeholder="100.00"></div>
+      <div class="field"><label>Currency</label>
+        <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+    </div>
+    <div class="modal-body" id="hotelBody" style="display:none">
+      <div class="leg">Stay</div>
+      <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
+      <div class="field"><label>City</label><input id="hCity" placeholder="Paris"></div>
+      <div class="field"><label>Address</label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
+      <div class="field"><label>Check-in</label><input id="hIn" type="datetime-local"></div>
+      <div class="field"><label>Check-out</label><input id="hOut" type="datetime-local"></div>
+      <div class="field"><label>Price</label><input id="hCost" type="number" min="0" step="0.01" placeholder="240.00"></div>
+      <div class="field"><label>Currency</label>
+        <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+      <div class="field full"><label>Link (optional)</label><input id="hLink" type="url" placeholder="https://…"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="delBtn" style="display:none">Delete</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn primary" id="saveBtn">Save segment</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
