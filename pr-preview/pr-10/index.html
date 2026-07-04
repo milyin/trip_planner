@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
-  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-10/assets/index-CUxHNNLE.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-10/assets/index-n5cqVXLD.css">
+  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-10/assets/index-CTYRZlYs.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-10/assets/index-BDw5WGOi.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -15,15 +15,13 @@
     <div class="spacer"></div>
     <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
     <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
-    <button class="btn ghost icon" id="settingsBtn" title="Ticket import — LLM provider settings">⚙️</button>
+    <button class="btn ghost icon" id="settingsBtn" title="Image parsers (LLM settings)">⚙️</button>
     <div class="menu-wrap">
       <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
       <div class="menu" id="addMenu" role="menu">
         <button type="button" role="menuitem" data-add="segment"><span class="mi">✈</span> Segment</button>
         <button type="button" role="menuitem" data-add="hotel"><span class="mi">🏨</span> Hotel</button>
-        <button type="button" role="menuitem" data-add="import"><span class="mi">🎫</span> Segment from ticket…</button>
       </div>
-      <input type="file" id="importFile" accept="application/pdf,image/*" style="display:none">
     </div>
   </div>
 
@@ -73,7 +71,18 @@
       <button type="button" class="mtab active" id="mtabForm">Details</button>
       <button type="button" class="mtab" id="mtabLlm">LLM exchange</button>
     </div>
-    <div class="file-preview" id="filePreview" style="display:none"></div>
+    <div class="seg-import" id="segImport">
+      <div class="import-zone" id="importZone" title="Click to choose an image or PDF, or drop one here (replaces the current one)">
+        <div class="file-preview" id="filePreview" style="display:none"></div>
+        <div class="drop-hint" id="dropHint">📎 Drop a screenshot of a flight / train listing here, or click to choose</div>
+        <input type="file" id="segFile" accept="application/pdf,image/*" style="display:none">
+      </div>
+      <div class="import-controls">
+        <input id="fNote" placeholder="Optional note for the model — e.g. “the 20:09 direct train”">
+        <select id="fParser" title="Image parser"></select>
+        <button class="btn" id="recogniseBtn" title="Extract the fields below from the image and note">Recognise</button>
+      </div>
+    </div>
     <div class="modal-body" id="segBody">
       <div class="leg col">Departure</div>
       <div class="leg col">Arrival</div>
@@ -92,7 +101,6 @@
       <div class="field"><label>Cost</label><input id="fCost" type="number" min="0" step="0.01" placeholder="100.00"></div>
       <div class="field"><label>Currency</label>
         <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
-      <div class="field full"><label>Link (optional)</label><input id="fLink" placeholder="https://… or attachment:…"></div>
     </div>
     <div class="modal-body" id="hotelBody" style="display:none">
       <div class="leg">Stay</div>
@@ -116,25 +124,27 @@
   </div>
 </div>
 
-<div class="overlay" id="keyOverlay">
+<div class="overlay" id="parserOverlay">
   <div class="modal narrow">
-    <div class="modal-head"><h3>Ticket import — LLM provider</h3></div>
+    <div class="modal-head"><h3>Image parsers</h3><div class="x" id="closeParsers">✕</div></div>
     <div class="modal-body single">
+      <div id="parserList" class="parser-list"></div>
+      <div class="leg">Add parser</div>
       <div class="field full"><label>Provider</label>
-        <select id="keyProvider">
+        <select id="pProvider">
           <option value="gemini">Gemini</option>
           <option value="openrouter">OpenRouter</option>
         </select></div>
-      <div class="field full"><label>API key</label>
-        <input id="keyInput" type="password" autocomplete="off"></div>
       <div class="field full"><label>Model</label>
-        <input id="keyModel" autocomplete="off"></div>
-      <p class="hint-block" id="keyHint"></p>
+        <input id="pModel" autocomplete="off"></div>
+      <div class="field full"><label>API key</label>
+        <input id="pKey" type="password" autocomplete="off"></div>
+      <p class="hint-block" id="pHint"></p>
     </div>
     <div class="modal-foot">
+      <button class="btn primary" id="pAddBtn">Add parser</button>
       <div class="spacer"></div>
-      <button class="btn ghost" id="keyCancelBtn">Cancel</button>
-      <button class="btn primary" id="keySaveBtn">Save</button>
+      <button class="btn ghost" id="parserDoneBtn">Done</button>
     </div>
   </div>
 </div>
