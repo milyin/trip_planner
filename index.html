@@ -13,6 +13,7 @@
     <div class="spacer"></div>
     <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
     <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
+    <button class="btn ghost icon" id="settingsBtn" title="Ticket import — LLM provider settings">⚙️</button>
     <div class="menu-wrap">
       <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
       <div class="menu" id="addMenu" role="menu">
@@ -110,17 +111,23 @@
 
 <div class="overlay" id="keyOverlay">
   <div class="modal narrow">
-    <div class="modal-head"><h3>Gemini API key</h3></div>
+    <div class="modal-head"><h3>Ticket import — LLM provider</h3></div>
     <div class="modal-body single">
-      <div class="field full"><label>API key (aistudio.google.com)</label>
-        <input id="keyInput" type="password" placeholder="AIza…" autocomplete="off"></div>
-      <p class="hint-block">Used to read ticket files with Gemini. Stored only in this browser
-        (note: any app hosted on this GitHub Pages origin could read it).</p>
+      <div class="field full"><label>Provider</label>
+        <select id="keyProvider">
+          <option value="gemini">Gemini</option>
+          <option value="openrouter">OpenRouter</option>
+        </select></div>
+      <div class="field full"><label>API key</label>
+        <input id="keyInput" type="password" autocomplete="off"></div>
+      <div class="field full"><label>Model</label>
+        <input id="keyModel" autocomplete="off"></div>
+      <p class="hint-block" id="keyHint"></p>
     </div>
     <div class="modal-foot">
       <div class="spacer"></div>
       <button class="btn ghost" id="keyCancelBtn">Cancel</button>
-      <button class="btn primary" id="keySaveBtn">Save key</button>
+      <button class="btn primary" id="keySaveBtn">Save</button>
     </div>
   </div>
 </div>

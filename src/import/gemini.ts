@@ -1,40 +1,18 @@
 import type { Settings } from '../state/settings';
 import { AuthError, type ExtractedSegment, type SegmentExtractor } from './extractor';
-
-/** Inline-data requests are capped at ~20MB total; leave headroom for the prompt. */
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
-
-const TRANSPORTS = ['Plane', 'Train', 'Bus', 'Taxi', 'Car', 'Other'];
-const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
-
-const PROMPT = `The attached file is a travel booking confirmation or ticket (flight, train, bus, etc).
-Extract every transport leg it describes, in travel order.
-- Times must be local to the place they refer to, formatted exactly as YYYY-MM-DDTHH:MM.
-- "addr" is the airport, station or stop name (e.g. "CDG", "St-Charles"), not a street address, and not a repetition of the city name.
-- "company" is the carrier operating the leg.
-- If the total price covers several legs, put it on the first leg and 0 on the rest.
-- Pick the currency from the allowed list; if the ticket uses another currency, convert approximately and pick the closest match.
-- Omit any field the file does not state; never invent values.`;
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    // result is "data:<mime>;base64,<data>" — keep only the payload.
-    r.onload = () => resolve((r.result as string).split(',', 2)[1] ?? '');
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(file);
-  });
-}
+import { assertFileSize, CURRENCIES, fileToBase64, PROMPT, TRANSPORTS } from './shared';
 
 export const geminiExtractor: SegmentExtractor = {
   name: 'Gemini',
 
   isConfigured: (s: Settings): boolean => !!s.geminiApiKey,
 
+  clearKey: (s: Settings): void => {
+    s.geminiApiKey = '';
+  },
+
   async extract(file: File, s: Settings): Promise<ExtractedSegment[]> {
-    if (file.size > MAX_FILE_BYTES) {
-      throw new Error(`File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB, limit 15 MB).`);
-    }
+    assertFileSize(file);
     // The SDK is heavy (~400KB) and only needed for imports — load it lazily.
     const { ApiError, GoogleGenAI, Type } = await import('@google/genai');
 

@@ -2,12 +2,14 @@
  * app name because `<user>.github.io` is one origin shared by every GitHub
  * Pages project of the account. */
 
-export type LlmProvider = 'gemini';
+export type LlmProvider = 'gemini' | 'openrouter';
 
 export interface Settings {
   provider: LlmProvider;
   geminiApiKey: string;
   geminiModel: string;
+  openrouterApiKey: string;
+  openrouterModel: string;
   theme: 'dark' | 'light';
 }
 
@@ -17,6 +19,8 @@ const DEFAULTS: Settings = {
   provider: 'gemini',
   geminiApiKey: '',
   geminiModel: 'gemini-2.5-flash',
+  openrouterApiKey: '',
+  openrouterModel: 'google/gemini-2.5-flash',
   theme: 'dark',
 };
 
