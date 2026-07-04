@@ -623,9 +623,16 @@ document.getElementById("overlay").onclick=e=>{ if(e.target.id==="overlay") clos
 document.getElementById("fitBtn").onclick=()=>{ const b=[]; items.forEach(r=>{ if(r.kind==="hotel"){ if(r.ll)b.push(r.ll); return; } if(r.dep.ll)b.push(r.dep.ll); if(r.arr.ll)b.push(r.arr.ll); }); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); };
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
 
-/* click outside any card (and outside the map / modal / buttons) unselects */
+/* click outside any card (and outside the map / modal / buttons) unselects.
+   The map is tested by screen geometry, not e.target.closest("#map"): clicking a
+   segment re-renders the map and detaches the clicked SVG path from the DOM, so by
+   the time this runs closest("#map") would be null and we'd wrongly unselect.
+   Empty-map clicks still deselect via Leaflet's own map "click" handler. */
 document.addEventListener("click",e=>{
-  if(e.target.closest(".card") || e.target.closest("#map") || e.target.closest(".overlay") || e.target.closest("button")) return;
+  const mapEl=document.getElementById("map");
+  let inMap=false;
+  if(mapEl){ const b=mapEl.getBoundingClientRect(); inMap = e.clientX>=b.left && e.clientX<=b.right && e.clientY>=b.top && e.clientY<=b.bottom; }
+  if(inMap || e.target.closest(".card") || e.target.closest(".overlay") || e.target.closest("button")) return;
   if(selected!==null){ selected=null; render(); }
 });
 
