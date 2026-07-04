@@ -602,6 +602,23 @@ function initMap(){
 }
 function applyTiles(){ const light=document.body.dataset.theme==="light";
   map.removeLayer(light?darkTiles:lightTiles); (light?lightTiles:darkTiles).addTo(map); }
+
+function scrollSelectedIntoView(){
+  if(selected==null) return;
+  const el=document.querySelector(".card.sel");
+  if(el) el.scrollIntoView({block:"nearest"});
+}
+/* Tapping a segment/hotel on the map selects it; on mobile also jump to the tab
+   that holds it (Plan if in the plan, otherwise Segments) and scroll it into view.
+   The tab switch is deferred (setTimeout 0) so the document-level "click outside"
+   handler still sees the visible map under the tap and keeps the fresh selection. */
+function selectFromMap(r){
+  selected=r.id; render();
+  if(document.body.classList.contains("mobile")){
+    const tab=r.inPlan?"plan":"segments";
+    setTimeout(()=>{ setTab(tab); scrollSelectedIntoView(); },0);
+  }
+}
 function drawMap(){
   segmentLayer.clearLayers(); const bounds=[]; const halo=cssv("--halo"), accent=cssv("--accent"), danger=cssv("--danger");
   const HITW=14;   // uniform transparent click/hover width (≈ the bold in-plan leg's halo) so thin dashed legs are as easy to grab as thick ones
@@ -612,7 +629,7 @@ function drawMap(){
       const m=L.marker(r.ll,{icon:L.divIcon({html:"🏨",className:cls,iconSize:[26,26],iconAnchor:[13,13]}),
         opacity:r.inPlan?1:.65, zIndexOffset:r.inPlan?600:300}).addTo(segmentLayer);
       m.bindTooltip(`🏨 ${r.name}<br><small>${r.city} · ${money(r)} · ${nights(r)} night${nights(r)>1?"s":""}</small>`,{className:"segment-tip",direction:"top"});
-      m.on("click",()=>{selected=r.id; render();});
+      m.on("click",()=>{selectFromMap(r);});
       bounds.push(r.ll); return;
     }
     if(!r.dep.ll||!r.arr.ll)return;
@@ -633,11 +650,11 @@ function drawMap(){
     // bubblingMouseEvents:false → clicking selects without also firing the map's "click empty → unselect" handler
     const hit=L.polyline([r.dep.ll,r.arr.ll],{color:"#000",opacity:0,weight:HITW,lineCap:"round",bubblingMouseEvents:false}).addTo(segmentLayer);
     hit.bindTooltip(`${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,{className:"segment-tip",sticky:true});
-    hit.on("click",()=>{selected=r.id; render();});
+    hit.on("click",()=>{selectFromMap(r);});
     [r.dep,r.arr].forEach(p=>{ L.circleMarker(p.ll,{radius:r.inPlan?6:4,color:halo,weight:2,
       fillColor:isSel?(conflict?danger:accent):col,fillOpacity:1,bubblingMouseEvents:false})
       .bindTooltip(p.city,{className:"place-tip",direction:"top"})
-      .on("click",()=>{selected=r.id; render();})       // clicking an endpoint dot selects its segment too
+      .on("click",()=>{selectFromMap(r);})       // clicking an endpoint dot selects its segment too
       .addTo(segmentLayer);
       bounds.push(p.ll); });
   });

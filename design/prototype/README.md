@@ -47,9 +47,11 @@ the look, layout, and interactions can be evaluated quickly in a browser.
   full-screen panel at a time (each tab carries a live count badge, the map resizes
   itself when its tab opens). The top bar condenses to icon-only buttons, card action
   buttons are always visible (no hover needed for touch), and the record dialog becomes
-  a full-width bottom sheet (the Departure | Arrival columns are kept). The desktop
-  three-panel layout is unchanged. A **📱 toggle** in the top bar previews the mobile
-  layout inside a phone frame on a desktop browser.
+  a full-width bottom sheet (the Departure | Arrival columns are kept). Tapping a
+  segment or hotel **on the map** jumps to the tab that holds it (Plan if it is in
+  the plan, otherwise Segments) with that record selected and scrolled into view.
+  The desktop three-panel layout is unchanged. A **📱 toggle** in the top bar
+  previews the mobile layout inside a phone frame on a desktop browser.
 
 These behaviours are the specification the native GUI mirrors; see the repository
 root [`README.md`](../../README.md) for the full design write-up.
