@@ -1,4 +1,4 @@
-import { parserName, type ImageParser } from '../state/settings';
+import type { ResolvedParser } from '../state/settings';
 import { byId } from '../ui/dom';
 import { AuthError, getExtractor, type ExtractedSegment } from './extractor';
 
@@ -7,16 +7,17 @@ import { AuthError, getExtractor, type ExtractedSegment } from './extractor';
 export async function runRecognition(
   file: File | null,
   note: string,
-  parser: ImageParser,
+  parser: ResolvedParser,
 ): Promise<ExtractedSegment[] | null> {
+  const name = `${parser.provider} ${parser.model}`;
   const busy = byId('importBusy');
-  byId('importBusyText').textContent = `Reading ${file ? file.name || 'image' : 'note'} with ${parserName(parser)}…`;
+  byId('importBusyText').textContent = `Reading ${file ? file.name || 'image' : 'note'} with ${name}…`;
   busy.style.display = 'flex';
   try {
     return await getExtractor(parser).extract({ file, note }, parser);
   } catch (e) {
     if (e instanceof AuthError) {
-      alert(`${parserName(parser)} rejected the API key — check this parser in ⚙ Image parsers.`);
+      alert(`${name} rejected the API key — check the account in ⚙ LLM configuration.`);
     } else {
       alert(
         `Recognition failed: ${e instanceof Error ? e.message : e}\n` +

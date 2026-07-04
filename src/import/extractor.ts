@@ -1,5 +1,5 @@
 import type { CurrencyCode, TransportKind } from '../domain/types';
-import type { ImageParser, LlmProvider } from '../state/settings';
+import type { LlmProvider, ResolvedParser } from '../state/settings';
 import { geminiExtractor } from './gemini';
 import { openrouterExtractor } from './openrouter';
 
@@ -29,7 +29,7 @@ export interface ExtractInput {
 
 /** A pluggable LLM backend that turns the input into segment legs. */
 export interface SegmentExtractor {
-  extract(input: ExtractInput, parser: ImageParser): Promise<ExtractedSegment[]>;
+  extract(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedSegment[]>;
 }
 
 /** Thrown when the provider rejects the parser's API key. */
@@ -40,4 +40,4 @@ const extractors: Record<LlmProvider, SegmentExtractor> = {
   openrouter: openrouterExtractor,
 };
 
-export const getExtractor = (parser: ImageParser): SegmentExtractor => extractors[parser.provider];
+export const getExtractor = (parser: ResolvedParser): SegmentExtractor => extractors[parser.provider];

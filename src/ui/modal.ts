@@ -6,7 +6,7 @@ import { formatExchange, lastExchange } from '../import/debugLog';
 import type { ExtractedSegment } from '../import/extractor';
 import { runRecognition } from '../import/recognise';
 import { deleteAttachment, getAttachment, putAttachment, resolveLink } from '../state/attachments';
-import { parserName, saveSettings, settings } from '../state/settings';
+import { parserName, resolveParser, saveSettings, settings } from '../state/settings';
 import { deleteItemById, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
 import { byId, getVal, setVal } from './dom';
@@ -145,7 +145,14 @@ async function recognise(): Promise<void> {
     refreshParserCombo();
     if (!settings.parsers.length) return;
   }
-  const parser = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
+  const entry = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
+  const parser = resolveParser(entry);
+  if (!parser || !parser.apiKey) {
+    alert('The selected parser has no account key — fill it in the LLM configuration.');
+    await openParserSettings();
+    refreshParserCombo();
+    return;
+  }
   const note = getVal('fNote');
   let file = pendingFile;
   if (!file && existingAttachment) {
@@ -355,6 +362,10 @@ export function wireModal(): void {
     if (f) setPendingFile(f);
   });
   byId('recogniseBtn').onclick = () => void recognise();
+  byId('cfgParsersBtn').onclick = async () => {
+    await openParserSettings();
+    refreshParserCombo();
+  };
   byId('fParser').onchange = () => {
     const v = Number(getVal('fParser'));
     if (!Number.isNaN(v)) {

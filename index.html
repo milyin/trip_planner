@@ -78,6 +78,7 @@
       <div class="import-controls">
         <input id="fNote" placeholder="Optional note for the model — e.g. “the 20:09 direct train”">
         <select id="fParser" title="Image parser"></select>
+        <button class="btn icon ghost" id="cfgParsersBtn" title="Configure LLM accounts &amp; parsers">⚙</button>
         <button class="btn" id="recogniseBtn" title="Extract the fields below from the image and note">Recognise</button>
       </div>
     </div>
@@ -124,25 +125,20 @@
 
 <div class="overlay" id="parserOverlay">
   <div class="modal narrow">
-    <div class="modal-head"><h3>Image parsers</h3><div class="x" id="closeParsers">✕</div></div>
+    <div class="modal-head"><h3>LLM configuration</h3><div class="x" id="closeParsers">✕</div></div>
     <div class="modal-body single">
+      <div class="leg">Accounts — provider + API key</div>
+      <div id="accountList" class="parser-list"></div>
+      <button class="btn ghost" id="addAccountBtn">＋ Add account</button>
+      <div class="leg">Parsers — account + model</div>
       <div id="parserList" class="parser-list"></div>
-      <div class="leg">Add parser</div>
-      <div class="field full"><label>Provider</label>
-        <select id="pProvider">
-          <option value="gemini">Gemini</option>
-          <option value="openrouter">OpenRouter</option>
-        </select></div>
-      <div class="field full"><label>Model</label>
-        <input id="pModel" autocomplete="off"></div>
-      <div class="field full"><label>API key</label>
-        <input id="pKey" type="password" autocomplete="off"></div>
-      <p class="hint-block" id="pHint"></p>
+      <button class="btn ghost" id="addParserBtn">＋ Add parser</button>
+      <p class="hint-block">Keys: aistudio.google.com (Gemini) · openrouter.ai/keys (OpenRouter).
+        Stored only in this browser (note: any app hosted on this GitHub Pages origin could read them).</p>
     </div>
     <div class="modal-foot">
-      <button class="btn primary" id="pAddBtn">Add parser</button>
       <div class="spacer"></div>
-      <button class="btn ghost" id="parserDoneBtn">Done</button>
+      <button class="btn primary" id="parserDoneBtn">Done</button>
     </div>
   </div>
 </div>

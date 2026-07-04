@@ -1,10 +1,10 @@
-import type { ImageParser } from '../state/settings';
+import type { ResolvedParser } from '../state/settings';
 import { beginExchange } from './debugLog';
 import { AuthError, type ExtractInput, type ExtractedSegment, type SegmentExtractor } from './extractor';
 import { assertFileSize, buildPrompt, CURRENCIES, fileToBase64, TRANSPORTS } from './shared';
 
 export const geminiExtractor: SegmentExtractor = {
-  async extract({ file, note }: ExtractInput, parser: ImageParser): Promise<ExtractedSegment[]> {
+  async extract({ file, note }: ExtractInput, parser: ResolvedParser): Promise<ExtractedSegment[]> {
     if (file) assertFileSize(file);
     const ex = beginExchange({
       provider: parser.provider,

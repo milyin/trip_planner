@@ -31,9 +31,13 @@ Useful hooks in the app:
   `#mtabLlm` (LLM exchange dump in `#llmDump`).
 - Ticket recognition lives inside the segment dialog: drop zone `#importZone` (hidden input
   `#segFile`, preview `#filePreview`, hint `#dropHint`), note `#fNote`, parser combo
-  `#fParser`, button `#recogniseBtn`. Parser manager: ⚙ `#settingsBtn` → `#parserOverlay`
-  (`#pProvider`, `#pModel`, `#pKey`, `#pAddBtn`, `#parserDoneBtn`; rows `.parser-row`).
+  `#fParser`, config shortcut `#cfgParsersBtn`, button `#recogniseBtn`. LLM configuration:
+  ⚙ `#settingsBtn` → `#parserOverlay` with two inline-editable lists — `#accountList`
+  (provider select + key input per row) and `#parserList` (account select + model input per
+  row), `#addAccountBtn` / `#addParserBtn` / `#parserDoneBtn`; rows `.parser-row`.
   Errors surface via `alert()` — capture with `page.on('dialog', ...)`.
+- Settings shape: `{accounts: [{id, provider, apiKey}], parsers: [{accountId, model}],
+  activeParser, theme}`; older shapes migrate on load.
 - LLM endpoints: `generativelanguage.googleapis.com` (Gemini SDK) and
   `openrouter.ai/api/v1/chat/completions` (plain fetch — easy to mock with `ctx.route`
   fulfilling a canned `{choices:[{message:{content: JSON.stringify({legs:[...]})}}]}`).

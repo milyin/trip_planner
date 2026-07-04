@@ -53,12 +53,15 @@
 .import-controls input:focus, .import-controls select:focus{border-color:var(--accent)}
 .import-controls select{max-width:200px}
 
-/* Parser manager dialog. */
+/* LLM configuration dialog: inline-editable account and parser rows. */
 .parser-list{display:flex; flex-direction:column; gap:6px}
-.parser-row{display:flex; align-items:center; gap:10px; background:var(--panel-2);
-  border:1px solid var(--border); border-radius:10px; padding:4px 6px 4px 12px}
-.parser-row .pname{flex:1; font-size:13px}
-.parser-row .pkey{color:var(--faint); font-size:11px}
+.parser-row{display:flex; align-items:center; gap:8px; background:var(--panel-2);
+  border:1px solid var(--border); border-radius:10px; padding:4px 6px}
+.parser-row select, .parser-row input{background:var(--panel); border:1px solid var(--border);
+  color:var(--text); border-radius:8px; padding:6px 8px; font:inherit; font-size:12px; outline:none; min-width:0}
+.parser-row select{flex:0 0 auto; max-width:45%}
+.parser-row input{flex:1}
+.parser-row select:focus, .parser-row input:focus{border-color:var(--accent)}
 .empty-note{color:var(--faint); font-size:12px}
 
 /* Full-screen busy indicator while the LLM reads the ticket. */
