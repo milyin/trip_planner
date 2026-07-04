@@ -122,3 +122,5 @@ To enable it once: in the repository's **Settings → Pages**, set **Source** to
   reserved for this next step).
 - Persisting the itinerary (local storage / shareable links).
 - A real geocoding provider behind the existing `geocode()` interface.
+
+<!-- CI preview smoke test (PR will be closed, not merged) -->
