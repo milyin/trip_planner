@@ -1,9 +1,10 @@
 import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
+import { backfillCoordinates } from './domain/geocode';
 import { initMap } from './map/mapView';
 import { settings } from './state/settings';
-import { subscribe } from './state/store';
+import { emitChange, state, subscribe } from './state/store';
 import { wireGlobal } from './ui/global';
 import { wireModal } from './ui/modal';
 import { setupDrop } from './ui/panels';
@@ -27,3 +28,7 @@ subscribe(renderAll);
 renderAll();
 setTab('plan');
 syncMode();
+
+// Resolve coordinates that older data or offline saves are missing, so every
+// record eventually shows on the map.
+backfillCoordinates(state.items, emitChange);

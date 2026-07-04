@@ -1,5 +1,5 @@
 import type { CurrencyCode, Hotel, Leg, TransportKind } from '../domain/types';
-import { geocode } from '../domain/geo';
+import { geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
@@ -274,6 +274,16 @@ async function saveLeg(): Promise<void> {
   }
 }
 
+/** Show the full-screen busy overlay while a slow save step runs. */
+function busyWhile<T>(text: string, work: Promise<T>): Promise<T> {
+  const busy = byId('importBusy');
+  byId('importBusyText').textContent = text;
+  busy.style.display = 'flex';
+  return work.finally(() => {
+    busy.style.display = 'none';
+  });
+}
+
 async function doSaveLeg(dc: string, ac: string): Promise<void> {
   const existing = editingId ? (findItem(editingId) as Leg | undefined) : undefined;
   let attachment = existingAttachment;
@@ -286,11 +296,16 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
   // Persist the exchange that filled this leg, next to the image. Awaited so
   // a reload right after Save cannot lose the write.
   if (dialogExchange) await putExchange(segId, dialogExchange);
+  // A cold geocoder lookup can take a few seconds (rate-limited network).
+  const [depLl, arrLl] = await busyWhile(
+    'Locating places…',
+    Promise.all([geocodePlace(dc, getVal('fDepAddr')), geocodePlace(ac, getVal('fArrAddr'))]),
+  );
   const seg: Leg = {
     id: segId,
     kind: 'leg',
-    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: geocode(dc, getVal('fDepAddr')) },
-    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: geocode(ac, getVal('fArrAddr')) },
+    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: depLl },
+    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: arrLl },
     transport: getVal('fTransport') as TransportKind,
     company: getVal('fCompany'),
     cost: Number(getVal('fCost') || 0),
@@ -305,37 +320,45 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
 
 function saveModal(): void {
   if (editKind === 'hotel') {
-    saveHotel();
+    void saveHotel();
     return;
   }
   void saveLeg();
 }
 
-function saveHotel(): void {
+async function saveHotel(): Promise<void> {
   const name = getVal('hName');
   const city = getVal('hCity');
   if (!name || !city) {
     alert('Hotel name and city are required.');
     return;
   }
-  const existing = editingId ? findItem(editingId) : undefined;
-  const h: Hotel = {
-    id: existing?.id ?? nextId(),
-    kind: 'hotel',
-    name,
-    city,
-    addr: getVal('hAddr'),
-    checkIn: getVal('hIn'),
-    checkOut: getVal('hOut'),
-    cost: Number(getVal('hCost') || 0),
-    currency: getVal('hCur') as CurrencyCode,
-    link: getVal('hLink').trim() || null,
-    ll: geocode(city, getVal('hAddr')),
-    inPlan: existing ? existing.inPlan : newInPlan,
-  };
-  upsertItem(h);
-  closeModal();
-  emitChange();
+  const saveBtn = byId<HTMLButtonElement>('saveBtn');
+  if (saveBtn.disabled) return;
+  saveBtn.disabled = true;
+  try {
+    const existing = editingId ? findItem(editingId) : undefined;
+    const ll = await busyWhile('Locating places…', geocodePlace(city, getVal('hAddr')));
+    const h: Hotel = {
+      id: existing?.id ?? nextId(),
+      kind: 'hotel',
+      name,
+      city,
+      addr: getVal('hAddr'),
+      checkIn: getVal('hIn'),
+      checkOut: getVal('hOut'),
+      cost: Number(getVal('hCost') || 0),
+      currency: getVal('hCur') as CurrencyCode,
+      link: getVal('hLink').trim() || null,
+      ll,
+      inPlan: existing ? existing.inPlan : newInPlan,
+    };
+    upsertItem(h);
+    closeModal();
+    emitChange();
+  } finally {
+    saveBtn.disabled = false;
+  }
 }
 
 function deleteItem(): void {
