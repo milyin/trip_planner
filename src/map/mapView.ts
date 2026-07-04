@@ -35,11 +35,14 @@ function clearArrowDefs(): void {
 }
 
 /**
- * Id of an SVG arrowhead marker filled with `color`, created on demand and cached
- * in `reg` for this draw. Applied to a segment line via `marker-end`, so it sits at
- * the arrival end, points along the direction of travel, and re-renders on zoom/pan.
+ * Id of an SVG arrowhead marker filled with `color` and outlined in `halo` (so it
+ * stays legible where it overlaps a same-coloured line), created on demand and cached
+ * in `reg` for this draw. Applied to a segment line via `marker-mid`, so it sits at the
+ * line's midpoint, points along the direction of travel, and re-renders on zoom/pan.
+ * A fixed user-space size keeps the head readable on both thin dashed and bold planned
+ * legs.
  */
-function arrowMarker(color: string, reg: Map<string, string>): string | null {
+function arrowMarker(color: string, halo: string, reg: Map<string, string>): string | null {
   const cached = reg.get(color);
   if (cached) return cached;
   const defs = overlayDefs();
@@ -48,20 +51,35 @@ function arrowMarker(color: string, reg: Map<string, string>): string | null {
   const marker = document.createElementNS(SVGNS, 'marker');
   marker.setAttribute('id', id);
   marker.setAttribute('class', 'tp-arrow');
-  marker.setAttribute('viewBox', '0 0 10 10');
-  marker.setAttribute('refX', '7');
-  marker.setAttribute('refY', '5');
-  marker.setAttribute('markerWidth', '10');
-  marker.setAttribute('markerHeight', '10');
+  marker.setAttribute('viewBox', '0 0 12 12');
+  marker.setAttribute('refX', '6'); // centred on the vertex so the head straddles the midpoint
+  marker.setAttribute('refY', '6');
+  marker.setAttribute('markerWidth', '13');
+  marker.setAttribute('markerHeight', '13');
   marker.setAttribute('markerUnits', 'userSpaceOnUse');
   marker.setAttribute('orient', 'auto');
   const tip = document.createElementNS(SVGNS, 'path');
-  tip.setAttribute('d', 'M0.5,1 L9,5 L0.5,9 Z');
+  tip.setAttribute('d', 'M1.5,1.5 L11,6 L1.5,10.5 Z');
   tip.setAttribute('fill', color);
+  tip.setAttribute('stroke', halo);
+  tip.setAttribute('stroke-width', '1.4');
+  tip.setAttribute('stroke-linejoin', 'round');
   marker.appendChild(tip);
   defs.appendChild(marker);
   reg.set(color, id);
   return id;
+}
+
+/**
+ * Midpoint of the dep→arr leg in the map's projected (pixel) space, returned as a
+ * LatLng. Inserted as a middle vertex so the arrowhead (marker-mid) sits at the visual
+ * centre of the straight line. Using the projected — not the lat/lng — midpoint keeps
+ * the inserted vertex exactly on the drawn line, so the leg stays straight at any zoom.
+ */
+function projectedMidpoint(a: LatLng, b: LatLng): LatLng {
+  const mid = map.project(a).add(map.project(b)).divideBy(2);
+  const ll = map.unproject(mid);
+  return [ll.lat, ll.lng];
 }
 
 /** Create the Leaflet map, tile layers, and global map interactions. */
@@ -153,7 +171,8 @@ export function drawMap(): void {
     const selHi = isSel && !conflict; // selected, non-conflicting → highlight
     if (selHi) dash = null; // solid so the accent border reads cleanly
     const mainW = selHi ? weight + 1 : weight; // don't thicken conflicting legs
-    const line: LatLng[] = [r.dep.ll, r.arr.ll];
+    // the mid vertex anchors the direction arrowhead (marker-mid) at the leg's centre
+    const line: LatLng[] = [r.dep.ll, projectedMidpoint(r.dep.ll, r.arr.ll), r.arr.ll];
 
     if (selHi) {
       // selection casing: accent border + neutral separator ring (keeps the border
@@ -167,11 +186,13 @@ export function drawMap(): void {
       L.polyline(line, { color: halo, weight: weight + 4, opacity: 0.6, interactive: false }).addTo(segmentLayer);
     }
     // visible line is decorative; a fat transparent "hit line" on top carries click + hover
-    const visible = L.polyline(line, { color: lineCol, weight: mainW, opacity, dashArray: dash ?? undefined, interactive: false }).addTo(segmentLayer);
+    // smoothFactor:0 keeps the collinear mid vertex (Leaflet would otherwise simplify it
+    // away), so the direction arrowhead (marker-mid) has a vertex to anchor to
+    const visible = L.polyline(line, { color: lineCol, weight: mainW, opacity, dashArray: dash ?? undefined, interactive: false, smoothFactor: 0 }).addTo(segmentLayer);
     if (lineCol === col) usedTransports.add(r.transport); // legend lists only transports whose colour is on the map
-    const arrowId = arrowMarker(lineCol, arrowReg);
+    const arrowId = arrowMarker(lineCol, halo, arrowReg);
     const vpath = (visible as unknown as { getElement(): SVGPathElement | null }).getElement();
-    if (vpath && arrowId) vpath.setAttribute('marker-end', `url(#${arrowId})`);
+    if (vpath && arrowId) vpath.setAttribute('marker-mid', `url(#${arrowId})`);
     const tip = conflict ? `<br><small style="color:${danger}">⚠ overlaps plan</small>` : '';
     // bubblingMouseEvents:false → clicking selects without firing the map's "click empty → unselect"
     const hit = L.polyline(line, { color: '#000', opacity: 0, weight: HITW, lineCap: 'round', bubblingMouseEvents: false }).addTo(segmentLayer);
@@ -181,8 +202,8 @@ export function drawMap(): void {
     );
     hit.on('click', () => selectFromMap(r));
 
-    // endpoints contribute to map bounds; only the departure gets a dot —
-    // the arrival end is marked by the arrowhead so the leg reads directionally
+    // endpoints contribute to map bounds; only the departure gets a dot — the
+    // mid-line arrowhead points toward the arrival so the leg reads directionally
     [r.dep, r.arr].forEach((p) => { if (p.ll) bounds.push(p.ll); });
     if (r.dep.ll) {
       L.circleMarker(r.dep.ll, {
