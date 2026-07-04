@@ -513,14 +513,18 @@ function drawMap(){
     else { weight=3; opacity=.7; dash="6 8"; }                     // available: dashed, transport color
     const drawHalo = r.inPlan || (isSel && !conflict);             // no glow on conflicting legs — keep them thin
     if(drawHalo){ L.polyline([r.dep.ll,r.arr.ll],
-      {color:isSel?accent:halo, weight:weight+4, opacity:isSel?.35:.6}).addTo(segmentLayer); }
+      {color:isSel?accent:halo, weight:weight+4, opacity:isSel?.35:.6, interactive:false}).addTo(segmentLayer); }  // decorative glow: never capture clicks
     const mainW = (isSel && !conflict) ? weight+1 : weight;        // don't thicken conflicting legs
-    const line=L.polyline([r.dep.ll,r.arr.ll],{color:lineCol,weight:mainW,opacity,dashArray:dash}).addTo(segmentLayer);
+    // bubblingMouseEvents:false → a click on the line selects it without also firing the map's "click empty → unselect" handler
+    const line=L.polyline([r.dep.ll,r.arr.ll],{color:lineCol,weight:mainW,opacity,dashArray:dash,bubblingMouseEvents:false}).addTo(segmentLayer);
     const tip = conflict?`<br><small style="color:${danger}">⚠ overlaps plan</small>`:"";
     line.bindTooltip(`${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,{className:"segment-tip",sticky:true});
     line.on("click",()=>{selected=r.id; render();});
     [r.dep,r.arr].forEach(p=>{ L.circleMarker(p.ll,{radius:r.inPlan?6:4,color:halo,weight:2,
-      fillColor:isSel?(conflict?danger:accent):col,fillOpacity:1}).bindTooltip(p.city,{className:"place-tip",direction:"top"}).addTo(segmentLayer);
+      fillColor:isSel?(conflict?danger:accent):col,fillOpacity:1,bubblingMouseEvents:false})
+      .bindTooltip(p.city,{className:"place-tip",direction:"top"})
+      .on("click",()=>{selected=r.id; render();})       // clicking an endpoint dot selects its segment too
+      .addTo(segmentLayer);
       bounds.push(p.ll); });
   });
   if(initialFit&&bounds.length){ map.fitBounds(bounds,{padding:[50,50],maxZoom:6}); initialFit=false; }
