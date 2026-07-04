@@ -64,6 +64,16 @@
   .btn.icon{padding:0; width:28px; height:28px; justify-content:center; gap:0; font-size:13px; border-radius:8px}
   .btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%, var(--border))}
   .btn.icon{padding:8px 10px}
+  .menu-wrap{position:relative; display:inline-flex}
+  .menu{position:absolute; top:calc(100% + 6px); right:0; min-width:156px; z-index:20;
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:6px;
+    box-shadow:0 14px 34px rgba(0,0,0,.4); display:none; flex-direction:column; gap:2px}
+  .menu.open{display:flex}
+  .menu button{display:flex; align-items:center; gap:10px; width:100%; text-align:left; white-space:nowrap;
+    background:transparent; border:none; color:var(--text); padding:9px 12px; border-radius:8px;
+    font-size:13px; font-weight:600; cursor:pointer}
+  .menu button:hover{background:var(--card-hover)}
+  .menu button .mi{font-size:15px; width:18px; text-align:center}
   .btn:disabled{opacity:.45; cursor:not-allowed}
 
   .layout{display:grid; grid-template-columns:330px 330px 1fr; min-height:0; flex:1}
@@ -99,6 +109,9 @@
   .seg-cost{color:var(--ok); font-weight:700; font-size:13px; white-space:nowrap}
   .seg-tr{font-weight:600; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px}
   .seg-tr .ti{font-size:14px}
+  body.mobile .seg-tr{cursor:pointer}                    /* tap transport → show on map */
+  body.mobile .seg-tr .co{text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;
+    text-decoration-color:color-mix(in srgb,var(--accent) 70%, transparent)}
   .seg-sub{color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
   .card-actions{display:none; position:absolute; bottom:6px; right:6px; z-index:3;
     align-items:center; gap:4px; padding:2px; border-radius:9px;
@@ -200,6 +213,64 @@
 
   @media (max-width:1080px){ .layout{grid-template-columns:1fr 1fr; grid-auto-rows:minmax(220px,auto)}
     .panel:nth-child(3){grid-column:1/-1} }
+
+  /* ---------- bottom tab bar (hidden until mobile) ---------- */
+  .tabbar{display:none}
+
+  /* ---------- mobile layout: bottom-tab-bar, one full-screen panel at a time ----------
+     Driven by the body.mobile class (set from a max-width media query OR the 📱 preview
+     toggle), so desktop styling above is never touched. */
+  body.mobile .app{height:100dvh}
+  body.mobile .topbar{gap:8px; padding:10px 12px}
+  body.mobile .brand small{display:none}
+  body.mobile .brand h1{font-size:15px}
+  body.mobile .brand .logo{width:30px; height:30px; font-size:16px}
+  body.mobile .lbl{display:none}                       /* icon-only action buttons */
+  body.mobile #fitBtn{display:none}                    /* Fit map handled inside Map tab */
+  @media (max-width:640px){ #previewBtn{display:none} }/* preview toggle: desktop review aid only */
+  body.mobile #addBtn{width:38px; height:38px; padding:0;
+    justify-content:center; font-size:16px; border-radius:10px}
+
+  body.mobile .layout{display:flex; grid-template-columns:none}
+  body.mobile .panel{display:none; border-right:none; flex:1}
+  body.mobile[data-tab="segments"] .panel[data-tab="segments"],
+  body.mobile[data-tab="plan"]     .panel[data-tab="plan"],
+  body.mobile[data-tab="map"]      .panel[data-tab="map"]{display:flex}
+
+  body.mobile .tabbar{display:flex; background:color-mix(in srgb,var(--panel) 92%, transparent);
+    border-top:1px solid var(--border); backdrop-filter:blur(8px); padding-bottom:env(safe-area-inset-bottom)}
+  body.mobile .tabbar button{flex:1; position:relative; display:flex; flex-direction:column; align-items:center;
+    gap:3px; padding:9px 0 8px; background:none; border:none; color:var(--muted); font:inherit; font-size:11px;
+    font-weight:600; cursor:pointer; -webkit-tap-highlight-color:transparent}
+  body.mobile .tabbar button .ti{font-size:19px; line-height:1}
+  body.mobile .tabbar button.active{color:var(--accent)}
+  .tabbar .tbadge{position:absolute; top:3px; left:calc(50% + 18px); min-width:16px; height:16px; padding:0 4px;
+    border-radius:999px; background:var(--panel-2); border:1px solid var(--border); color:var(--muted);
+    font-size:10px; font-weight:700; display:grid; place-items:center; line-height:1}
+  body.mobile .tabbar button.active .tbadge{border-color:var(--accent); color:var(--accent)}
+
+  /* touch: action buttons always visible, stacked vertically in a reserved
+     right-hand column so they never overlap the card text */
+  body.mobile .card{cursor:pointer; padding-right:48px}
+  body.mobile .card-actions{display:flex; flex-direction:column; justify-content:center;
+    inset:0 0 0 auto; bottom:0; right:0; width:40px; gap:6px; padding:0;
+    background:transparent; box-shadow:none; border-radius:0; border-left:1px solid var(--border)}
+  body.mobile .card-actions .btn.icon{width:30px; height:30px; font-size:14px}
+  body.mobile .map-legend{font-size:11px; gap:12px; padding:8px 10px}
+
+  /* modal becomes a bottom sheet; dep|arr stay paired in two columns */
+  body.mobile .overlay{align-items:flex-end}
+  body.mobile .modal{width:100vw; max-width:100vw; max-height:92dvh; border-radius:18px 18px 0 0;
+    display:flex; flex-direction:column}
+  body.mobile .modal-body{overflow:auto; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; padding:16px}
+  body.mobile .modal-body input, body.mobile .modal-body select{min-width:0}
+  body.mobile .modal-foot{padding:12px 16px; padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+
+  /* ---------- phone-frame preview (desktop review aid; toggled by 📱) ---------- */
+  body.preview-frame{display:grid; place-items:center; min-height:100vh;
+    background:radial-gradient(1200px 800px at 50% -10%, #10151f, #05070c)}
+  body.preview-frame .app{width:390px; height:800px; max-height:94vh; border:10px solid #10151d;
+    border-radius:38px; overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.6)}
 </style>
 </head>
 <body data-theme="dark">
@@ -208,27 +279,33 @@
     <div class="brand"><div class="logo">✈</div>
       <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
     <div class="spacer"></div>
+    <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
     <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
-    <button class="btn ghost sm" id="fitBtn" title="Zoom map to all segments &amp; hotels">🗺 Fit map</button>
-    <button class="btn" id="newHotelBtn" title="Add a hotel stay">🏨 Hotel</button>
-    <button class="btn primary" id="newBtn">＋ Segment</button>
+    <button class="btn ghost sm" id="fitBtn" title="Zoom map to all segments &amp; hotels">🗺 <span class="lbl">Fit map</span></button>
+    <div class="menu-wrap">
+      <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
+      <div class="menu" id="addMenu" role="menu">
+        <button type="button" role="menuitem" data-add="segment"><span class="mi">✈</span> Segment</button>
+        <button type="button" role="menuitem" data-add="hotel"><span class="mi">🏨</span> Hotel</button>
+      </div>
+    </div>
   </div>
 
   <div class="layout">
-    <section class="panel">
+    <section class="panel" data-tab="segments">
       <div class="panel-head"><span class="dot grey"></span><span class="title">Segments</span>
         <span class="count" id="segmentsCount">0</span></div>
       <div class="scroll" id="segmentsList"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-tab="plan">
       <div class="panel-head"><span class="dot white"></span><span class="title">Plan</span>
         <span class="count" id="planCount">0</span></div>
       <div class="scroll" id="planList"></div>
       <div class="plan-foot" id="planFoot"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-tab="map">
       <div class="panel-head"><span class="title">Map</span>
         <span class="count" id="mapHint">drag to pan · scroll to zoom</span></div>
       <div class="map-wrap">
@@ -244,6 +321,12 @@
       </div>
     </section>
   </div>
+
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="segments"><span class="ti">🧭</span>Segments<span class="tbadge" id="tabSegCount">0</span></button>
+    <button data-tab="plan"><span class="ti">🧩</span>Plan<span class="tbadge" id="tabPlanCount">0</span></button>
+    <button data-tab="map"><span class="ti">🗺</span>Map</button>
+  </nav>
 </div>
 
 <div class="overlay" id="overlay">
@@ -398,7 +481,7 @@ function openEditor(r){ r.kind==="hotel"?openHotelModal(r.id):openModal(r.id); }
 function cardActions(el,r,mode){
   const a=el.querySelector(".card-actions");
   if(mode==="list"){ const conflict=r.kind==="segment"?conflictOf(r):null, disabled=!!conflict;
-    const add=btn(disabled?"⊘":"＋","btn icon "+(disabled?"":"primary"));
+    const add=btn(disabled?"⊘":"→","btn icon "+(disabled?"":"primary"));
     add.title=disabled?"Overlaps plan — can't add":"Add to plan"; add.disabled=disabled;
     add.onclick=e=>{e.stopPropagation(); r.inPlan=true; selected=r.id; render();}; a.appendChild(add);
   }else{ const rm=btn("↩","btn icon"); rm.title="Remove from plan";
@@ -423,7 +506,7 @@ function segmentCard(r,mode){
     <div class="stripe" style="background:${col}"></div>
     <div class="seg-grid">
       <div class="seg-city c1 r1" title="${esc(r.dep.city)}">${r.dep.city}</div>
-      <div class="seg-tr c2 r1" title="${esc(r.transport+(r.company?' · '+r.company:''))}"><span class="ti" style="color:${col}">${TICON[r.transport]||"•"}</span> ${r.company||r.transport}</div>
+      <div class="seg-tr c2 r1" title="${esc(r.transport+(r.company?' · '+r.company:''))}"><span class="ti" style="color:${col}">${TICON[r.transport]||"•"}</span> <span class="co">${r.company||r.transport}</span></div>
       <div class="seg-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
       <div class="seg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr||"—"}</div>
       <div class="seg-cost c2 r2" title="Fare">${money(r)}</div>
@@ -436,6 +519,13 @@ function segmentCard(r,mode){
     <div class="card-actions"></div>`;
   el.title=`${r.dep.city} → ${r.arr.city}  ·  ${r.transport}${r.company?' · '+r.company:''}  ·  ${money(r)}  ·  ⏱ ${tripDur(r)}\nDepart: ${fmtTime(r.dep.time)} — ${r.dep.city}, ${r.dep.addr}\nArrive: ${fmtTime(r.arr.time)} — ${r.arr.city}, ${r.arr.addr}\n(Click to select · double-click to edit · drag to move)`;
   cardActions(el,r,mode); makeDraggable(el,r);
+  const trEl=el.querySelector(".seg-tr");
+  if(trEl){ trEl.title="Show on map";
+    trEl.addEventListener("click",e=>{
+      if(!document.body.classList.contains("mobile")) return;   // desktop: bubble up → normal card select
+      e.stopPropagation(); selectAndShowOnMap(r);
+    });
+  }
   return el;
 }
 function hotelCard(r,mode){
@@ -466,7 +556,9 @@ function render(){
 
   const pl=document.getElementById("planList"); pl.innerHTML="";
   const plan=planItems(); document.getElementById("planCount").textContent=plan.length;
-  if(!plan.length) pl.innerHTML=`<div class="empty"><span class="big">🧩</span>Empty plan.<br>Press <b>Add →</b> on a segment or hotel.</div>`;
+  { const t1=document.getElementById("tabSegCount"), t2=document.getElementById("tabPlanCount");
+    if(t1) t1.textContent=list.length; if(t2) t2.textContent=plan.length; }
+  if(!plan.length) pl.innerHTML=`<div class="empty"><span class="big">🧩</span>Your plan is empty.<br>In the <b>Segments</b> list, press <b>→</b> on a segment or hotel to add it here.</div>`;
   let badCount=0;
   plan.forEach((r,i)=>{
     if(i>0){ const prev=plan[i-1], c=classifyGap(prev,r);
@@ -535,6 +627,35 @@ function initMap(){
 }
 function applyTiles(){ const light=document.body.dataset.theme==="light";
   map.removeLayer(light?darkTiles:lightTiles); (light?lightTiles:darkTiles).addTo(map); }
+
+function scrollSelectedIntoView(){
+  if(selected==null) return;
+  const el=document.querySelector(".card.sel");
+  if(el) el.scrollIntoView({block:"nearest"});
+}
+/* Tapping a segment/hotel on the map selects it; on mobile also jump to the tab
+   that holds it (Plan if in the plan, otherwise Segments) and scroll it into view.
+   The tab switch is deferred (setTimeout 0) so the document-level "click outside"
+   handler still sees the visible map under the tap and keeps the fresh selection. */
+function selectFromMap(r){
+  selected=r.id; render();
+  if(document.body.classList.contains("mobile")){
+    const tab=r.inPlan?"plan":"segments";
+    setTimeout(()=>{ setTab(tab); scrollSelectedIntoView(); },0);
+  }
+}
+/* Tapping the transport chip of a card (mobile) selects the record and jumps to the
+   Map tab, centering the map on that leg — the inverse of selectFromMap. */
+function selectAndShowOnMap(r){
+  selected=r.id; render(); setTab("map");
+  setTimeout(()=>{ if(!map) return;
+    let ll=null;
+    if(r.kind==="hotel") ll=r.ll;
+    else if(r.dep&&r.arr&&r.dep.ll&&r.arr.ll) ll=[(r.dep.ll[0]+r.arr.ll[0])/2,(r.dep.ll[1]+r.arr.ll[1])/2];
+    else if(r.dep&&r.dep.ll) ll=r.dep.ll;
+    if(ll) map.panTo(ll,{animate:true});
+  },90);
+}
 function drawMap(){
   segmentLayer.clearLayers(); const bounds=[]; const halo=cssv("--halo"), accent=cssv("--accent"), danger=cssv("--danger");
   const HITW=14;   // uniform transparent click/hover width (≈ the bold in-plan leg's halo) so thin dashed legs are as easy to grab as thick ones
@@ -545,7 +666,7 @@ function drawMap(){
       const m=L.marker(r.ll,{icon:L.divIcon({html:"🏨",className:cls,iconSize:[26,26],iconAnchor:[13,13]}),
         opacity:r.inPlan?1:.65, zIndexOffset:r.inPlan?600:300}).addTo(segmentLayer);
       m.bindTooltip(`🏨 ${r.name}<br><small>${r.city} · ${money(r)} · ${nights(r)} night${nights(r)>1?"s":""}</small>`,{className:"segment-tip",direction:"top"});
-      m.on("click",()=>{selected=r.id; render();});
+      m.on("click",()=>{selectFromMap(r);});
       bounds.push(r.ll); return;
     }
     if(!r.dep.ll||!r.arr.ll)return;
@@ -555,10 +676,19 @@ function drawMap(){
     if(r.inPlan){ weight=6; opacity=1; }                           // in plan: solid, transport color
     else if(conflict){ weight=3; opacity=.9; lineCol=danger; dash="6 8"; }  // selected + overlapped: thin, dashed, red
     else { weight=3; opacity=.7; dash="6 8"; }                     // available: dashed, transport color
-    const drawHalo = r.inPlan || (isSel && !conflict);             // no glow on conflicting legs — keep them thin
-    if(drawHalo){ L.polyline([r.dep.ll,r.arr.ll],
-      {color:isSel?accent:halo, weight:weight+4, opacity:isSel?.35:.6, interactive:false}).addTo(segmentLayer); }  // decorative glow: never capture clicks
-    const mainW = (isSel && !conflict) ? weight+1 : weight;        // don't thicken conflicting legs
+    const selHi = isSel && !conflict;                              // selected, non-conflicting → highlight
+    if(selHi) dash=null;                                           // solid so the accent border reads cleanly
+    const mainW = selHi ? weight+1 : weight;                       // don't thicken conflicting legs
+    if(selHi){
+      // selection casing: a crisp accent border around the leg + a neutral separator ring
+      // (keeps the border visible even when the leg's own color IS the accent, e.g. Plane)
+      // + a soft outer glow — mirrors the accent border/halo of a selected hotel pin (.hotel-pin.sel)
+      L.polyline([r.dep.ll,r.arr.ll],{color:accent, weight:mainW+12, opacity:.28, interactive:false, lineCap:"round"}).addTo(segmentLayer);
+      L.polyline([r.dep.ll,r.arr.ll],{color:accent, weight:mainW+7,  opacity:1,   interactive:false, lineCap:"round"}).addTo(segmentLayer);
+      L.polyline([r.dep.ll,r.arr.ll],{color:halo,   weight:mainW+3,  opacity:1,   interactive:false, lineCap:"round"}).addTo(segmentLayer);
+    }else if(r.inPlan){
+      L.polyline([r.dep.ll,r.arr.ll],{color:halo, weight:weight+4, opacity:.6, interactive:false}).addTo(segmentLayer);  // decorative glow: never capture clicks
+    }
     // Visible line is purely decorative (interactive:false); a fat transparent "hit line" on top
     // carries click + hover, so thin dashed legs get the same wide hot area as thick ones.
     L.polyline([r.dep.ll,r.arr.ll],{color:lineCol,weight:mainW,opacity,dashArray:dash,interactive:false}).addTo(segmentLayer);
@@ -566,11 +696,11 @@ function drawMap(){
     // bubblingMouseEvents:false → clicking selects without also firing the map's "click empty → unselect" handler
     const hit=L.polyline([r.dep.ll,r.arr.ll],{color:"#000",opacity:0,weight:HITW,lineCap:"round",bubblingMouseEvents:false}).addTo(segmentLayer);
     hit.bindTooltip(`${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,{className:"segment-tip",sticky:true});
-    hit.on("click",()=>{selected=r.id; render();});
+    hit.on("click",()=>{selectFromMap(r);});
     [r.dep,r.arr].forEach(p=>{ L.circleMarker(p.ll,{radius:r.inPlan?6:4,color:halo,weight:2,
       fillColor:isSel?(conflict?danger:accent):col,fillOpacity:1,bubblingMouseEvents:false})
       .bindTooltip(p.city,{className:"place-tip",direction:"top"})
-      .on("click",()=>{selected=r.id; render();})       // clicking an endpoint dot selects its segment too
+      .on("click",()=>{selectFromMap(r);})       // clicking an endpoint dot selects its segment too
       .addTo(segmentLayer);
       bounds.push(p.ll); });
   });
@@ -658,8 +788,14 @@ function toggleTheme(){ const light=document.body.dataset.theme!=="light";
   applyTiles(); buildLegend(); render(); }
 
 /* ---------- wire up ---------- */
-document.getElementById("newBtn").onclick=()=>openModal(null);
-document.getElementById("newHotelBtn").onclick=()=>openHotelModal(null);
+const addBtn=document.getElementById("addBtn"), addMenu=document.getElementById("addMenu");
+function closeAddMenu(){ addMenu.classList.remove("open"); addBtn.setAttribute("aria-expanded","false"); }
+addBtn.onclick=e=>{ e.stopPropagation();
+  const open=!addMenu.classList.contains("open");
+  addMenu.classList.toggle("open",open); addBtn.setAttribute("aria-expanded",open?"true":"false"); };
+addMenu.querySelectorAll("button").forEach(b=>b.onclick=e=>{ e.stopPropagation(); closeAddMenu();
+  if(b.dataset.add==="hotel") openHotelModal(null); else openModal(null); });
+document.addEventListener("click",e=>{ if(!e.target.closest(".menu-wrap")) closeAddMenu(); });
 document.getElementById("closeModal").onclick=closeModal;
 document.getElementById("cancelBtn").onclick=closeModal;
 document.getElementById("saveBtn").onclick=saveModal;
@@ -667,8 +803,9 @@ document.getElementById("delBtn").onclick=deleteItem;
 document.getElementById("themeBtn").onclick=toggleTheme;
 document.getElementById("fTransport").onchange=bufHint;
 document.getElementById("overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
-document.getElementById("fitBtn").onclick=()=>{ const b=[]; items.forEach(r=>{ if(r.kind==="hotel"){ if(r.ll)b.push(r.ll); return; } if(r.dep.ll)b.push(r.dep.ll); if(r.arr.ll)b.push(r.arr.ll); }); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); };
-document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+function fitAll(){ const b=[]; items.forEach(r=>{ if(r.kind==="hotel"){ if(r.ll)b.push(r.ll); return; } if(r.dep.ll)b.push(r.dep.ll); if(r.arr.ll)b.push(r.arr.ll); }); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); }
+document.getElementById("fitBtn").onclick=fitAll;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ closeModal(); closeAddMenu(); } });
 
 /* click outside any card (and outside the map / modal / buttons) unselects.
    The map is tested by screen geometry, not e.target.closest("#map"): clicking a
@@ -695,7 +832,28 @@ function setupDrop(id,target){ const c=document.getElementById(id);
     draggedId=null; render(); }); }
 setupDrop("segmentsList","segments"); setupDrop("planList","plan");
 
+/* ---------- responsive: mobile bottom-tab-bar ---------- */
+let previewMobile=false, mobileFitted=false;
+const mqMobile = window.matchMedia("(max-width:640px)");
+function refreshMap(){ if(map){ map.invalidateSize(); placeLegend(); } }
+function syncMode(){
+  const mobile = mqMobile.matches || previewMobile;
+  document.body.classList.toggle("mobile", mobile);
+  document.body.classList.toggle("preview-frame", previewMobile);
+  setTimeout(refreshMap, 60);
+}
+mqMobile.addEventListener("change", syncMode);
+document.getElementById("previewBtn").onclick=()=>{ previewMobile=!previewMobile;
+  document.getElementById("previewBtn").classList.toggle("primary", previewMobile); syncMode(); };
+function setTab(t){
+  document.body.dataset.tab=t;
+  document.querySelectorAll("#tabbar button").forEach(b=>b.classList.toggle("active", b.dataset.tab===t));
+  if(t==="map") setTimeout(()=>{ if(map){ map.invalidateSize(); if(!mobileFitted){ fitAll(); mobileFitted=true; } placeLegend(); } }, 60);
+}
+document.querySelectorAll("#tabbar button").forEach(b=> b.onclick=()=>setTab(b.dataset.tab));
+
 initMap(); buildLegend(); render();
+setTab("plan"); syncMode();
 </script>
 </body>
 </html>
