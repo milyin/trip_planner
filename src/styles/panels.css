@@ -1,7 +1,7 @@
 .layout{display:grid; grid-template-columns:330px 330px 1fr; min-height:0; flex:1}
 .panel{display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--border); background:var(--panel)}
 .panel:last-child{border-right:none}
-.panel-head{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)}
+.panel-head{display:flex; align-items:center; gap:10px; padding:0 16px; min-height:52px; border-bottom:1px solid var(--border)}
 .panel-head .title{font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted)}
 .panel-head .count{margin-left:auto; font-size:11px; color:var(--muted); background:var(--panel-2);
   border:1px solid var(--border); padding:2px 8px; border-radius:999px}

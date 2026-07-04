@@ -13,7 +13,6 @@
     <div class="spacer"></div>
     <button class="btn ghost icon" id="previewBtn" title="Preview mobile layout">📱</button>
     <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
-    <button class="btn ghost sm" id="fitBtn" title="Zoom map to all segments &amp; hotels">🗺 <span class="lbl">Fit map</span></button>
     <div class="menu-wrap">
       <button class="btn primary" id="addBtn" title="Add a segment or hotel" aria-haspopup="true" aria-expanded="false">＋ <span class="lbl">Add</span></button>
       <div class="menu" id="addMenu" role="menu">
@@ -39,7 +38,8 @@
 
     <section class="panel" data-tab="map">
       <div class="panel-head"><span class="title">Map</span>
-        <span class="count" id="mapHint">drag to pan · scroll to zoom</span></div>
+        <span class="count" id="mapHint">drag to pan · scroll to zoom</span>
+        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments &amp; hotels" aria-label="Zoom map to all segments &amp; hotels">🗺</button></div>
       <div class="map-wrap">
         <div id="map"></div>
         <div class="map-legend">

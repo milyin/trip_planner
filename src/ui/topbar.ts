@@ -9,7 +9,7 @@ export function closeAddMenu(): void {
   byId('addBtn').setAttribute('aria-expanded', 'false');
 }
 
-/** Wire the top bar: the ＋ Add menu, theme toggle, and Fit map. */
+/** Wire the top bar (＋ Add menu, theme toggle) and the Map panel's Fit button. */
 export function wireTopbar(): void {
   const addBtn = byId('addBtn');
   const addMenu = byId('addMenu');

@@ -1,4 +1,4 @@
-.map-wrap{position:relative; flex:1; min-height:0}
+.map-wrap{position:relative; flex:1; min-height:0; z-index:0}
 #map{position:absolute; inset:0; background:#0b1020}
 body[data-theme="light"] #map{background:#dfe8f6}
 .map-legend{position:absolute; left:14px; bottom:14px; z-index:500;
