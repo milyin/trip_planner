@@ -42,6 +42,14 @@ the look, layout, and interactions can be evaluated quickly in a browser.
   (> 50 km) offers a **🧭 Add segment** button. Either one opens the modal
   pre-filled with the surrounding locations and dates and drops the new record
   straight into the plan to fill the gap.
+- **Responsive mobile layout**: on narrow screens (≤ 640 px) the three side-by-side
+  panels collapse to a **bottom tab bar** — *Segments · Plan · Map* — showing one
+  full-screen panel at a time (each tab carries a live count badge, the map resizes
+  itself when its tab opens). The top bar condenses to icon-only buttons, card action
+  buttons are always visible (no hover needed for touch), and the record dialog becomes
+  a full-width bottom sheet (the Departure | Arrival columns are kept). The desktop
+  three-panel layout is unchanged. A **📱 toggle** in the top bar previews the mobile
+  layout inside a phone frame on a desktop browser.
 
 These behaviours are the specification the native GUI mirrors; see the repository
 root [`README.md`](../../README.md) for the full design write-up.
