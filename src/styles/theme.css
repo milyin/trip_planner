@@ -1,0 +1,35 @@
+:root{
+  --bg1:#17203a; --bg2:#0e1320;
+  --panel:#151b2b; --panel-2:#1b2334; --card:#1e2739; --card-hover:#243049;
+  --border:#2b3550; --line:#334063;
+  --text:#e8edf7; --muted:#9aa6be; --faint:#6b7793;
+  --accent:#38bdf8;
+  --warn:#f59e0b; --danger:#ef4444; --ok:#4ade80;
+  --halo:#0b1020;
+  --shadow:0 10px 30px rgba(0,0,0,.35);
+  --radius:14px;
+  /* transport palette (line + icon share these) */
+  --t-plane:#38bdf8; --t-train:#22c55e; --t-bus:#fb923c;
+  --t-taxi:#f472b6; --t-car:#a78bfa; --t-other:#94a3b8; --t-hotel:#eab308;
+}
+body[data-theme="light"]{
+  --bg1:#dfe8f6; --bg2:#f4f7fc;
+  --panel:#ffffff; --panel-2:#f1f4fa; --card:#ffffff; --card-hover:#eef3fb;
+  --border:#dce3ee; --line:#c4cddd;
+  --text:#0f1729; --muted:#5b6577; --faint:#93a0b4;
+  --accent:#0284c7;
+  --warn:#b45309; --danger:#dc2626; --ok:#16a34a;
+  --halo:#ffffff;
+  --shadow:0 10px 26px rgba(30,50,90,.14);
+  --t-plane:#0ea5e9; --t-train:#16a34a; --t-bus:#ea580c;
+  --t-taxi:#db2777; --t-car:#7c3aed; --t-other:#64748b; --t-hotel:#ca8a04;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:radial-gradient(1200px 800px at 80% -10%, var(--bg1) 0%, var(--bg2) 55%);
+  color:var(--text);
+  font:14px/1.45 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  -webkit-font-smoothing:antialiased; transition:background .25s, color .25s;
+}
+.app{display:flex; flex-direction:column; height:100vh; overflow:hidden}

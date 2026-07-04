@@ -1,0 +1,19 @@
+.map-wrap{position:relative; flex:1; min-height:0}
+#map{position:absolute; inset:0; background:#0b1020}
+body[data-theme="light"] #map{background:#dfe8f6}
+.map-legend{position:absolute; left:14px; bottom:14px; z-index:500;
+  background:color-mix(in srgb, var(--panel) 88%, transparent);
+  border:1px solid var(--border); border-radius:12px; padding:10px 12px; backdrop-filter:blur(6px);
+  font-size:12px; display:flex; gap:16px; box-shadow:var(--shadow); transition:left .2s ease, top .2s ease}
+.legcol{display:flex; flex-direction:column; gap:6px}
+.legcol .h{font-size:10px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); font-weight:700}
+.lrow{display:flex; align-items:center; gap:8px}
+.lg-line{width:24px; height:0; border-top-width:4px; border-top-style:solid; border-radius:2px; opacity:1}
+.lg-line.faded{opacity:.5} .lg-line.dashed{border-top-style:dashed; opacity:.5}
+.leaflet-container{font-family:inherit}
+.segment-tip{background:var(--panel)!important; color:var(--text)!important; border:1px solid var(--line)!important; border-radius:8px!important}
+.place-tip{background:var(--panel)!important;color:var(--text)!important;border:1px solid var(--line)!important;border-radius:6px!important;font-weight:600}
+.hotel-pin{display:grid; place-items:center; width:26px; height:26px; border-radius:8px; font-size:14px;
+  background:var(--panel); border:2px solid var(--t-hotel); box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.hotel-pin.plan{background:var(--t-hotel)}
+.hotel-pin.sel{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%, transparent)}
