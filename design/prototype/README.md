@@ -12,13 +12,16 @@ the look, layout, and interactions can be evaluated quickly in a browser.
 - **Two record types**: **segments** (a transport leg: departure/arrival place + time,
   transport, company, cost) and **hotels** (a stay: city, hotel name, address, check-in /
   check-out dates, price, and an optional booking link). Both are added from the top bar
-  (`＋ Segment` / `🏨 Hotel`) and live together in the Segments and Plan panels.
+  via a single **＋ Add** button that opens a small menu (**✈ Segment** / **🏨 Hotel**),
+  and live together in the Segments and Plan panels.
 - **Add / edit / delete** records through a modal dialog (the modal swaps its fields for
   segments vs hotels). The **segment** dialog is laid out in two aligned columns —
   **Departure** on the left, **Arrival** on the right — so the matching city, address, and
   time fields sit directly next to each other, with transport / company / cost / currency
   below.
 - **Move records** between Segments and Plan (buttons, drag-and-drop, double-click to edit).
+  Each Segments card carries a **→** button that sends the record into the plan; each Plan
+  card carries a **↩** button that sends it back.
 - **Boarding-pass segment cards**: each segment is a compact three-column card. Row 1 shows
   the departure city, the transport icon + company (centred), and the arrival city;
   row 2 the departure address, the fare (centred), and the arrival address; row 3 the
@@ -33,7 +36,10 @@ the look, layout, and interactions can be evaluated quickly in a browser.
 - **Map drawing rules**: transport-colored lines for segments and 🏨 pins for hotels;
   plan legs solid with a halo, available legs dashed, overlapping legs hidden (drawn
   thin/dashed/red only when selected); available hotels are faded and plan hotels are
-  filled; the legend auto-relocates to the emptiest map corner.
+  filled; the legend auto-relocates to the emptiest map corner. A **selected segment**
+  gets a crisp **accent border** (with a neutral separator ring so the border stays
+  visible even when the leg's own color is the accent, e.g. Plane) — matching the accent
+  border a selected 🏨 hotel pin gets, so map selection looks the same for both.
 - **Plan building**: auto-generated gap rows (time + distance) between consecutive
   records, long-layover and impossible-connection warnings, and a totals footer
   (legs, nights, span, cost).
@@ -45,13 +51,15 @@ the look, layout, and interactions can be evaluated quickly in a browser.
 - **Responsive mobile layout**: on narrow screens (≤ 640 px) the three side-by-side
   panels collapse to a **bottom tab bar** — *Segments · Plan · Map* — showing one
   full-screen panel at a time (each tab carries a live count badge, the map resizes
-  itself when its tab opens). The top bar condenses to icon-only buttons, card action
-  buttons are always visible (no hover needed for touch), and the record dialog becomes
-  a full-width bottom sheet (the Departure | Arrival columns are kept). Tapping a
-  segment or hotel **on the map** jumps to the tab that holds it (Plan if it is in
-  the plan, otherwise Segments) with that record selected and scrolled into view.
-  The desktop three-panel layout is unchanged. A **📱 toggle** in the top bar
-  previews the mobile layout inside a phone frame on a desktop browser.
+  itself when its tab opens). The top bar condenses to icon-only buttons (the **＋ Add**
+  menu included), card action buttons are always visible (no hover needed for touch), and
+  the record dialog becomes a full-width bottom sheet (the Departure | Arrival columns are
+  kept). Tapping a segment or hotel **on the map** jumps to the tab that holds it (Plan if
+  it is in the plan, otherwise Segments) with that record selected and scrolled into view;
+  conversely, tapping a card's **transport chip** (icon + company) jumps to the **Map** tab
+  with that leg selected and centred. The desktop three-panel layout is unchanged. A
+  **📱 toggle** in the top bar previews the mobile layout inside a phone frame on a desktop
+  browser.
 
 These behaviours are the specification the native GUI mirrors; see the repository
 root [`README.md`](../../README.md) for the full design write-up.
