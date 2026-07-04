@@ -283,8 +283,9 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
     attachment = await putAttachment(pendingFile);
   }
   const segId = existing?.id ?? nextId();
-  // Persist the exchange that filled this leg, next to the image.
-  if (dialogExchange) void putExchange(segId, dialogExchange);
+  // Persist the exchange that filled this leg, next to the image. Awaited so
+  // a reload right after Save cannot lose the write.
+  if (dialogExchange) await putExchange(segId, dialogExchange);
   const seg: Leg = {
     id: segId,
     kind: 'leg',
