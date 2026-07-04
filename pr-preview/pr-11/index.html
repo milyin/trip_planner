@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
-  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-11/assets/index-D3HikMBf.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-11/assets/index-D2EMeNNH.css">
+  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-11/assets/index-DjLgiaMQ.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-11/assets/index-0G40w64j.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -87,8 +87,8 @@
       </div>
     </div>
     <div class="modal-body" id="legBody">
-      <div class="leg col">Departure</div>
-      <div class="leg col">Arrival</div>
+      <div class="leg col">Departure <button type="button" class="geo-chip" id="depGeo" title="Locate this place on the map"></button></div>
+      <div class="leg col">Arrival <button type="button" class="geo-chip" id="arrGeo" title="Locate this place on the map"></button></div>
       <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
       <div class="field"><label>City</label><input id="fArrCity" placeholder="Paris"></div>
       <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
@@ -106,7 +106,7 @@
         <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
     </div>
     <div class="modal-body" id="hotelBody" style="display:none">
-      <div class="leg">Stay</div>
+      <div class="leg">Stay <button type="button" class="geo-chip" id="hotGeo" title="Locate this place on the map"></button></div>
       <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
       <div class="field"><label>City</label><input id="hCity" placeholder="Paris"></div>
       <div class="field"><label>Address</label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
