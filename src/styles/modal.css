@@ -4,8 +4,18 @@
 .modal{width:min(680px,94vw); max-height:92vh; display:flex; flex-direction:column;
   background:var(--panel); border:1px solid var(--line);
   border-radius:18px; box-shadow:var(--shadow); overflow:hidden; animation:pop .16s ease}
-.modal-head, .modal-foot, .file-preview{flex:0 0 auto}
+.modal-head, .modal-foot, .file-preview, .modal-tabs{flex:0 0 auto}
 .modal-body{overflow-y:auto}
+
+.modal-tabs{display:flex; gap:2px; padding:0 20px; border-bottom:1px solid var(--border)}
+.mtab{background:none; border:none; border-bottom:2px solid transparent; color:var(--muted);
+  padding:9px 12px; margin-bottom:-1px; cursor:pointer; font:inherit; font-size:13px}
+.mtab:hover{color:var(--text)}
+.mtab.active{color:var(--text); border-bottom-color:var(--accent)}
+
+.modal-body.llm{display:block}
+#llmDump{margin:0; white-space:pre-wrap; word-break:break-word; user-select:text;
+  font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; line-height:1.55; color:var(--text)}
 @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
 .modal-head{display:flex; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border)}
 .modal-head h3{margin:0; font-size:16px}

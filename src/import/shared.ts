@@ -9,6 +9,7 @@ export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 export const PROMPT = `The attached file is a travel booking confirmation or ticket (flight, train, bus, etc).
 Extract every transport leg it describes, in travel order.
 - Times must be local to the place they refer to, formatted exactly as YYYY-MM-DDTHH:MM.
+- If the year is not printed, infer it: prefer the nearest upcoming date, and if a weekday is printed pick the year where the date falls on that weekday.
 - "addr" is the airport, station or stop name (e.g. "CDG", "St-Charles"), not a street address, and not a repetition of the city name.
 - "company" is the carrier operating the leg.
 - If the total price covers several legs, put it on the first leg and 0 on the rest.

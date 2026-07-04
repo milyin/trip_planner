@@ -2,6 +2,7 @@ import type { CurrencyCode, Hotel, Segment, TransportKind } from '../domain/type
 import { geocode } from '../domain/geo';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
+import { formatExchange, lastExchange } from '../import/debugLog';
 import { deleteAttachment, isAttachmentLink, resolveLink } from '../state/attachments';
 import { deleteItemById, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
@@ -26,11 +27,25 @@ let editKind: 'segment' | 'hotel' = 'segment';
 let newInPlan = false;
 let onClosed: (() => void) | null = null;
 let previewUrl: string | null = null;
+let activeTab: 'form' | 'llm' = 'form';
+let hasPreview = false;
 
 /** One-shot hook fired after the dialog closes (save or cancel) — used by the
  * ticket import flow to open the next leg's dialog. */
 export function setOnModalClosed(fn: () => void): void {
   onClosed = fn;
+}
+
+/** Show/hide the modal sections for the active tab (Details / LLM exchange). */
+function applyTabs(): void {
+  const form = activeTab === 'form';
+  byId('segBody').style.display = form && editKind === 'segment' ? 'grid' : 'none';
+  byId('hotelBody').style.display = form && editKind === 'hotel' ? 'grid' : 'none';
+  byId('filePreview').style.display = form && hasPreview ? 'block' : 'none';
+  byId('llmBody').style.display = form ? 'none' : 'block';
+  byId('mtabForm').classList.toggle('active', form);
+  byId('mtabLlm').classList.toggle('active', !form);
+  if (!form) byId('llmDump').textContent = formatExchange(lastExchange());
 }
 
 /** Show the file/link preview above the form when the link is a stored
@@ -41,6 +56,7 @@ function renderPreview(link: string | null): void {
     URL.revokeObjectURL(previewUrl);
     previewUrl = null;
   }
+  hasPreview = false;
   box.style.display = 'none';
   box.innerHTML = '';
   if (!isAttachmentLink(link)) return;
@@ -50,15 +66,18 @@ function renderPreview(link: string | null): void {
     box.innerHTML = r.type.startsWith('image/')
       ? `<img src="${r.url}" alt="Attached file preview">`
       : `<embed src="${r.url}" type="${r.type}">`;
-    box.style.display = 'block';
+    hasPreview = true;
+    applyTabs();
   });
 }
 
 function showBody(kind: 'segment' | 'hotel'): void {
   editKind = kind;
-  byId('segBody').style.display = kind === 'segment' ? 'grid' : 'none';
-  byId('hotelBody').style.display = kind === 'hotel' ? 'grid' : 'none';
+  activeTab = 'form';
+  // The LLM exchange tab only makes sense for segments (the import target).
+  byId('modalTabs').style.display = kind === 'segment' ? 'flex' : 'none';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save segment';
+  applyTabs();
 }
 
 function bufHint(): void {
@@ -194,6 +213,14 @@ export function wireModal(): void {
   byId('saveBtn').onclick = saveModal;
   byId('delBtn').onclick = deleteItem;
   byId('fTransport').onchange = bufHint;
+  byId('mtabForm').onclick = () => {
+    activeTab = 'form';
+    applyTabs();
+  };
+  byId('mtabLlm').onclick = () => {
+    activeTab = 'llm';
+    applyTabs();
+  };
   byId('overlay').onclick = (e) => {
     if ((e.target as HTMLElement).id === 'overlay') closeModal();
   };

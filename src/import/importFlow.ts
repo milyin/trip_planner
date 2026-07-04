@@ -46,8 +46,10 @@ async function importTicketFile(file: File): Promise<void> {
     } else {
       alert(
         `Could not extract segment data: ${e instanceof Error ? e.message : e}\n` +
-          `The file is saved — create the segment manually and paste "${link}" into its Link field.`,
+          `Opening a blank segment with the file attached — see its "LLM exchange" tab for the full request and response.`,
       );
+      // Blank dialog: the user can inspect the exchange and fill fields manually.
+      openLegDialogs([{}], link);
     }
     return;
   }
