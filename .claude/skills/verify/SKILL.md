@@ -27,14 +27,21 @@ const browser = await chromium.launch({ channel: 'chrome' });
 
 Useful hooks in the app:
 - Cards render into `#segmentsList` / `#planList`; the shared edit dialog is `#overlay`
-  (`#segBody` / `#hotelBody`, `#saveBtn`, `#cancelBtn`, `#delBtn`).
-- Ticket import: `#addBtn` → `[data-add="import"]` → set files on the hidden `#importFile`
-  input. API-key dialog is `#keyOverlay` (`#keyInput`, `#keySaveBtn`). Errors surface via
-  `alert()` — capture with `page.on('dialog', ...)`.
-- LLM calls go to `generativelanguage.googleapis.com`; block the route to test the offline
-  error path, or use a fake key (`AIza...`) against the real API to test the auth path.
+  (`#segBody` / `#hotelBody`, `#saveBtn`, `#cancelBtn`, `#delBtn`); tabs `#mtabForm` /
+  `#mtabLlm` (LLM exchange dump in `#llmDump`).
+- Ticket recognition lives inside the segment dialog: drop zone `#importZone` (hidden input
+  `#segFile`, preview `#filePreview`, hint `#dropHint`), note `#fNote`, parser combo
+  `#fParser`, button `#recogniseBtn`. Parser manager: ⚙ `#settingsBtn` → `#parserOverlay`
+  (`#pProvider`, `#pModel`, `#pKey`, `#pAddBtn`, `#parserDoneBtn`; rows `.parser-row`).
+  Errors surface via `alert()` — capture with `page.on('dialog', ...)`.
+- LLM endpoints: `generativelanguage.googleapis.com` (Gemini SDK) and
+  `openrouter.ai/api/v1/chat/completions` (plain fetch — easy to mock with `ctx.route`
+  fulfilling a canned `{choices:[{message:{content: JSON.stringify({legs:[...]})}}]}`).
 - Persistence: items + settings in `localStorage` (`tripPlanner.items.v1`,
-  `tripPlanner.settings.v1`), files in IndexedDB db `tripPlanner`, store `attachments`.
+  `tripPlanner.settings.v1` — settings hold a `parsers` array), files in IndexedDB db
+  `tripPlanner`, store `attachments`. Segments reference images via `attachment` field.
+- Drag-n-drop can be simulated in `page.evaluate` with `new DataTransfer()` +
+  `new File(...)` + dispatching a `DragEvent('drop', {dataTransfer, bubbles: true})`.
 
 ## Gotchas
 

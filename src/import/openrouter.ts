@@ -1,7 +1,7 @@
-import type { Settings } from '../state/settings';
+import type { ImageParser } from '../state/settings';
 import { beginExchange } from './debugLog';
-import { AuthError, type ExtractedSegment, type SegmentExtractor } from './extractor';
-import { assertFileSize, CURRENCIES, fileToDataUrl, PROMPT, TRANSPORTS } from './shared';
+import { AuthError, type ExtractInput, type ExtractedSegment, type SegmentExtractor } from './extractor';
+import { assertFileSize, buildPrompt, CURRENCIES, fileToDataUrl, TRANSPORTS } from './shared';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -27,33 +27,35 @@ interface ChatCompletion {
 }
 
 export const openrouterExtractor: SegmentExtractor = {
-  name: 'OpenRouter',
-
-  isConfigured: (s: Settings): boolean => !!s.openrouterApiKey,
-
-  clearKey: (s: Settings): void => {
-    s.openrouterApiKey = '';
-  },
-
-  async extract(file: File, s: Settings): Promise<ExtractedSegment[]> {
-    assertFileSize(file);
+  async extract({ file, note }: ExtractInput, parser: ImageParser): Promise<ExtractedSegment[]> {
+    if (file) assertFileSize(file);
     const ex = beginExchange({
-      provider: 'OpenRouter',
-      model: s.openrouterModel,
-      file: { name: file.name, type: file.type, size: file.size },
+      provider: parser.provider,
+      model: parser.model,
+      file: file ? { name: file.name, type: file.type, size: file.size } : null,
+      note,
       startedAt: Date.now(),
     });
     try {
-      const dataUrl = await fileToDataUrl(file);
       // PDFs go through OpenRouter's file parser (native engine when the model
       // reads PDFs itself, OCR otherwise); images use the standard vision part.
-      const isPdf = file.type === 'application/pdf';
-      const filePart = isPdf
-        ? { type: 'file', file: { filename: file.name || 'ticket.pdf', file_data: dataUrl } }
-        : { type: 'image_url', image_url: { url: dataUrl } };
+      const filePart = async (): Promise<unknown> => {
+        if (!file) return null;
+        const dataUrl = await fileToDataUrl(file);
+        return file.type === 'application/pdf'
+          ? { type: 'file', file: { filename: file.name || 'ticket.pdf', file_data: dataUrl } }
+          : { type: 'image_url', image_url: { url: dataUrl } };
+      };
+      const elidedPart = file
+        ? file.type === 'application/pdf'
+          ? { type: 'file', file: { filename: file.name, file_data: `<${file.size} bytes elided>` } }
+          : { type: 'image_url', image_url: { url: `<${file.size} bytes elided>` } }
+        : null;
       const request = (fp: unknown): unknown => ({
-        model: s.openrouterModel,
-        messages: [{ role: 'user', content: [fp, { type: 'text', text: PROMPT }] }],
+        model: parser.model,
+        messages: [
+          { role: 'user', content: [...(fp ? [fp] : []), { type: 'text', text: buildPrompt(note) }] },
+        ],
         response_format: {
           type: 'json_schema',
           json_schema: {
@@ -66,22 +68,18 @@ export const openrouterExtractor: SegmentExtractor = {
           },
         },
       });
-      ex.request = request(
-        isPdf
-          ? { type: 'file', file: { filename: file.name, file_data: `<${file.size} bytes elided>` } }
-          : { type: 'image_url', image_url: { url: `<${file.size} bytes elided>` } },
-      );
+      ex.request = request(elidedPart);
 
       const res = await fetch(ENDPOINT, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${s.openrouterApiKey}`,
+          Authorization: `Bearer ${parser.apiKey}`,
           'Content-Type': 'application/json',
           // Optional app attribution (shows up in the user's OpenRouter stats).
           'HTTP-Referer': 'https://milyin.github.io/trip_planner/',
           'X-Title': 'Trip Planner',
         },
-        body: JSON.stringify(request(filePart)),
+        body: JSON.stringify(request(await filePart())),
       });
       ex.status = `HTTP ${res.status}`;
       const raw = await res.text();
@@ -101,7 +99,7 @@ export const openrouterExtractor: SegmentExtractor = {
       // Models without structured-output support may wrap the JSON in a fence.
       const json = content.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');
       const legs = (JSON.parse(json) as { legs?: ExtractedSegment[] }).legs;
-      if (!legs?.length) throw new Error('No transport legs found in the file.');
+      if (!legs?.length) throw new Error('No transport legs found in the input.');
       ex.legs = legs;
       return legs;
     } catch (e) {

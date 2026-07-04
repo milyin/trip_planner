@@ -4,7 +4,8 @@
 export interface LlmExchange {
   provider: string;
   model: string;
-  file: { name: string; type: string; size: number };
+  file: { name: string; type: string; size: number } | null;
+  note: string;
   startedAt: number;
   durationMs?: number;
   /** Request body with the file payload elided (it would be megabytes of base64). */
@@ -30,11 +31,14 @@ export const lastExchange = (): LlmExchange | null => last;
 /** Render the exchange as plain text for the debug tab. */
 export function formatExchange(x: LlmExchange | null): string {
   if (!x) {
-    return 'No LLM exchange in this session yet.\nUse ＋ Add → 🎫 Segment from ticket… to import a file.';
+    return 'No LLM exchange in this session yet.\nAttach a screenshot (or write a note) and press Recognise.';
   }
   const lines = [
-    `Provider: ${x.provider} (${x.model})`,
-    `File: ${x.file.name} (${x.file.type || 'unknown type'}, ${(x.file.size / 1024).toFixed(1)} KB)`,
+    `Parser: ${x.provider} ${x.model}`,
+    x.file
+      ? `File: ${x.file.name} (${x.file.type || 'unknown type'}, ${(x.file.size / 1024).toFixed(1)} KB)`
+      : 'File: (none — note only)',
+    `Note: ${x.note.trim() || '(none)'}`,
     `When: ${new Date(x.startedAt).toLocaleString()}${x.durationMs != null ? ` · took ${(x.durationMs / 1000).toFixed(1)} s` : ''}`,
     `Status: ${x.status ?? '—'}`,
   ];

@@ -9,9 +9,14 @@ export function loadItems(): TripItem[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return seedItems();
     const items = JSON.parse(raw) as TripItem[];
-    // Items saved before the segment `link` field existed lack it.
     for (const it of items) {
-      if (it.kind === 'segment' && (it as Segment).link === undefined) (it as Segment).link = null;
+      if (it.kind !== 'segment') continue;
+      const seg = it as Segment & { link?: string | null };
+      // Migrate from the earlier `link` field (URL or attachment reference).
+      if (seg.attachment === undefined) {
+        seg.attachment = seg.link?.startsWith('attachment:') ? seg.link : null;
+      }
+      delete seg.link;
     }
     return items;
   } catch {

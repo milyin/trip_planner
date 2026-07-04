@@ -6,15 +6,22 @@ export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const TRANSPORTS = ['Plane', 'Train', 'Bus', 'Taxi', 'Car', 'Other'];
 export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 
-export const PROMPT = `The attached file is a travel booking confirmation or ticket (flight, train, bus, etc).
-Extract every transport leg it describes, in travel order.
+export const PROMPT = `You help fill in a segment form of a trip-planning app.
+The user provides a screenshot and/or a free-form note. The screenshot is usually a list of flights or trains from a booking site or search engine — not a bought ticket — though it can also be a booking confirmation.
+Extract the transport legs of ONE itinerary:
+- If the input shows several alternatives, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.
+- An itinerary may consist of several legs (connections); return each leg separately, in travel order.
 - Times must be local to the place they refer to, formatted exactly as YYYY-MM-DDTHH:MM.
 - If the year is not printed, infer it: prefer the nearest upcoming date, and if a weekday is printed pick the year where the date falls on that weekday.
 - "addr" is the airport, station or stop name (e.g. "CDG", "St-Charles"), not a street address, and not a repetition of the city name.
 - "company" is the carrier operating the leg.
-- If the total price covers several legs, put it on the first leg and 0 on the rest.
-- Pick the currency from the allowed list; if the ticket uses another currency, convert approximately and pick the closest match.
-- Omit any field the file does not state; never invent values.`;
+- If one price covers the whole itinerary, put it on the first leg and 0 on the rest.
+- Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
+- Omit any field the input does not state; never invent values.`;
+
+/** Final prompt text: the instructions plus the user's note, if any. */
+export const buildPrompt = (note: string): string =>
+  note.trim() ? `${PROMPT}\n\nUser note:\n${note.trim()}` : PROMPT;
 
 /** Read a file as a `data:<mime>;base64,…` URL. */
 export function fileToDataUrl(file: File): Promise<string> {

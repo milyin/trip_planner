@@ -3,7 +3,7 @@ import { esc, fmtTime, money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
 import { conflictOf } from '../domain/plan';
 import { TRANSPORT_ICON } from '../domain/transport';
-import { isAttachmentLink, resolveLink } from '../state/attachments';
+import { resolveLink } from '../state/attachments';
 import { addToPlan, emitChange, removeFromPlan, select, state } from '../state/store';
 import { mkBtn } from './dom';
 import { openHotelModal, openModal } from './modal';
@@ -54,13 +54,9 @@ function cardActions(el: HTMLElement, r: TripItem, mode: CardMode): void {
   a.appendChild(ed);
 }
 
-/** Open a record's link: stored attachments resolve to an object URL first. */
-function openLink(link: string): void {
-  if (!isAttachmentLink(link)) {
-    window.open(link, '_blank', 'noopener');
-    return;
-  }
-  void resolveLink(link).then((r) => {
+/** Open a segment's stored ticket image in a new tab. */
+function openAttachment(att: string): void {
+  void resolveLink(att).then((r) => {
     if (r) window.open(r.url, '_blank', 'noopener');
     else alert('The attached file is no longer in this browser’s storage.');
   });
@@ -108,7 +104,7 @@ function segmentCard(r: Segment, mode: CardMode): HTMLDivElement {
       <div class="seg-tr c2 r1" title="${esc(r.transport + (r.company ? ' · ' + r.company : ''))}"><span class="ti" style="color:${col}">${TRANSPORT_ICON[r.transport] || '•'}</span> <span class="co">${r.company || r.transport}</span></div>
       <div class="seg-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
       <div class="seg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr || '—'}</div>
-      <div class="seg-cost c2 r2" title="Fare">${money(r)}${r.link ? ' <span class="seg-link" title="' + (isAttachmentLink(r.link) ? 'Open attached ticket' : 'Open booking link') + '">🔗</span>' : ''}</div>
+      <div class="seg-cost c2 r2" title="Fare">${money(r)}${r.attachment ? ' <span class="seg-link" title="Open attached ticket image">🎫</span>' : ''}</div>
       <div class="seg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr || '—'}</div>
       <div class="seg-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
       <div class="seg-sub c2 r3">${tripDur(r)}</div>
@@ -124,11 +120,11 @@ function segmentCard(r: Segment, mode: CardMode): HTMLDivElement {
   cardActions(el, r, mode);
   makeDraggable(el, r);
   const linkEl = el.querySelector<HTMLElement>('.seg-link');
-  if (linkEl && r.link) {
-    const link = r.link;
+  if (linkEl && r.attachment) {
+    const att = r.attachment;
     linkEl.onclick = (e) => {
       e.stopPropagation();
-      openLink(link);
+      openAttachment(att);
     };
   }
   const trEl = el.querySelector<HTMLElement>('.seg-tr');

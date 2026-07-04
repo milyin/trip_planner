@@ -3,17 +3,22 @@ import { geocode } from '../domain/geo';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange } from '../import/debugLog';
-import { deleteAttachment, isAttachmentLink, resolveLink } from '../state/attachments';
+import type { ExtractedSegment } from '../import/extractor';
+import { runRecognition } from '../import/recognise';
+import { deleteAttachment, getAttachment, putAttachment, resolveLink } from '../state/attachments';
+import { parserName, saveSettings, settings } from '../state/settings';
 import { deleteItemById, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
 import { byId, getVal, setVal } from './dom';
+import { openParserSettings } from './parserSettings';
 
 export interface SegmentPrefill {
   inPlan?: boolean;
   depCity?: string; depAddr?: string; depTime?: string;
   arrCity?: string; arrAddr?: string; arrTime?: string;
   transport?: TransportKind; company?: string; cost?: number; currency?: CurrencyCode;
-  link?: string;
+  /** Ticket image carried into the dialog (queued multi-leg recognition). */
+  file?: File;
 }
 
 export interface HotelPrefill {
@@ -25,56 +30,68 @@ export interface HotelPrefill {
 let editingId: string | null = null;
 let editKind: 'segment' | 'hotel' = 'segment';
 let newInPlan = false;
-let onClosed: (() => void) | null = null;
-let previewUrl: string | null = null;
 let activeTab: 'form' | 'llm' = 'form';
+let previewUrl: string | null = null;
 let hasPreview = false;
-
-/** One-shot hook fired after the dialog closes (save or cancel) — used by the
- * ticket import flow to open the next leg's dialog. */
-export function setOnModalClosed(fn: () => void): void {
-  onClosed = fn;
-}
+/** Image picked/dropped in this dialog, not yet saved to IndexedDB. */
+let pendingFile: File | null = null;
+/** Attachment of the segment being edited (kept unless replaced). */
+let existingAttachment: string | null = null;
+/** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
+let queuedLegs: ExtractedSegment[] = [];
+let queuedFile: File | null = null;
 
 /** Show/hide the modal sections for the active tab (Details / LLM exchange). */
 function applyTabs(): void {
   const form = activeTab === 'form';
   byId('segBody').style.display = form && editKind === 'segment' ? 'grid' : 'none';
   byId('hotelBody').style.display = form && editKind === 'hotel' ? 'grid' : 'none';
-  byId('filePreview').style.display = form && hasPreview ? 'block' : 'none';
+  byId('segImport').style.display = form && editKind === 'segment' ? 'block' : 'none';
+  byId('filePreview').style.display = hasPreview ? 'block' : 'none';
+  byId('dropHint').style.display = hasPreview ? 'none' : 'flex';
   byId('llmBody').style.display = form ? 'none' : 'block';
   byId('mtabForm').classList.toggle('active', form);
   byId('mtabLlm').classList.toggle('active', !form);
   if (!form) byId('llmDump').textContent = formatExchange(lastExchange());
 }
 
-/** Show the file/link preview above the form when the link is a stored
- * attachment (PDF or image); hide it otherwise. */
-function renderPreview(link: string | null): void {
+/** Render the ticket image (or PDF) preview inside the drop zone. */
+function renderPreview(src: File | string | null): void {
   const box = byId('filePreview');
   if (previewUrl) {
     URL.revokeObjectURL(previewUrl);
     previewUrl = null;
   }
   hasPreview = false;
-  box.style.display = 'none';
   box.innerHTML = '';
-  if (!isAttachmentLink(link)) return;
-  void resolveLink(link).then((r) => {
-    if (!r || byId('overlay').classList.contains('open') === false) return;
-    previewUrl = r.url;
-    box.innerHTML = r.type.startsWith('image/')
-      ? `<img src="${r.url}" alt="Attached file preview">`
-      : `<embed src="${r.url}" type="${r.type}">`;
+  const show = (url: string, type: string): void => {
+    previewUrl = url;
+    box.innerHTML = type.startsWith('image/')
+      ? `<img src="${url}" alt="Attached ticket preview">`
+      : `<embed src="${url}" type="${type}">`;
     hasPreview = true;
     applyTabs();
+  };
+  if (src instanceof File) {
+    show(URL.createObjectURL(src), src.type);
+    return;
+  }
+  applyTabs();
+  if (!src) return;
+  void resolveLink(src).then((r) => {
+    if (r && byId('overlay').classList.contains('open')) show(r.url, r.type);
   });
+}
+
+function setPendingFile(f: File): void {
+  pendingFile = f;
+  renderPreview(f);
 }
 
 function showBody(kind: 'segment' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
-  // The LLM exchange tab only makes sense for segments (the import target).
+  // Recognition and the LLM exchange tab only apply to segments.
   byId('modalTabs').style.display = kind === 'segment' ? 'flex' : 'none';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save segment';
   applyTabs();
@@ -83,6 +100,67 @@ function showBody(kind: 'segment' | 'hotel'): void {
 function bufHint(): void {
   const t = getVal('fTransport') as TransportKind;
   byId('bufHint').textContent = `Needs ≥ ${fmtDur(bufferMin(t) * 60000)} to connect before this leg`;
+}
+
+function refreshParserCombo(): void {
+  const sel = byId<HTMLSelectElement>('fParser');
+  sel.innerHTML = '';
+  settings.parsers.forEach((p, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = parserName(p);
+    sel.appendChild(o);
+  });
+  if (!settings.parsers.length) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = 'no parsers — add in ⚙';
+    sel.appendChild(o);
+    return;
+  }
+  sel.value = String(Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1));
+}
+
+/** Fill the segment form from an extracted leg (only fields the model set). */
+function fillSegmentFields(leg: ExtractedSegment): void {
+  const set = (id: string, v: unknown): void => {
+    if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
+  };
+  set('fDepCity', leg.depCity);
+  set('fDepAddr', leg.depAddr);
+  set('fDepTime', leg.depTime);
+  set('fArrCity', leg.arrCity);
+  set('fArrAddr', leg.arrAddr);
+  set('fArrTime', leg.arrTime);
+  set('fTransport', leg.transport);
+  set('fCompany', leg.company);
+  set('fCost', leg.cost);
+  set('fCur', leg.currency);
+  bufHint();
+}
+
+async function recognise(): Promise<void> {
+  if (!settings.parsers.length) {
+    await openParserSettings();
+    refreshParserCombo();
+    if (!settings.parsers.length) return;
+  }
+  const parser = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
+  const note = getVal('fNote');
+  let file = pendingFile;
+  if (!file && existingAttachment) {
+    const rec = await getAttachment(existingAttachment);
+    if (rec) file = new File([rec.blob], rec.name, { type: rec.type });
+  }
+  if (!file && !note.trim()) {
+    alert('Attach a screenshot or write a note first.');
+    return;
+  }
+  const legs = await runRecognition(file, note, parser);
+  if (!legs) return;
+  fillSegmentFields(legs[0]);
+  queuedLegs = legs.slice(1);
+  queuedFile = queuedLegs.length ? file : null;
 }
 
 /** Open the segment dialog (new when `id` is null), optionally pre-filled. */
@@ -94,6 +172,8 @@ export function openModal(id: string | null, prefill?: SegmentPrefill): void {
   byId('modalTitle').textContent = id ? 'Edit segment' : 'New segment';
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const r = (id ? findItem(id) : null) as Segment | null;
+  pendingFile = P.file ?? null;
+  existingAttachment = r ? r.attachment : null;
   setVal('fDepCity', r ? r.dep.city : P.depCity ?? '');
   setVal('fDepAddr', r ? r.dep.addr : P.depAddr ?? '');
   setVal('fDepTime', r ? r.dep.time : P.depTime ?? '2026-05-01T12:00');
@@ -104,10 +184,11 @@ export function openModal(id: string | null, prefill?: SegmentPrefill): void {
   setVal('fCompany', r ? r.company : P.company ?? '');
   setVal('fCost', r ? r.cost : P.cost ?? '');
   setVal('fCur', r ? r.currency : P.currency ?? 'EUR');
-  setVal('fLink', r ? r.link || '' : P.link ?? '');
+  setVal('fNote', '');
+  refreshParserCombo();
   bufHint();
   byId('overlay').classList.add('open');
-  renderPreview(r ? r.link : P.link ?? null);
+  renderPreview(pendingFile ?? existingAttachment);
 }
 
 /** Open the hotel dialog (new when `id` is null), optionally pre-filled. */
@@ -119,6 +200,8 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   byId('modalTitle').textContent = id ? 'Edit hotel' : 'New hotel';
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const h = (id ? findItem(id) : null) as Hotel | null;
+  pendingFile = null;
+  existingAttachment = null;
   setVal('hName', h ? h.name : P.name ?? '');
   setVal('hCity', h ? h.city : P.city ?? '');
   setVal('hAddr', h ? h.addr : P.addr ?? '');
@@ -134,23 +217,44 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
 export function closeModal(): void {
   byId('overlay').classList.remove('open');
   renderPreview(null);
-  const fn = onClosed;
-  onClosed = null;
-  fn?.();
+  pendingFile = null;
+  existingAttachment = null;
+  if (queuedLegs.length) {
+    const [leg, ...rest] = queuedLegs;
+    queuedLegs = [];
+    const f = queuedFile;
+    if (!rest.length) queuedFile = null;
+    openModal(null, { ...leg, file: f ?? undefined });
+    queuedLegs = rest;
+  }
 }
 
-function saveModal(): void {
-  if (editKind === 'hotel') {
-    saveHotel();
-    return;
-  }
+async function saveSegment(): Promise<void> {
   const dc = getVal('fDepCity');
   const ac = getVal('fArrCity');
   if (!dc || !ac) {
     alert('Departure and arrival city are required.');
     return;
   }
-  const existing = editingId ? findItem(editingId) : undefined;
+  // Storing the image is async — block a double-click on Save meanwhile.
+  const saveBtn = byId<HTMLButtonElement>('saveBtn');
+  if (saveBtn.disabled) return;
+  saveBtn.disabled = true;
+  try {
+    await doSaveSegment(dc, ac);
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
+async function doSaveSegment(dc: string, ac: string): Promise<void> {
+  const existing = editingId ? (findItem(editingId) as Segment | undefined) : undefined;
+  let attachment = existingAttachment;
+  if (pendingFile) {
+    // A newly picked image replaces the stored one.
+    if (existingAttachment) void deleteAttachment(existingAttachment);
+    attachment = await putAttachment(pendingFile);
+  }
   const seg: Segment = {
     id: existing?.id ?? nextId(),
     kind: 'segment',
@@ -160,12 +264,20 @@ function saveModal(): void {
     company: getVal('fCompany'),
     cost: Number(getVal('fCost') || 0),
     currency: getVal('fCur') as CurrencyCode,
-    link: getVal('fLink').trim() || null,
+    attachment,
     inPlan: existing ? existing.inPlan : newInPlan,
   };
   upsertItem(seg);
   closeModal();
   emitChange();
+}
+
+function saveModal(): void {
+  if (editKind === 'hotel') {
+    saveHotel();
+    return;
+  }
+  void saveSegment();
 }
 
 function saveHotel(): void {
@@ -198,15 +310,15 @@ function saveHotel(): void {
 function deleteItem(): void {
   if (editingId) {
     const r = findItem(editingId);
-    // Deleting the record deletes its locally stored file too.
-    if (r && r.kind === 'segment') void deleteAttachment(r.link);
+    // Deleting the record deletes its locally stored image too.
+    if (r && r.kind === 'segment') void deleteAttachment(r.attachment);
     deleteItemById(editingId);
   }
   closeModal();
   emitChange();
 }
 
-/** Wire the dialog's buttons and overlay-dismiss behaviour (once, at startup). */
+/** Wire the dialog's buttons, drop zone and overlay-dismiss (once, at startup). */
 export function wireModal(): void {
   byId('closeModal').onclick = closeModal;
   byId('cancelBtn').onclick = closeModal;
@@ -220,6 +332,35 @@ export function wireModal(): void {
   byId('mtabLlm').onclick = () => {
     activeTab = 'llm';
     applyTabs();
+  };
+  const zone = byId('importZone');
+  zone.onclick = (e) => {
+    if ((e.target as HTMLElement).id !== 'segFile') byId<HTMLInputElement>('segFile').click();
+  };
+  byId<HTMLInputElement>('segFile').onchange = (e) => {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    input.value = ''; // allow re-selecting the same file
+    if (f) setPendingFile(f);
+  };
+  zone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    zone.classList.add('dragover');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const f = e.dataTransfer?.files?.[0];
+    if (f) setPendingFile(f);
+  });
+  byId('recogniseBtn').onclick = () => void recognise();
+  byId('fParser').onchange = () => {
+    const v = Number(getVal('fParser'));
+    if (!Number.isNaN(v)) {
+      settings.activeParser = v;
+      saveSettings();
+    }
   };
   byId('overlay').onclick = (e) => {
     if ((e.target as HTMLElement).id === 'overlay') closeModal();

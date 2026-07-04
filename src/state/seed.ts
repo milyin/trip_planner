@@ -11,7 +11,7 @@ function seg(
     id: nextId(), kind: 'segment',
     dep: { city: dc, addr: da, time: dt, ll: geocode(dc, da) },
     arr: { city: ac, addr: aa, time: at, ll: geocode(ac, aa) },
-    transport: tr, company: co, cost, currency: cur, link: null, inPlan,
+    transport: tr, company: co, cost, currency: cur, attachment: null, inPlan,
   };
 }
 

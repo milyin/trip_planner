@@ -4,7 +4,7 @@
 .modal{width:min(680px,94vw); max-height:92vh; display:flex; flex-direction:column;
   background:var(--panel); border:1px solid var(--line);
   border-radius:18px; box-shadow:var(--shadow); overflow:hidden; animation:pop .16s ease}
-.modal-head, .modal-foot, .file-preview, .modal-tabs{flex:0 0 auto}
+.modal-head, .modal-foot, .seg-import, .modal-tabs{flex:0 0 auto}
 .modal-body{overflow-y:auto}
 
 .modal-tabs{display:flex; gap:2px; padding:0 20px; border-bottom:1px solid var(--border)}
@@ -39,8 +39,27 @@
 .hint-block{grid-column:1/-1; margin:0; color:var(--faint); font-size:12px; line-height:1.4}
 
 /* Preview of the ticket file attached to a segment (shown above the form). */
-.file-preview{border-bottom:1px solid var(--border); background:var(--panel-2)}
+/* Ticket image zone at the top of the segment form: preview or drop hint. */
+.seg-import{border-bottom:1px solid var(--border)}
+.import-zone{position:relative; background:var(--panel-2); cursor:pointer}
+.import-zone.dragover{outline:2px dashed var(--accent); outline-offset:-6px}
+.drop-hint{display:flex; align-items:center; justify-content:center; text-align:center;
+  color:var(--faint); font-size:12px; padding:20px 14px}
 .file-preview img, .file-preview embed{display:block; width:100%; height:30vh; object-fit:contain}
+.import-controls{display:flex; gap:8px; align-items:center; padding:10px 20px; border-top:1px solid var(--border)}
+.import-controls input, .import-controls select{background:var(--panel-2); border:1px solid var(--border);
+  color:var(--text); border-radius:10px; padding:8px 10px; font:inherit; font-size:13px; outline:none; min-width:0}
+.import-controls input{flex:1}
+.import-controls input:focus, .import-controls select:focus{border-color:var(--accent)}
+.import-controls select{max-width:200px}
+
+/* Parser manager dialog. */
+.parser-list{display:flex; flex-direction:column; gap:6px}
+.parser-row{display:flex; align-items:center; gap:10px; background:var(--panel-2);
+  border:1px solid var(--border); border-radius:10px; padding:4px 6px 4px 12px}
+.parser-row .pname{flex:1; font-size:13px}
+.parser-row .pkey{color:var(--faint); font-size:11px}
+.empty-note{color:var(--faint); font-size:12px}
 
 /* Full-screen busy indicator while the LLM reads the ticket. */
 .busy{position:fixed; inset:0; background:rgba(6,10,18,.6); backdrop-filter:blur(4px);
