@@ -1,6 +1,6 @@
 import type { TransportKind } from '../domain/types';
 import { TRANSPORT_COLOR_VAR } from '../domain/transport';
-import { applyTiles, buildLegend } from '../map/mapView';
+import { applyTiles } from '../map/mapView';
 import { emitChange } from '../state/store';
 import { byId } from './dom';
 
@@ -19,6 +19,5 @@ export function toggleTheme(): void {
   document.body.dataset.theme = light ? 'light' : 'dark';
   byId('themeBtn').textContent = light ? '☀️' : '🌙';
   applyTiles();
-  buildLegend();
   emitChange();
 }
