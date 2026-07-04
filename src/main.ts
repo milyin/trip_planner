@@ -1,7 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
-import { buildLegend, initMap } from './map/mapView';
+import { initMap } from './map/mapView';
 import { subscribe } from './state/store';
 import { wireGlobal } from './ui/global';
 import { wireModal } from './ui/modal';
@@ -11,7 +11,6 @@ import { setTab, syncMode, wireTabbar } from './ui/tabbar';
 import { wireTopbar } from './ui/topbar';
 
 initMap();
-buildLegend();
 wireTopbar();
 wireModal();
 wireTabbar();

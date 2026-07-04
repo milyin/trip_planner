@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import type { LatLng } from '../domain/types';
+import type { LatLng, TransportKind } from '../domain/types';
 import { money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
 import { conflictOf } from '../domain/plan';
@@ -14,6 +14,55 @@ let darkTiles: L.TileLayer;
 let lightTiles: L.TileLayer;
 let initialFit = true;
 let mobileFitted = false;
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+/** The overlay-pane <svg>'s <defs> (created on first use), or null if not ready yet. */
+function overlayDefs(): SVGDefsElement | null {
+  const svg = document.querySelector<SVGSVGElement>('.leaflet-overlay-pane svg');
+  if (!svg) return null;
+  let defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS(SVGNS, 'defs');
+    svg.insertBefore(defs, svg.firstChild);
+  }
+  return defs as SVGDefsElement;
+}
+
+/** Remove arrowhead marker defs left over from the previous draw. */
+function clearArrowDefs(): void {
+  document.querySelectorAll('.leaflet-overlay-pane svg defs marker.tp-arrow').forEach((m) => m.remove());
+}
+
+/**
+ * Id of an SVG arrowhead marker filled with `color`, created on demand and cached
+ * in `reg` for this draw. Applied to a segment line via `marker-end`, so it sits at
+ * the arrival end, points along the direction of travel, and re-renders on zoom/pan.
+ */
+function arrowMarker(color: string, reg: Map<string, string>): string | null {
+  const cached = reg.get(color);
+  if (cached) return cached;
+  const defs = overlayDefs();
+  if (!defs) return null;
+  const id = 'tp-arrow-' + reg.size;
+  const marker = document.createElementNS(SVGNS, 'marker');
+  marker.setAttribute('id', id);
+  marker.setAttribute('class', 'tp-arrow');
+  marker.setAttribute('viewBox', '0 0 10 10');
+  marker.setAttribute('refX', '7');
+  marker.setAttribute('refY', '5');
+  marker.setAttribute('markerWidth', '10');
+  marker.setAttribute('markerHeight', '10');
+  marker.setAttribute('markerUnits', 'userSpaceOnUse');
+  marker.setAttribute('orient', 'auto');
+  const tip = document.createElementNS(SVGNS, 'path');
+  tip.setAttribute('d', 'M0.5,1 L9,5 L0.5,9 Z');
+  tip.setAttribute('fill', color);
+  marker.appendChild(tip);
+  defs.appendChild(marker);
+  reg.set(color, id);
+  return id;
+}
 
 /** Create the Leaflet map, tile layers, and global map interactions. */
 export function initMap(): void {
@@ -49,12 +98,15 @@ export function applyTiles(): void {
 /** Redraw all segment/hotel geometry from current state. */
 export function drawMap(): void {
   segmentLayer.clearLayers();
+  clearArrowDefs();
   const bounds: LatLng[] = [];
   const halo = cssv('--halo');
   const accent = cssv('--accent');
   const danger = cssv('--danger');
   // uniform transparent click/hover width so thin dashed legs are as easy to grab as thick ones
   const HITW = 14;
+  const usedTransports = new Set<TransportKind>();
+  const arrowReg = new Map<string, string>();
 
   state.items.forEach((r) => {
     if (r.kind === 'hotel') {
@@ -115,7 +167,11 @@ export function drawMap(): void {
       L.polyline(line, { color: halo, weight: weight + 4, opacity: 0.6, interactive: false }).addTo(segmentLayer);
     }
     // visible line is decorative; a fat transparent "hit line" on top carries click + hover
-    L.polyline(line, { color: lineCol, weight: mainW, opacity, dashArray: dash ?? undefined, interactive: false }).addTo(segmentLayer);
+    const visible = L.polyline(line, { color: lineCol, weight: mainW, opacity, dashArray: dash ?? undefined, interactive: false }).addTo(segmentLayer);
+    if (lineCol === col) usedTransports.add(r.transport); // legend lists only transports whose colour is on the map
+    const arrowId = arrowMarker(lineCol, arrowReg);
+    const vpath = (visible as unknown as { getElement(): SVGPathElement | null }).getElement();
+    if (vpath && arrowId) vpath.setAttribute('marker-end', `url(#${arrowId})`);
     const tip = conflict ? `<br><small style="color:${danger}">⚠ overlaps plan</small>` : '';
     // bubblingMouseEvents:false → clicking selects without firing the map's "click empty → unselect"
     const hit = L.polyline(line, { color: '#000', opacity: 0, weight: HITW, lineCap: 'round', bubblingMouseEvents: false }).addTo(segmentLayer);
@@ -125,23 +181,25 @@ export function drawMap(): void {
     );
     hit.on('click', () => selectFromMap(r));
 
-    [r.dep, r.arr].forEach((p) => {
-      if (!p.ll) return;
-      L.circleMarker(p.ll, {
+    // endpoints contribute to map bounds; only the departure gets a dot —
+    // the arrival end is marked by the arrowhead so the leg reads directionally
+    [r.dep, r.arr].forEach((p) => { if (p.ll) bounds.push(p.ll); });
+    if (r.dep.ll) {
+      L.circleMarker(r.dep.ll, {
         radius: r.inPlan ? 6 : 4, color: halo, weight: 2,
         fillColor: isSel ? (conflict ? danger : accent) : col, fillOpacity: 1, bubblingMouseEvents: false,
       })
-        .bindTooltip(p.city, { className: 'place-tip', direction: 'top' })
+        .bindTooltip(r.dep.city, { className: 'place-tip', direction: 'top' })
         .on('click', () => selectFromMap(r))
         .addTo(segmentLayer);
-      bounds.push(p.ll);
-    });
+    }
   });
 
   if (initialFit && bounds.length) {
     map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], maxZoom: 6 });
     initialFit = false;
   }
+  buildLegend(usedTransports);
   placeLegend();
 }
 
@@ -212,13 +270,16 @@ export function placeLegend(): void {
   leg.dataset.corner = best;
 }
 
-/** Build the transport colour legend (recomputed on theme change). */
-export function buildLegend(): void {
+/** Build the transport colour legend — only modes whose colour is currently on the map. */
+export function buildLegend(used: Set<TransportKind>): void {
   const el = document.getElementById('legTransport');
   if (!el) return;
-  el.innerHTML = TRANSPORT_KINDS.map(
-    (t) => `<div class="lrow"><span class="lg-line" style="border-top-color:${transportColor(t)}"></span> ${t}</div>`,
-  ).join('');
+  const kinds = TRANSPORT_KINDS.filter((t) => used.has(t));
+  el.innerHTML = kinds
+    .map((t) => `<div class="lrow"><span class="lg-line" style="border-top-color:${transportColor(t)}"></span> ${t}</div>`)
+    .join('');
+  const col = el.closest('.legcol') as HTMLElement | null;
+  if (col) col.style.display = kinds.length ? '' : 'none'; // hide the whole column when nothing is drawn
 }
 
 /** Zoom/pan to fit every geocoded record. */
