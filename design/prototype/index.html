@@ -187,6 +187,7 @@
   .modal-body{padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px 16px}
   .leg{grid-column:1/-1; color:var(--accent); font-size:11px; font-weight:700; letter-spacing:1px;
     text-transform:uppercase; margin-top:4px}
+  .leg.col{grid-column:auto}
   .field{display:flex; flex-direction:column; gap:6px}
   .field.full{grid-column:1/-1}
   .field label{font-size:12px; color:var(--muted)}
@@ -249,14 +250,14 @@
   <div class="modal">
     <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
     <div class="modal-body" id="segBody">
-      <div class="leg">Departure</div>
+      <div class="leg col">Departure</div>
+      <div class="leg col">Arrival</div>
       <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
-      <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
-      <div class="field full"><label>Departure time</label><input id="fDepTime" type="datetime-local"></div>
-      <div class="leg">Arrival</div>
       <div class="field"><label>City</label><input id="fArrCity" placeholder="Paris"></div>
+      <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
       <div class="field"><label>Address / stop</label><input id="fArrAddr" placeholder="CDG"></div>
-      <div class="field full"><label>Arrival time</label><input id="fArrTime" type="datetime-local"></div>
+      <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
+      <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
       <div class="leg">Details</div>
       <div class="field"><label>Transport</label>
         <select id="fTransport"><option>Plane</option><option>Train</option><option>Bus</option>

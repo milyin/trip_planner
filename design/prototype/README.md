@@ -14,7 +14,10 @@ the look, layout, and interactions can be evaluated quickly in a browser.
   check-out dates, price, and an optional booking link). Both are added from the top bar
   (`＋ Segment` / `🏨 Hotel`) and live together in the Segments and Plan panels.
 - **Add / edit / delete** records through a modal dialog (the modal swaps its fields for
-  segments vs hotels).
+  segments vs hotels). The **segment** dialog is laid out in two aligned columns —
+  **Departure** on the left, **Arrival** on the right — so the matching city, address, and
+  time fields sit directly next to each other, with transport / company / cost / currency
+  below.
 - **Move records** between Segments and Plan (buttons, drag-and-drop, double-click to edit).
 - **Boarding-pass segment cards**: each segment is a compact three-column card. Row 1 shows
   the departure city, the transport icon + company (centred), and the arrival city;
