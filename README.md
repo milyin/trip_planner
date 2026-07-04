@@ -1,23 +1,45 @@
-# trip_planner
+# Trip Planner
 
-Rust desktop trip planner built with a replaceable backend/frontend split. The current GUI uses [`iced`](https://iced.rs/), while route rules, storage, geocoding, and plan generation live outside the GUI.
+A browser-based trip planner for designing a **non-conflicting itinerary** from a
+pool of transport segments and hotel stays, with everything visualised on a
+zoomable world map. It runs entirely in the browser — no backend, no build-time
+secrets — and is deployed to GitHub Pages.
 
-## Features
+**Live app:** https://milyin.github.io/trip_planner/
 
-- Add, edit, remove, and list travel routes.
-- Store routes locally in SQLite.
-- Model routes as departure and arrival stops, transport, optional company, and money.
-- Geocode places with the Rust `geocoding` crate through an isolated provider trait.
-- Build a non-overlapping route plan interactively.
-- Grey out routes that overlap already selected plan routes.
-- Generate gap rows between selected routes with elapsed time and distance when coordinates are available.
-- Classify plan gaps by feasibility using per-transport connection buffers (impossible = red, long layover = yellow).
-- Show plan totals: number of legs, total span, and total cost per currency.
-- Prepare storage for future route screenshot attachments.
+## What it does
 
-## Specification — domain rules
+- **Two record types** — *segments* (a transport leg: departure/arrival place +
+  time, transport mode, company, fare) and *hotels* (city, name, address,
+  check-in/out, price, optional booking link). Both are added, edited, deleted
+  through a modal dialog and geocoded onto the map.
+- **Three panels** — **Segments** (the pool), **Plan** (your chosen itinerary),
+  and a **Map**. On phones these collapse into a bottom tab bar showing one
+  full-screen panel at a time.
+- **Conflict-free planning** — adding a segment to the plan greys out every other
+  segment whose time overlaps it (they can't be added while the conflict stands).
+- **Generated gap rows** — between consecutive plan items the app inserts a row
+  with the elapsed time, great-circle distance, and a feasibility check:
+  - **impossible** (red) when the slack is below the next leg's connection buffer,
+  - **long layover** (yellow) when it exceeds 8 hours,
+  - otherwise neutral.
+- **One-click gap filling** — an overnight gap offers **🏨 Add hotel** and a
+  geographically remote gap offers **🧭 Add segment**, each opening the dialog
+  pre-filled from the surrounding items and dropped straight into the plan.
+- **Colour-coded map** — each transport mode has a fixed colour shared by its
+  icon and its map line. Plan legs are solid with a halo, available legs are
+  dashed, and a selected leg gets an accent border mirroring the selected-hotel
+  pin. The legend re-homes itself to the map corner least covered by lines.
+- **Totals footer** — number of legs, total nights, total span, cost per
+  currency, and an overall connection-feasibility flag.
+- **Day / night themes** that also swap the map tiles, plus a 📱 preview toggle
+  that renders the mobile layout in a phone frame on desktop.
 
-**Minimum connection buffer** (required arrival-before-departure of the *next* leg). These are domain data in `trip_core`, reused by any frontend:
+## Domain rules
+
+**Minimum connection buffer** — how long you must arrive before the *next* leg
+departs. These live in `src/domain/transport.ts` and are reused by every part of
+the UI:
 
 | Transport | Buffer |
 |-----------|--------|
@@ -28,46 +50,75 @@ Rust desktop trip planner built with a replaceable backend/frontend split. The c
 | Car       | 5m     |
 | Other     | 30m    |
 
-**Gap feasibility** between two consecutive plan legs, where `available = next.departure - previous.arrival`:
+**Gap feasibility** between two consecutive plan items, where
+`available = next.start − prev.end`:
 
-- `available < buffer(next.transport)` (including negative) → **impossible** (red).
-- `available > 8h` → **long layover** (yellow).
+- `available < buffer(next)` (including negative) → **impossible** (red);
+- `available > 8h` (and neither side is a hotel) → **long layover** (yellow);
 - otherwise → **ok**.
 
-## Workspace layout
+Hotels never grey out segments and need no connection buffer before them.
+
+## Tech stack
+
+- [TypeScript](https://www.typescriptlang.org/) (strict) + [Vite](https://vitejs.dev/)
+- [Leaflet](https://leafletjs.com/) for the map (CARTO tiles)
+- No framework — a small typed domain layer with a plain observer/render loop
+
+## Project layout
+
+The code is split so the **domain logic is UI-agnostic and testable**, and the UI
+is a thin, replaceable layer on top:
 
 ```text
-crates/trip_core      # domain model, validation, overlap and plan algorithms
-crates/trip_storage   # SQLite persistence and future screenshot attachment schema
-crates/trip_geo       # geocoding and distance abstractions
-crates/trip_app       # UI-independent application service layer
-crates/trip_iced      # iced desktop frontend
+src/
+  domain/     # pure, DOM-free: types, transport metadata, geocoding, plan/gap algorithms
+    types.ts        # Place, Segment, Hotel, TripItem, TransportKind, CurrencyCode
+    transport.ts    # icons, colours, connection buffers, thresholds, currency symbols
+    geo.ts          # geocoder + haversine distance
+    item.ts         # start/end accessors that unify segments and hotels
+    plan.ts         # planItems/listItems, conflict detection, gap classification, totals
+    format.ts       # duration/time/money formatting
+  state/      # mutable store + observer, id generator, seed itinerary
+  ui/         # cards, panels, modal, topbar, tabbar, selection, theme, render loop
+  map/        # Leaflet map view (draw, legend placement, fit, tabs)
+  styles/     # CSS split by concern (theme, topbar, panels, cards, map, modal, responsive)
+  main.ts     # bootstraps the map, wires the UI, subscribes the renderer
+index.html    # static markup queried by id; no inline script/style
 ```
 
-The GUI depends on `trip_app`; it does not own business rules or persistence details.
+State changes call `emitChange()`, which re-runs `renderAll()` (rebuild the two
+lists + redraw the map). Swapping the frontend means replacing `src/ui` +
+`src/map` while keeping `src/domain` and `src/state`.
 
-## Run
+## Develop
 
 ```bash
-cargo run -p trip_iced
+npm install
+npm run dev        # start the Vite dev server (hot reload)
 ```
 
-The application creates `trip_planner.sqlite3` in the working directory and seeds the Marseille/Paris/Madrid example routes on first launch.
-
-## Test
+## Build & preview
 
 ```bash
-cargo test
+npm run build      # type-check (tsc --noEmit) then bundle to dist/
+npm run preview    # serve the production build locally
 ```
 
-## Initial interface
+`npm run typecheck` runs the strict type check on its own.
 
-The desktop shell uses a three-panel layout (Routes | Plan | Map) with a top bar:
+## Deploy
 
-- **Routes**: all stored routes with selectable, selected, or disabled status; an `Add →` button moves a route into the plan. Each route is a compact **boarding-pass card** — departure (city/address/time) on the left, transport (icon + name, company, **trip duration**) in the center, arrival (city/address/time) on the right, and the fare on the far right; hovering an ellipsized field reveals its full untrimmed text.
-- **Plan**: selected non-overlapping route rows plus generated gap rows, with a totals footer (legs, span, cost per currency); a `↩ Remove` button moves a route back.
-- **Map**: a zoomable world map. Non-overlapping routes are drawn and color-coded by transport type (the line matches its transport icon color); plan legs are solid with a halo, available legs are dashed. Overlapping routes are hidden to reduce clutter and are drawn thin, dashed and red only while selected. The legend auto-relocates to the map corner least covered by routes.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds the app
+and publishes `dist/` to GitHub Pages. Because the site is served from a project
+subpath, `vite.config.ts` sets `base: '/trip_planner/'`.
 
-Routes are created and edited through a **modal dialog** (add/edit/delete). Hovering or selecting a card reveals compact action **icon buttons pinned to its top-right corner** (Add/Remove and Edit); the buttons sit in the empty top-right gutter so revealing them never changes card size. **Clicking outside** any card — an empty panel area, the top bar, or the map background — clears the selection, while clicking a route line still selects it. **Double-click** opens the edit modal, and cards can be **dragged** between the Routes and Plan panels to add/remove them (a drop that would time-overlap the plan is rejected with a red indicator). A **day/night theme toggle** switches both the UI palette and the map tiles. Screenshot drag-and-drop is intentionally not mixed into the core route model yet; the storage schema already has a route screenshot table for the next implementation step.
+To enable it once: in the repository's **Settings → Pages**, set **Source** to
+**GitHub Actions**.
 
-A clickable HTML/Leaflet prototype of this design is used to validate look-and-feel before the `iced` implementation.
+## Roadmap
+
+- Drag-and-drop of route screenshots stored alongside records (a field is
+  reserved for this next step).
+- Persisting the itinerary (local storage / shareable links).
+- A real geocoding provider behind the existing `geocode()` interface.

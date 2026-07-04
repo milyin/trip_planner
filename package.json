@@ -1,0 +1,21 @@
+{
+  "name": "trip-planner",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Browser-based trip planner — segments, hotels, an interactive plan, and a world map.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.21",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}

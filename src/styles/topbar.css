@@ -1,0 +1,32 @@
+.topbar{display:flex; align-items:center; gap:16px; padding:14px 20px;
+  border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--panel) 78%, transparent);
+  backdrop-filter:blur(8px); z-index:5}
+.brand{display:flex; align-items:center; gap:12px; font-weight:700}
+.brand .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+  background:linear-gradient(135deg, var(--accent), #7c5cff); color:#08111c; font-size:18px;
+  box-shadow:0 6px 18px rgba(56,189,248,.35)}
+.brand h1{font-size:16px;margin:0}
+.brand small{display:block;color:var(--muted);font-weight:500;font-size:11px}
+.spacer{flex:1}
+.btn{border:1px solid var(--border); background:var(--panel-2); color:var(--text);
+  padding:8px 14px; border-radius:10px; cursor:pointer; font-weight:600; font-size:13px;
+  display:inline-flex; align-items:center; gap:8px; transition:.15s}
+.btn:hover{background:var(--card-hover); border-color:var(--line)}
+.btn.primary{background:linear-gradient(135deg,var(--accent),#5aa0ff); color:#06121f; border:none;
+  box-shadow:0 6px 16px rgba(56,189,248,.3)}
+.btn.ghost{background:transparent}
+.btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+.btn.icon{padding:0; width:28px; height:28px; justify-content:center; gap:0; font-size:13px; border-radius:8px}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%, var(--border))}
+.btn.icon{padding:8px 10px}
+.menu-wrap{position:relative; display:inline-flex}
+.menu{position:absolute; top:calc(100% + 6px); right:0; min-width:156px; z-index:20;
+  background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:6px;
+  box-shadow:0 14px 34px rgba(0,0,0,.4); display:none; flex-direction:column; gap:2px}
+.menu.open{display:flex}
+.menu button{display:flex; align-items:center; gap:10px; width:100%; text-align:left; white-space:nowrap;
+  background:transparent; border:none; color:var(--text); padding:9px 12px; border-radius:8px;
+  font-size:13px; font-weight:600; cursor:pointer}
+.menu button:hover{background:var(--card-hover)}
+.menu button .mi{font-size:15px; width:18px; text-align:center}
+.btn:disabled{opacity:.45; cursor:not-allowed}
