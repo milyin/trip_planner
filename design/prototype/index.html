@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Trip Planner — GUI design proposal</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --bg1:#17203a; --bg2:#0e1320;
+    --panel:#151b2b; --panel-2:#1b2334; --card:#1e2739; --card-hover:#243049;
+    --border:#2b3550; --line:#334063;
+    --text:#e8edf7; --muted:#9aa6be; --faint:#6b7793;
+    --accent:#38bdf8;
+    --warn:#f59e0b; --danger:#ef4444; --ok:#4ade80;
+    --halo:#0b1020;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+    --radius:14px;
+    /* transport palette (line + icon share these) */
+    --t-plane:#38bdf8; --t-train:#22c55e; --t-bus:#fb923c;
+    --t-taxi:#f472b6; --t-car:#a78bfa; --t-other:#94a3b8; --t-hotel:#eab308;
+  }
+  body[data-theme="light"]{
+    --bg1:#dfe8f6; --bg2:#f4f7fc;
+    --panel:#ffffff; --panel-2:#f1f4fa; --card:#ffffff; --card-hover:#eef3fb;
+    --border:#dce3ee; --line:#c4cddd;
+    --text:#0f1729; --muted:#5b6577; --faint:#93a0b4;
+    --accent:#0284c7;
+    --warn:#b45309; --danger:#dc2626; --ok:#16a34a;
+    --halo:#ffffff;
+    --shadow:0 10px 26px rgba(30,50,90,.14);
+    --t-plane:#0ea5e9; --t-train:#16a34a; --t-bus:#ea580c;
+    --t-taxi:#db2777; --t-car:#7c3aed; --t-other:#64748b; --t-hotel:#ca8a04;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 80% -10%, var(--bg1) 0%, var(--bg2) 55%);
+    color:var(--text);
+    font:14px/1.45 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    -webkit-font-smoothing:antialiased; transition:background .25s, color .25s;
+  }
+  .app{display:flex; flex-direction:column; height:100vh; overflow:hidden}
+
+  .topbar{display:flex; align-items:center; gap:16px; padding:14px 20px;
+    border-bottom:1px solid var(--border); background:color-mix(in srgb, var(--panel) 78%, transparent);
+    backdrop-filter:blur(8px); z-index:5}
+  .brand{display:flex; align-items:center; gap:12px; font-weight:700}
+  .brand .logo{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+    background:linear-gradient(135deg, var(--accent), #7c5cff); color:#08111c; font-size:18px;
+    box-shadow:0 6px 18px rgba(56,189,248,.35)}
+  .brand h1{font-size:16px;margin:0}
+  .brand small{display:block;color:var(--muted);font-weight:500;font-size:11px}
+  .spacer{flex:1}
+  .btn{border:1px solid var(--border); background:var(--panel-2); color:var(--text);
+    padding:8px 14px; border-radius:10px; cursor:pointer; font-weight:600; font-size:13px;
+    display:inline-flex; align-items:center; gap:8px; transition:.15s}
+  .btn:hover{background:var(--card-hover); border-color:var(--line)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),#5aa0ff); color:#06121f; border:none;
+    box-shadow:0 6px 16px rgba(56,189,248,.3)}
+  .btn.ghost{background:transparent}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:8px}
+  .btn.icon{padding:0; width:28px; height:28px; justify-content:center; gap:0; font-size:13px; border-radius:8px}
+  .btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 35%, var(--border))}
+  .btn.icon{padding:8px 10px}
+  .btn:disabled{opacity:.45; cursor:not-allowed}
+
+  .layout{display:grid; grid-template-columns:330px 330px 1fr; min-height:0; flex:1}
+  .panel{display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--border); background:var(--panel)}
+  .panel:last-child{border-right:none}
+  .panel-head{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border)}
+  .panel-head .title{font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted)}
+  .panel-head .count{margin-left:auto; font-size:11px; color:var(--muted); background:var(--panel-2);
+    border:1px solid var(--border); padding:2px 8px; border-radius:999px}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .dot.grey{background:var(--faint)} .dot.white{background:#fff; box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+  body[data-theme="light"] .dot.white{background:#111827; box-shadow:0 0 0 2px rgba(0,0,0,.12)}
+  .scroll{overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px}
+  .scroll::-webkit-scrollbar{width:10px}
+  .scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:3px solid var(--panel)}
+
+  .card{border:1px solid var(--border); background:var(--card); border-radius:var(--radius);
+    padding:12px; cursor:grab; transition:.15s; position:relative; overflow:hidden; flex:0 0 auto}
+  .card:active{cursor:grabbing}
+  .card.dragging{opacity:.4}
+  .card:hover{background:var(--card-hover); border-color:var(--line)}
+  .card.sel{border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset}
+  .card .stripe{position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--faint)}
+  .card.disabled{opacity:.5}
+  /* boarding-pass segment card grid: departure | center(cost / transport+company / duration) | arrival */
+  .seg-grid{display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    grid-template-rows:auto auto auto; column-gap:10px; row-gap:3px; margin-left:6px; align-items:center}
+  .seg-grid > .c1{grid-column:1; justify-self:stretch; text-align:left; min-width:0}
+  .seg-grid > .c2{grid-column:2; justify-self:center; text-align:center; min-width:0}
+  .seg-grid > .c3{grid-column:3; justify-self:stretch; text-align:right; min-width:0}
+  .seg-grid > .r1{grid-row:1} .seg-grid > .r2{grid-row:2} .seg-grid > .r3{grid-row:3}
+  .seg-city{font-weight:700; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .seg-cost{color:var(--ok); font-weight:700; font-size:13px; white-space:nowrap}
+  .seg-tr{font-weight:600; font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:130px}
+  .seg-tr .ti{font-size:14px}
+  .seg-sub{color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .card-actions{display:none; position:absolute; bottom:6px; right:6px; z-index:3;
+    align-items:center; gap:4px; padding:2px; border-radius:9px;
+    background:var(--card-hover); box-shadow:0 2px 10px rgba(0,0,0,.28), 0 0 0 1px var(--border)}
+  .card-actions .btn.icon{width:22px; height:22px; padding:0; font-size:12px; border-radius:7px}
+  .card.sel .card-actions, .card:hover .card-actions{display:flex; animation:reveal .16s ease}
+  @keyframes reveal{from{opacity:0; transform:translateY(3px)}to{opacity:1; transform:none}}
+  .scroll.drop{outline:2px dashed var(--accent); outline-offset:-6px; border-radius:12px;
+    background:color-mix(in srgb,var(--accent) 9%, transparent)}
+  .scroll.drop-bad{outline:2px dashed var(--danger); outline-offset:-6px; border-radius:12px;
+    background:color-mix(in srgb,var(--danger) 9%, transparent)}
+  .warn{color:var(--danger); font-size:11.5px; margin:8px 0 0 6px; display:flex; gap:6px; align-items:center}
+
+  /* hotel (stay) card: name | price on top, location · link, dates | nights */
+  .hotel-grid{display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:10px; row-gap:3px; margin-left:6px; align-items:center}
+  .hotel-grid > .hc1{grid-column:1; min-width:0; text-align:left; justify-self:start}
+  .hotel-grid > .hc2{grid-column:2; justify-self:end; text-align:right; white-space:nowrap}
+  .hotel-grid > .hr1{grid-row:1} .hotel-grid > .hr2{grid-row:2} .hotel-grid > .hr3{grid-row:3}
+  .hotel-name{font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px; min-width:0}
+  .hotel-name .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .hotel-loc{color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .hotel-dates{color:var(--muted); font-size:12px; white-space:nowrap}
+  .hotel-nights{color:var(--muted); font-size:12px; white-space:nowrap}
+  .hotel-link{color:var(--accent); text-decoration:none; font-size:12px; white-space:nowrap}
+  .hotel-link:hover{text-decoration:underline}
+
+  .gap{display:flex; align-items:center; gap:10px; margin:2px 0 2px 22px; padding:8px 12px;
+    color:var(--muted); font-size:12.5px; position:relative; flex-wrap:wrap; flex:0 0 auto}
+  .gap::before{content:""; position:absolute; left:-6px; top:-6px; bottom:-6px; width:2px;
+    background:repeating-linear-gradient(to bottom, var(--line) 0 6px, transparent 6px 12px)}
+  .gap.long::before{background:repeating-linear-gradient(to bottom, var(--warn) 0 6px, transparent 6px 12px)}
+  .gap.bad::before{background:var(--danger)}
+  .gap .pill{background:var(--panel-2); border:1px solid var(--border); border-radius:999px;
+    padding:3px 10px; display:inline-flex; gap:8px; align-items:center}
+  .gap .pill b{color:var(--text)}
+  .gap.long .status{color:var(--warn); font-weight:600}
+  .gap.bad .status{color:var(--danger); font-weight:700}
+  .gap-actions{display:inline-flex; gap:6px; margin-left:auto; flex-wrap:wrap}
+  .gap-btn{border:1px dashed var(--line); background:transparent; color:var(--muted);
+    padding:3px 9px; border-radius:999px; cursor:pointer; font-size:11.5px; font-weight:600;
+    display:inline-flex; align-items:center; gap:5px; white-space:nowrap; transition:.15s}
+  .gap-btn:hover{color:var(--text); border-style:solid; border-color:var(--accent);
+    background:color-mix(in srgb, var(--accent) 14%, transparent)}
+
+  .empty{color:var(--faint); text-align:center; padding:26px 12px; font-size:13px}
+  .empty .big{font-size:26px; opacity:.5; display:block; margin-bottom:8px}
+
+  .plan-foot{border-top:1px solid var(--border); background:var(--panel-2); padding:12px 16px;
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+  .plan-foot .stat{display:flex; flex-direction:column; line-height:1.2}
+  .plan-foot .stat small{color:var(--muted); font-size:10.5px; text-transform:uppercase; letter-spacing:.6px}
+  .plan-foot .stat b{font-size:15px}
+  .plan-foot .total b{color:var(--accent); font-size:18px}
+  .plan-foot .flag{margin-left:auto; color:var(--danger); font-weight:700; font-size:12px}
+  .plan-foot .flag.ok{color:var(--ok)}
+
+  .map-wrap{position:relative; flex:1; min-height:0}
+  #map{position:absolute; inset:0; background:#0b1020}
+  body[data-theme="light"] #map{background:#dfe8f6}
+  .map-legend{position:absolute; left:14px; bottom:14px; z-index:500;
+    background:color-mix(in srgb, var(--panel) 88%, transparent);
+    border:1px solid var(--border); border-radius:12px; padding:10px 12px; backdrop-filter:blur(6px);
+    font-size:12px; display:flex; gap:16px; box-shadow:var(--shadow); transition:left .2s ease, top .2s ease}
+  .legcol{display:flex; flex-direction:column; gap:6px}
+  .legcol .h{font-size:10px; text-transform:uppercase; letter-spacing:.7px; color:var(--muted); font-weight:700}
+  .lrow{display:flex; align-items:center; gap:8px}
+  .lg-line{width:24px; height:0; border-top-width:4px; border-top-style:solid; border-radius:2px; opacity:1}
+  .lg-line.faded{opacity:.5} .lg-line.dashed{border-top-style:dashed; opacity:.5}
+  .leaflet-container{font-family:inherit}
+  .segment-tip{background:var(--panel)!important; color:var(--text)!important; border:1px solid var(--line)!important; border-radius:8px!important}
+  .place-tip{background:var(--panel)!important;color:var(--text)!important;border:1px solid var(--line)!important;border-radius:6px!important;font-weight:600}
+  .hotel-pin{display:grid; place-items:center; width:26px; height:26px; border-radius:8px; font-size:14px;
+    background:var(--panel); border:2px solid var(--t-hotel); box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .hotel-pin.plan{background:var(--t-hotel)}
+  .hotel-pin.sel{border-color:var(--accent); box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 45%, transparent)}
+
+  .overlay{position:fixed; inset:0; background:rgba(6,10,18,.6); backdrop-filter:blur(4px);
+    display:none; align-items:center; justify-content:center; z-index:1000}
+  .overlay.open{display:flex}
+  .modal{width:min(680px,94vw); background:var(--panel); border:1px solid var(--line);
+    border-radius:18px; box-shadow:var(--shadow); overflow:hidden; animation:pop .16s ease}
+  @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
+  .modal-head{display:flex; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border)}
+  .modal-head h3{margin:0; font-size:16px}
+  .modal-head .x{margin-left:auto; cursor:pointer; color:var(--muted); font-size:20px; line-height:1}
+  .modal-body{padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:14px 16px}
+  .leg{grid-column:1/-1; color:var(--accent); font-size:11px; font-weight:700; letter-spacing:1px;
+    text-transform:uppercase; margin-top:4px}
+  .leg.col{grid-column:auto}
+  .field{display:flex; flex-direction:column; gap:6px}
+  .field.full{grid-column:1/-1}
+  .field label{font-size:12px; color:var(--muted)}
+  .field .hint{color:var(--faint); font-size:11px}
+  .field input, .field select{background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    border-radius:10px; padding:9px 11px; font:inherit; outline:none}
+  .field input:focus, .field select:focus{border-color:var(--accent)}
+  .modal-foot{display:flex; gap:10px; padding:16px 20px; border-top:1px solid var(--border)}
+  .modal-foot .spacer{flex:1}
+
+  @media (max-width:1080px){ .layout{grid-template-columns:1fr 1fr; grid-auto-rows:minmax(220px,auto)}
+    .panel:nth-child(3){grid-column:1/-1} }
+</style>
+</head>
+<body data-theme="dark">
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><div class="logo">✈</div>
+      <div><h1>Trip Planner</h1><small>segment &amp; plan designer</small></div></div>
+    <div class="spacer"></div>
+    <button class="btn ghost icon" id="themeBtn" title="Toggle day / night theme">🌙</button>
+    <button class="btn ghost sm" id="fitBtn" title="Zoom map to all segments &amp; hotels">🗺 Fit map</button>
+    <button class="btn" id="newHotelBtn" title="Add a hotel stay">🏨 Hotel</button>
+    <button class="btn primary" id="newBtn">＋ Segment</button>
+  </div>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-head"><span class="dot grey"></span><span class="title">Segments</span>
+        <span class="count" id="segmentsCount">0</span></div>
+      <div class="scroll" id="segmentsList"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span class="dot white"></span><span class="title">Plan</span>
+        <span class="count" id="planCount">0</span></div>
+      <div class="scroll" id="planList"></div>
+      <div class="plan-foot" id="planFoot"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><span class="title">Map</span>
+        <span class="count" id="mapHint">drag to pan · scroll to zoom</span></div>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div class="map-legend">
+          <div class="legcol"><div class="h">Transport</div><div id="legTransport"></div></div>
+          <div class="legcol"><div class="h">State</div>
+            <div class="lrow"><span class="lg-line" style="border-top-color:var(--muted)"></span> In plan</div>
+            <div class="lrow"><span class="lg-line dashed" style="border-top-color:var(--muted)"></span> Available</div>
+            <div class="lrow"><span class="lg-line" style="border-top-color:var(--danger)"></span> Overlaps (selected)</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head"><h3 id="modalTitle">New segment</h3><div class="x" id="closeModal">✕</div></div>
+    <div class="modal-body" id="segBody">
+      <div class="leg col">Departure</div>
+      <div class="leg col">Arrival</div>
+      <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
+      <div class="field"><label>City</label><input id="fArrCity" placeholder="Paris"></div>
+      <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
+      <div class="field"><label>Address / stop</label><input id="fArrAddr" placeholder="CDG"></div>
+      <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
+      <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
+      <div class="leg">Details</div>
+      <div class="field"><label>Transport</label>
+        <select id="fTransport"><option>Plane</option><option>Train</option><option>Bus</option>
+          <option>Taxi</option><option>Car</option><option>Other</option></select>
+        <span class="hint" id="bufHint"></span></div>
+      <div class="field"><label>Company (optional)</label><input id="fCompany" placeholder="AirFrance"></div>
+      <div class="field"><label>Cost</label><input id="fCost" type="number" min="0" step="0.01" placeholder="100.00"></div>
+      <div class="field"><label>Currency</label>
+        <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+    </div>
+    <div class="modal-body" id="hotelBody" style="display:none">
+      <div class="leg">Stay</div>
+      <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
+      <div class="field"><label>City</label><input id="hCity" placeholder="Paris"></div>
+      <div class="field"><label>Address</label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
+      <div class="field"><label>Check-in</label><input id="hIn" type="datetime-local"></div>
+      <div class="field"><label>Check-out</label><input id="hOut" type="datetime-local"></div>
+      <div class="field"><label>Price</label><input id="hCost" type="number" min="0" step="0.01" placeholder="240.00"></div>
+      <div class="field"><label>Currency</label>
+        <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+      <div class="field full"><label>Link (optional)</label><input id="hLink" type="url" placeholder="https://…"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn danger" id="delBtn" style="display:none">Delete</button>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn primary" id="saveBtn">Save segment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- transport metadata ---------- */
+const TICON={Plane:"✈",Train:"🚆",Bus:"🚌",Taxi:"🚕",Car:"🚗",Other:"•"};
+const TVAR ={Plane:"--t-plane",Train:"--t-train",Bus:"--t-bus",Taxi:"--t-taxi",Car:"--t-car",Other:"--t-other"};
+/* minimum connection buffer: required arrival-before-departure of the NEXT leg (minutes) */
+const BUFFER={Plane:120,Train:20,Bus:15,Taxi:5,Car:5,Other:30};
+const LONG_GAP=8*60;         // > 8h layover = "too long" (yellow)
+const REMOTE_KM=50;          // end of one leg > 50 km from start of next = "geographically remote" → offer a connecting segment
+const cssv=v=>getComputedStyle(document.body).getPropertyValue(v).trim();
+const tcolor=tr=>cssv(TVAR[tr]||"--t-other");
+
+/* ---------- mock geocoder ---------- */
+const GAZ={ "marseille":[43.4393,5.2214],"paris":[48.9,2.45],"paris cdg":[49.0097,2.5479],
+  "paris orly":[48.7233,2.3794],"madrid":[40.4936,-3.5668],"lyon":[45.7256,5.0811],
+  "nice":[43.6584,7.2159],"barcelona":[41.2974,2.0833],"london":[51.4700,-0.4543],
+  "berlin":[52.3667,13.5033],"rome":[41.8003,12.2389],"amsterdam":[52.3105,4.7683],
+  "lisbon":[38.7742,-9.1342],"geneva":[46.2381,6.1090],"zurich":[47.4647,8.5492],
+  "brussels":[50.9014,4.4844],"milan":[45.6306,8.7281] };
+function geocode(city,addr){ const k=(city+" "+(addr||"")).trim().toLowerCase();
+  if(GAZ[k])return GAZ[k]; const c=(city||"").trim().toLowerCase(); if(GAZ[c])return GAZ[c];
+  for(const g in GAZ){ if(c&&g.includes(c))return GAZ[g]; } return null; }
+const CUR={EUR:"€",USD:"$",GBP:"£",CHF:"CHF "};
+
+/* ---------- seed data ---------- */
+let idSeq=1; const nid=()=>"r"+(idSeq++);
+let items=[
+  mk("Marseille","Airport","2026-05-01T12:00","Paris","CDG","2026-05-01T13:30","Plane","AirFrance",100,"EUR",true),
+  mk("Paris","Orly","2026-05-01T16:00","Madrid","Airport","2026-05-01T18:00","Plane","Iberia",150,"EUR",true),
+  mk("Paris","CDG","2026-05-01T13:00","Lyon","Part-Dieu","2026-05-01T14:30","Train","SNCF",60,"EUR",false),
+  mk("Madrid","Airport","2026-05-02T09:00","Barcelona","El Prat","2026-05-02T10:15","Plane","Vueling",80,"EUR",true),
+  mk("Marseille","St-Charles","2026-05-01T08:00","Nice","Ville","2026-05-01T09:00","Train","SNCF",30,"EUR",false),
+  mk("Nice","Port","2026-05-01T10:00","Marseille","Old Port","2026-05-01T13:20","Bus","FlixBus",20,"EUR",false),
+  mkHotel("Madrid","Hostal Central","Gran Vía 8","2026-05-01T20:00","2026-05-02T08:00",90,"EUR",null,false),
+  mkHotel("Paris","Hôtel Le Marais","12 Rue de Rivoli","2026-05-02T15:00","2026-05-04T11:00",240,"EUR","https://example.com/le-marais",false),
+  mk("Madrid","Airport","2026-05-02T20:00","Lisbon","Airport","2026-05-02T21:30","Plane","TAP",120,"EUR",true),
+];
+function mk(dc,da,dt,ac,aa,at,tr,co,cost,cur,inPlan){
+  return {id:nid(), kind:"segment", dep:{city:dc,addr:da,time:dt,ll:geocode(dc,da)},
+          arr:{city:ac,addr:aa,time:at,ll:geocode(ac,aa)},
+          transport:tr, company:co, cost:cost, currency:cur, inPlan:!!inPlan}; }
+function mkHotel(city,name,addr,ci,co,cost,cur,link,inPlan){
+  return {id:nid(), kind:"hotel", city, name, addr, checkIn:ci, checkOut:co,
+          cost, currency:cur, link:link||null, ll:geocode(city,addr), inPlan:!!inPlan}; }
+
+/* ---------- helpers ---------- */
+const T=s=>new Date(s).getTime();
+const startT=x=>x.kind==="hotel"?T(x.checkIn):T(x.dep.time);
+const endT  =x=>x.kind==="hotel"?T(x.checkOut):T(x.arr.time);
+const startLL=x=>x.kind==="hotel"?x.ll:x.dep.ll;
+const endLL  =x=>x.kind==="hotel"?x.ll:x.arr.ll;
+const startCity=x=>x.kind==="hotel"?x.city:x.dep.city;
+const endCity  =x=>x.kind==="hotel"?x.city:x.arr.city;
+const nights=h=>Math.max(1,Math.round((T(h.checkOut)-T(h.checkIn))/86400000));
+/* raw datetime-local strings & addresses at either end of an item (works for segments & hotels) */
+const endTimeStr  =x=>x.kind==="hotel"?x.checkOut:x.arr.time;
+const startTimeStr=x=>x.kind==="hotel"?x.checkIn :x.dep.time;
+const endAddr  =x=>x.kind==="hotel"?(x.addr||""):x.arr.addr;
+const startAddr=x=>x.kind==="hotel"?(x.addr||""):x.dep.addr;
+const overlaps=(a,b)=>T(a.dep.time)<T(b.arr.time)&&T(b.dep.time)<T(a.arr.time);
+const planItems=()=>items.filter(r=>r.inPlan).sort((a,b)=>startT(a)-startT(b));
+const listItems=()=>items.filter(r=>!r.inPlan).sort((a,b)=>startT(a)-startT(b));
+function conflictOf(r){ if(r.kind!=="segment"||r.inPlan)return null;
+  return planItems().find(p=>p.kind==="segment"&&overlaps(r,p))||null; }
+function haversine(a,b){ if(!a||!b)return null; const R=6371,rad=x=>x*Math.PI/180;
+  const dLat=rad(b[0]-a[0]),dLon=rad(b[1]-a[1]);
+  const s=Math.sin(dLat/2)**2+Math.cos(rad(a[0]))*Math.cos(rad(b[0]))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s)); }
+function fmtDur(ms){ let m=Math.round(ms/60000); const neg=m<0; m=Math.abs(m);
+  const d=Math.floor(m/1440); m-=d*1440; const h=Math.floor(m/60), mm=m%60; const out=[];
+  if(d)out.push(d+"d"); if(h)out.push(h+"h"); if(mm||!out.length)out.push(mm+"m");
+  return (neg?"-":"")+out.join(" "); }
+function fmtTime(s){ const d=new Date(s);
+  return d.toLocaleDateString([], {month:"short",day:"numeric"})+" "+d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"}); }
+function money(r){ const s=CUR[r.currency]||r.currency+" "; return s+Number(r.cost).toFixed(0); }
+function tripDur(r){ return fmtDur(T(r.arr.time)-T(r.dep.time)); }
+const esc=s=>String(s??"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+/* classify gap between prev and next plan legs */
+function classifyGap(prev,next){
+  const availMin=(startT(next)-endT(prev))/60000;
+  const need=next.kind==="segment"?(BUFFER[next.transport]??30):0;
+  if(availMin<need) return {kind:"bad", availMin, need};
+  const hotelSide=prev.kind==="hotel"||next.kind==="hotel";
+  if(!hotelSide && availMin>LONG_GAP) return {kind:"long", availMin, need};
+  return {kind:"ok", availMin, need};
+}
+/* nights a gap spans = calendar-day boundaries between the two items (≥1 ⇒ needs a place to sleep) */
+function gapNights(prev,next){
+  const a=new Date(endTimeStr(prev)), b=new Date(startTimeStr(next));
+  if(isNaN(a)||isNaN(b))return 0;
+  const a0=new Date(a.getFullYear(),a.getMonth(),a.getDate());
+  const b0=new Date(b.getFullYear(),b.getMonth(),b.getDate());
+  return Math.max(0,Math.round((b0-a0)/86400000));
+}
+/* are the two ends far enough apart to need a connecting segment? */
+function gapRemote(prev,next){
+  const d=haversine(endLL(prev),startLL(next));
+  if(d!=null)return d>REMOTE_KM;
+  return (endCity(prev)||"").trim().toLowerCase()!==(startCity(next)||"").trim().toLowerCase();
+}
+
+let selected=null, draggedId=null;
+
+/* ---------- cards ---------- */
+function btn(t,c){ const b=document.createElement("button"); b.className=c; b.textContent=t; return b; }
+function itemCard(r,mode){ return r.kind==="hotel"?hotelCard(r,mode):segmentCard(r,mode); }
+function openEditor(r){ r.kind==="hotel"?openHotelModal(r.id):openModal(r.id); }
+function cardActions(el,r,mode){
+  const a=el.querySelector(".card-actions");
+  if(mode==="list"){ const conflict=r.kind==="segment"?conflictOf(r):null, disabled=!!conflict;
+    const add=btn(disabled?"⊘":"＋","btn icon "+(disabled?"":"primary"));
+    add.title=disabled?"Overlaps plan — can't add":"Add to plan"; add.disabled=disabled;
+    add.onclick=e=>{e.stopPropagation(); r.inPlan=true; selected=r.id; render();}; a.appendChild(add);
+  }else{ const rm=btn("↩","btn icon"); rm.title="Remove from plan";
+    rm.onclick=e=>{e.stopPropagation(); r.inPlan=false; selected=r.id; render();}; a.appendChild(rm); }
+  const ed=btn("✎","btn icon ghost"); ed.title="Edit"; ed.onclick=e=>{e.stopPropagation(); openEditor(r);}; a.appendChild(ed);
+}
+function makeDraggable(el,r){
+  el.onclick=()=>{ selected=r.id; render(); };
+  el.ondblclick=e=>{ e.stopPropagation(); openEditor(r); };
+  el.draggable=true;
+  el.addEventListener("dragstart",e=>{ draggedId=r.id; e.dataTransfer.effectAllowed="move";
+    try{e.dataTransfer.setData("text/plain",r.id);}catch(_){}
+    requestAnimationFrame(()=>el.classList.add("dragging")); });
+  el.addEventListener("dragend",()=>{ el.classList.remove("dragging"); clearDrop(); draggedId=null; });
+}
+function segmentCard(r,mode){
+  const conflict = mode==="list"?conflictOf(r):null, disabled=!!conflict;
+  const col=tcolor(r.transport);
+  const el=document.createElement("div");
+  el.className="card "+(mode==="plan"?"plan ":"")+(disabled?"disabled ":"")+(selected===r.id?"sel":"");
+  el.innerHTML=`
+    <div class="stripe" style="background:${col}"></div>
+    <div class="seg-grid">
+      <div class="seg-city c1 r1" title="${esc(r.dep.city)}">${r.dep.city}</div>
+      <div class="seg-tr c2 r1" title="${esc(r.transport+(r.company?' · '+r.company:''))}"><span class="ti" style="color:${col}">${TICON[r.transport]||"•"}</span> ${r.company||r.transport}</div>
+      <div class="seg-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
+      <div class="seg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr||"—"}</div>
+      <div class="seg-cost c2 r2" title="Fare">${money(r)}</div>
+      <div class="seg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr||"—"}</div>
+      <div class="seg-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
+      <div class="seg-sub c2 r3">${tripDur(r)}</div>
+      <div class="seg-sub c3 r3" title="${esc(fmtTime(r.arr.time))}">${fmtTime(r.arr.time)}</div>
+    </div>
+    ${disabled?`<div class="warn">⚠ Overlaps plan: ${conflict.dep.city} → ${conflict.arr.city}</div>`:""}
+    <div class="card-actions"></div>`;
+  el.title=`${r.dep.city} → ${r.arr.city}  ·  ${r.transport}${r.company?' · '+r.company:''}  ·  ${money(r)}  ·  ⏱ ${tripDur(r)}\nDepart: ${fmtTime(r.dep.time)} — ${r.dep.city}, ${r.dep.addr}\nArrive: ${fmtTime(r.arr.time)} — ${r.arr.city}, ${r.arr.addr}\n(Click to select · double-click to edit · drag to move)`;
+  cardActions(el,r,mode); makeDraggable(el,r);
+  return el;
+}
+function hotelCard(r,mode){
+  const col=cssv("--t-hotel"), n=nights(r);
+  const el=document.createElement("div");
+  el.className="card hotel "+(mode==="plan"?"plan ":"")+(selected===r.id?"sel":"");
+  el.innerHTML=`
+    <div class="stripe" style="background:${col}"></div>
+    <div class="hotel-grid">
+      <div class="hotel-name hc1 hr1"><span class="ti" style="color:${col}">🏨</span><span class="nm" title="${esc(r.name)}">${r.name||"Hotel"}</span></div>
+      <div class="seg-cost hc2 hr1" title="Price">${money(r)}</div>
+      <div class="hotel-loc hc1 hr2" title="${esc(r.city+(r.addr?' · '+r.addr:''))}">${r.city}${r.addr?' · '+r.addr:''}</div>
+      <div class="hc2 hr2">${r.link?`<a class="hotel-link" href="${esc(r.link)}" target="_blank" rel="noopener" title="Open booking link" onclick="event.stopPropagation()">🔗 Link</a>`:""}</div>
+      <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn)+' → '+fmtTime(r.checkOut))}">${fmtTime(r.checkIn)} → ${fmtTime(r.checkOut)}</div>
+      <div class="hotel-nights hc2 hr3">${n} night${n>1?"s":""}</div>
+    </div>
+    <div class="card-actions"></div>`;
+  el.title=`🏨 ${r.name} — ${r.city}${r.addr?', '+r.addr:''}  ·  ${money(r)}  ·  ${n} night${n>1?"s":""}\nCheck-in:  ${fmtTime(r.checkIn)}\nCheck-out: ${fmtTime(r.checkOut)}${r.link?'\nLink: '+r.link:''}\n(Click to select · double-click to edit · drag to move)`;
+  cardActions(el,r,mode); makeDraggable(el,r);
+  return el;
+}
+
+function render(){
+  const rl=document.getElementById("segmentsList"); rl.innerHTML="";
+  const list=listItems(); document.getElementById("segmentsCount").textContent=list.length;
+  if(!list.length) rl.innerHTML=`<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a segment or hotel above.</div>`;
+  list.forEach(r=>rl.appendChild(itemCard(r,"list")));
+
+  const pl=document.getElementById("planList"); pl.innerHTML="";
+  const plan=planItems(); document.getElementById("planCount").textContent=plan.length;
+  if(!plan.length) pl.innerHTML=`<div class="empty"><span class="big">🧩</span>Empty plan.<br>Press <b>Add →</b> on a segment or hotel.</div>`;
+  let badCount=0;
+  plan.forEach((r,i)=>{
+    if(i>0){ const prev=plan[i-1], c=classifyGap(prev,r);
+      if(c.kind==="bad") badCount++;
+      const dist=haversine(endLL(prev),startLL(r));
+      const g=document.createElement("div"); g.className="gap "+c.kind;
+      let status="";
+      if(c.kind==="bad"){ const lead=c.availMin<0?"Overlaps previous item":"Too tight";
+        const suf=r.kind==="segment"?` · needs ≥ ${fmtDur(c.need*60000)} before ${r.transport}`:"";
+        status=`<span class="status">⛔ ${lead}${suf}</span>`;
+      } else if(c.kind==="long") status=`<span class="status">⚠ Long layover</span>`;
+      g.innerHTML=`<span class="pill">⏱ <b>${fmtDur(startT(r)-endT(prev))}</b></span>
+        <span class="pill">📏 <b>${dist!=null?Math.round(dist)+" km":"—"}</b></span>
+        <span style="color:var(--faint)">${endCity(prev)} → ${startCity(r)}</span> ${status}`;
+      if(c.kind!=="bad"){                                        // offer to fill sensible gaps
+        const nN=gapNights(prev,r);
+        const wantHotel = prev.kind!=="hotel" && r.kind!=="hotel" && nN>=1;   // overnight gap, no hotel yet
+        const wantSeg = gapRemote(prev,r);                       // ends are far apart
+        const acts=document.createElement("span"); acts.className="gap-actions";
+        if(wantHotel){ const b=btn("🏨 Add hotel","gap-btn");
+          b.title=`Overnight gap — ${nN} night${nN>1?"s":""} in ${endCity(prev)}. Add a hotel to fill it.`;
+          b.onclick=e=>{ e.stopPropagation(); openHotelModal(null,{inPlan:true,city:endCity(prev),checkIn:endTimeStr(prev),checkOut:startTimeStr(r)}); };
+          acts.appendChild(b); }
+        if(wantSeg){ const b=btn("🧭 Add segment","gap-btn");
+          b.title=`${endCity(prev)} → ${startCity(r)}${dist!=null?` (${Math.round(dist)} km apart)`:""}. Add a connecting segment.`;
+          b.onclick=e=>{ e.stopPropagation(); openModal(null,{inPlan:true,depCity:endCity(prev),depAddr:endAddr(prev),depTime:endTimeStr(prev),arrCity:startCity(r),arrAddr:startAddr(r),arrTime:startTimeStr(r)}); };
+          acts.appendChild(b); }
+        if(acts.childNodes.length) g.appendChild(acts);
+      }
+      pl.appendChild(g);
+    }
+    pl.appendChild(itemCard(r,"plan"));
+  });
+  renderPlanFoot(plan,badCount);
+  drawMap();
+}
+
+function renderPlanFoot(plan,badCount){
+  const foot=document.getElementById("planFoot");
+  if(!plan.length){ foot.innerHTML=`<span style="color:var(--faint)">Add segments or hotels to see totals.</span>`; return; }
+  const totals={}; plan.forEach(r=>{ totals[r.currency]=(totals[r.currency]||0)+Number(r.cost); });
+  const totalStr=Object.entries(totals).map(([c,v])=>(CUR[c]||c+" ")+v.toFixed(0)).join(" + ");
+  const span=fmtDur(endT(plan[plan.length-1])-startT(plan[0]));
+  const legs=plan.filter(p=>p.kind==="segment").length;
+  const nightsTotal=plan.filter(p=>p.kind==="hotel").reduce((s,h)=>s+nights(h),0);
+  foot.innerHTML=`
+    <div class="stat"><small>Legs</small><b>${legs}</b></div>
+    ${nightsTotal?`<div class="stat"><small>Nights</small><b>${nightsTotal}</b></div>`:""}
+    <div class="stat"><small>Total time</small><b>${span}</b></div>
+    <div class="stat total"><small>Total cost</small><b>${totalStr}</b></div>
+    <div class="flag ${badCount?'':'ok'}">${badCount?('⛔ '+badCount+' impossible connection'+(badCount>1?'s':'')):'✓ all connections OK'}</div>`;
+}
+
+/* ---------- map ---------- */
+let map, segmentLayer, darkTiles, lightTiles, initialFit=true;
+function initMap(){
+  map=L.map("map",{worldCopyJump:true,minZoom:2,zoomControl:true}).setView([45,6],5);
+  darkTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    {subdomains:"abcd",maxZoom:19,attribution:"© OpenStreetMap · © CARTO"});
+  lightTiles=L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    {subdomains:"abcd",maxZoom:19,attribution:"© OpenStreetMap · © CARTO"});
+  segmentLayer=L.layerGroup().addTo(map); applyTiles();
+  map.on("moveend zoomend",()=>placeLegend());
+  map.on("click",()=>{ if(selected!==null){ selected=null; render(); } });   // click empty map unselects
+  window.addEventListener("resize",()=>{ if(map){ map.invalidateSize(); placeLegend(); } });
+}
+function applyTiles(){ const light=document.body.dataset.theme==="light";
+  map.removeLayer(light?darkTiles:lightTiles); (light?lightTiles:darkTiles).addTo(map); }
+function drawMap(){
+  segmentLayer.clearLayers(); const bounds=[]; const halo=cssv("--halo"), accent=cssv("--accent"), danger=cssv("--danger");
+  const HITW=14;   // uniform transparent click/hover width (≈ the bold in-plan leg's halo) so thin dashed legs are as easy to grab as thick ones
+  items.forEach(r=>{
+    if(r.kind==="hotel"){
+      if(!r.ll)return; const isSel=selected===r.id;
+      const cls="hotel-pin"+(r.inPlan?" plan":"")+(isSel?" sel":"");
+      const m=L.marker(r.ll,{icon:L.divIcon({html:"🏨",className:cls,iconSize:[26,26],iconAnchor:[13,13]}),
+        opacity:r.inPlan?1:.65, zIndexOffset:r.inPlan?600:300}).addTo(segmentLayer);
+      m.bindTooltip(`🏨 ${r.name}<br><small>${r.city} · ${money(r)} · ${nights(r)} night${nights(r)>1?"s":""}</small>`,{className:"segment-tip",direction:"top"});
+      m.on("click",()=>{selected=r.id; render();});
+      bounds.push(r.ll); return;
+    }
+    if(!r.dep.ll||!r.arr.ll)return;
+    const col=tcolor(r.transport), conflict=conflictOf(r), isSel=selected===r.id;
+    if(conflict && !isSel) return;                                 // overlapped: not drawn unless selected
+    let weight,opacity,dash=null,lineCol=col;
+    if(r.inPlan){ weight=6; opacity=1; }                           // in plan: solid, transport color
+    else if(conflict){ weight=3; opacity=.9; lineCol=danger; dash="6 8"; }  // selected + overlapped: thin, dashed, red
+    else { weight=3; opacity=.7; dash="6 8"; }                     // available: dashed, transport color
+    const drawHalo = r.inPlan || (isSel && !conflict);             // no glow on conflicting legs — keep them thin
+    if(drawHalo){ L.polyline([r.dep.ll,r.arr.ll],
+      {color:isSel?accent:halo, weight:weight+4, opacity:isSel?.35:.6, interactive:false}).addTo(segmentLayer); }  // decorative glow: never capture clicks
+    const mainW = (isSel && !conflict) ? weight+1 : weight;        // don't thicken conflicting legs
+    // Visible line is purely decorative (interactive:false); a fat transparent "hit line" on top
+    // carries click + hover, so thin dashed legs get the same wide hot area as thick ones.
+    L.polyline([r.dep.ll,r.arr.ll],{color:lineCol,weight:mainW,opacity,dashArray:dash,interactive:false}).addTo(segmentLayer);
+    const tip = conflict?`<br><small style="color:${danger}">⚠ overlaps plan</small>`:"";
+    // bubblingMouseEvents:false → clicking selects without also firing the map's "click empty → unselect" handler
+    const hit=L.polyline([r.dep.ll,r.arr.ll],{color:"#000",opacity:0,weight:HITW,lineCap:"round",bubblingMouseEvents:false}).addTo(segmentLayer);
+    hit.bindTooltip(`${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,{className:"segment-tip",sticky:true});
+    hit.on("click",()=>{selected=r.id; render();});
+    [r.dep,r.arr].forEach(p=>{ L.circleMarker(p.ll,{radius:r.inPlan?6:4,color:halo,weight:2,
+      fillColor:isSel?(conflict?danger:accent):col,fillOpacity:1,bubblingMouseEvents:false})
+      .bindTooltip(p.city,{className:"place-tip",direction:"top"})
+      .on("click",()=>{selected=r.id; render();})       // clicking an endpoint dot selects its segment too
+      .addTo(segmentLayer);
+      bounds.push(p.ll); });
+  });
+  if(initialFit&&bounds.length){ map.fitBounds(bounds,{padding:[50,50],maxZoom:6}); initialFit=false; }
+  placeLegend();
+}
+
+/* place the legend in whichever map corner is least covered by drawn segments */
+function placeLegend(){
+  const leg=document.querySelector(".map-legend"), wrap=document.querySelector(".map-wrap");
+  if(!leg||!wrap||!map) return;
+  const W=wrap.clientWidth, H=wrap.clientHeight, lw=leg.offsetWidth, lh=leg.offsetHeight, m=14;
+  if(!W||!H||!lw) return;
+  const corners={ bl:{left:m,top:H-lh-m}, br:{left:W-lw-m,top:H-lh-m}, tl:{left:m,top:m}, tr:{left:W-lw-m,top:m} };
+  const pts=[];
+  items.forEach(r=>{
+    if(r.kind==="hotel"){ if(!r.ll)return; try{const p=map.latLngToContainerPoint(r.ll); pts.push([p.x,p.y]);}catch(_){} return; }
+    if(!r.dep.ll||!r.arr.ll)return; const conflict=conflictOf(r), isSel=selected===r.id;
+    if(conflict&&!isSel)return;                                    // only sample drawn segments
+    let a,b; try{ a=map.latLngToContainerPoint(r.dep.ll); b=map.latLngToContainerPoint(r.arr.ll); }catch(_){return;}
+    for(let t=0;t<=1.0001;t+=0.06) pts.push([a.x+(b.x-a.x)*t, a.y+(b.y-a.y)*t]); });
+  const cover=c=>{ const x0=c.left-8,y0=c.top-8,x1=c.left+lw+8,y1=c.top+lh+8; let n=0;
+    for(const p of pts) if(p[0]>=x0&&p[0]<=x1&&p[1]>=y0&&p[1]<=y1) n++; return n; };
+  let best="bl", bn=Infinity;
+  for(const k of ["bl","br","tl","tr"]){ const n=cover(corners[k]); if(n<bn){ bn=n; best=k; } }   // ties keep bl>br>tl>tr
+  const c=corners[best];
+  leg.style.left=Math.max(m,c.left)+"px"; leg.style.top=Math.max(m,c.top)+"px";
+  leg.style.right="auto"; leg.style.bottom="auto"; leg.dataset.corner=best;
+}
+
+/* ---------- legend ---------- */
+function buildLegend(){ const el=document.getElementById("legTransport");
+  el.innerHTML=Object.keys(TICON).map(t=>
+    `<div class="lrow"><span class="lg-line" style="border-top-color:${tcolor(t)}"></span> ${t}</div>`).join(""); }
+
+/* ---------- modal ---------- */
+let editingId=null, editKind="segment", newInPlan=false;
+const set=(id,v)=>document.getElementById(id).value=v; const get=id=>document.getElementById(id).value;
+function bufHint(){ const t=get("fTransport");
+  document.getElementById("bufHint").textContent=`Needs ≥ ${fmtDur((BUFFER[t]??30)*60000)} to connect before this leg`; }
+function showBody(kind){ editKind=kind;
+  document.getElementById("segBody").style.display=kind==="segment"?"grid":"none";
+  document.getElementById("hotelBody").style.display=kind==="hotel"?"grid":"none";
+  document.getElementById("saveBtn").textContent=kind==="hotel"?"Save hotel":"Save segment"; }
+function openModal(id,prefill){ editingId=id||null; showBody("segment"); const P=prefill||{}; newInPlan=P.inPlan===true;
+  document.getElementById("modalTitle").textContent=id?"Edit segment":"New segment";
+  document.getElementById("delBtn").style.display=id?"inline-flex":"none";
+  const r=id?items.find(x=>x.id===id):null;
+  set("fDepCity",r?r.dep.city:(P.depCity??"")); set("fDepAddr",r?r.dep.addr:(P.depAddr??"")); set("fDepTime",r?r.dep.time:(P.depTime??"2026-05-01T12:00"));
+  set("fArrCity",r?r.arr.city:(P.arrCity??"")); set("fArrAddr",r?r.arr.addr:(P.arrAddr??"")); set("fArrTime",r?r.arr.time:(P.arrTime??"2026-05-01T14:00"));
+  set("fTransport",r?r.transport:(P.transport??"Plane")); set("fCompany",r?r.company:(P.company??""));
+  set("fCost",r?r.cost:(P.cost??"")); set("fCur",r?r.currency:(P.currency??"EUR")); bufHint();
+  document.getElementById("overlay").classList.add("open"); }
+function openHotelModal(id,prefill){ editingId=id||null; showBody("hotel"); const P=prefill||{}; newInPlan=P.inPlan===true;
+  document.getElementById("modalTitle").textContent=id?"Edit hotel":"New hotel";
+  document.getElementById("delBtn").style.display=id?"inline-flex":"none";
+  const h=id?items.find(x=>x.id===id):null;
+  set("hName",h?h.name:(P.name??"")); set("hCity",h?h.city:(P.city??"")); set("hAddr",h?h.addr:(P.addr??""));
+  set("hIn",h?h.checkIn:(P.checkIn??"2026-05-01T15:00")); set("hOut",h?h.checkOut:(P.checkOut??"2026-05-03T11:00"));
+  set("hCost",h?h.cost:(P.cost??"")); set("hCur",h?h.currency:(P.currency??"EUR")); set("hLink",h?(h.link||""):(P.link??""));
+  document.getElementById("overlay").classList.add("open"); }
+function closeModal(){ document.getElementById("overlay").classList.remove("open"); }
+function saveModal(){ if(editKind==="hotel") return saveHotel();
+  const dc=get("fDepCity"),ac=get("fArrCity");
+  if(!dc||!ac){ alert("Departure and arrival city are required."); return; }
+  const data={kind:"segment",dep:{city:dc,addr:get("fDepAddr"),time:get("fDepTime"),ll:geocode(dc,get("fDepAddr"))},
+    arr:{city:ac,addr:get("fArrAddr"),time:get("fArrTime"),ll:geocode(ac,get("fArrAddr"))},
+    transport:get("fTransport"),company:get("fCompany"),cost:Number(get("fCost")||0),currency:get("fCur")};
+  if(editingId){ Object.assign(items.find(x=>x.id===editingId),data); selected=editingId; }
+  else { const r={id:nid(),inPlan:newInPlan,...data}; items.push(r); selected=r.id; }
+  closeModal(); render(); }
+function saveHotel(){ const name=get("hName"), city=get("hCity");
+  if(!name||!city){ alert("Hotel name and city are required."); return; }
+  const data={kind:"hotel",name,city,addr:get("hAddr"),checkIn:get("hIn"),checkOut:get("hOut"),
+    cost:Number(get("hCost")||0),currency:get("hCur"),link:get("hLink").trim()||null,ll:geocode(city,get("hAddr"))};
+  if(editingId){ Object.assign(items.find(x=>x.id===editingId),data); selected=editingId; }
+  else { const h={id:nid(),inPlan:newInPlan,...data}; items.push(h); selected=h.id; }
+  closeModal(); render(); }
+function deleteItem(){ if(editingId){ items=items.filter(x=>x.id!==editingId); selected=null; } closeModal(); render(); }
+
+/* ---------- theme ---------- */
+function toggleTheme(){ const light=document.body.dataset.theme!=="light";
+  document.body.dataset.theme=light?"light":"dark";
+  document.getElementById("themeBtn").textContent=light?"☀":"🌙";
+  applyTiles(); buildLegend(); render(); }
+
+/* ---------- wire up ---------- */
+document.getElementById("newBtn").onclick=()=>openModal(null);
+document.getElementById("newHotelBtn").onclick=()=>openHotelModal(null);
+document.getElementById("closeModal").onclick=closeModal;
+document.getElementById("cancelBtn").onclick=closeModal;
+document.getElementById("saveBtn").onclick=saveModal;
+document.getElementById("delBtn").onclick=deleteItem;
+document.getElementById("themeBtn").onclick=toggleTheme;
+document.getElementById("fTransport").onchange=bufHint;
+document.getElementById("overlay").onclick=e=>{ if(e.target.id==="overlay") closeModal(); };
+document.getElementById("fitBtn").onclick=()=>{ const b=[]; items.forEach(r=>{ if(r.kind==="hotel"){ if(r.ll)b.push(r.ll); return; } if(r.dep.ll)b.push(r.dep.ll); if(r.arr.ll)b.push(r.arr.ll); }); if(b.length) map.fitBounds(b,{padding:[50,50],maxZoom:6}); };
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+
+/* click outside any card (and outside the map / modal / buttons) unselects.
+   The map is tested by screen geometry, not e.target.closest("#map"): clicking a
+   segment re-renders the map and detaches the clicked SVG path from the DOM, so by
+   the time this runs closest("#map") would be null and we'd wrongly unselect.
+   Empty-map clicks still deselect via Leaflet's own map "click" handler. */
+document.addEventListener("click",e=>{
+  const mapEl=document.getElementById("map");
+  let inMap=false;
+  if(mapEl){ const b=mapEl.getBoundingClientRect(); inMap = e.clientX>=b.left && e.clientX<=b.right && e.clientY>=b.top && e.clientY<=b.bottom; }
+  if(inMap || e.target.closest(".card") || e.target.closest(".overlay") || e.target.closest("button")) return;
+  if(selected!==null){ selected=null; render(); }
+});
+
+function clearDrop(){ ["segmentsList","planList"].forEach(id=>document.getElementById(id).classList.remove("drop","drop-bad")); }
+function setupDrop(id,target){ const c=document.getElementById(id);
+  c.addEventListener("dragover",e=>{ if(!draggedId)return; const r=items.find(x=>x.id===draggedId); if(!r)return;
+    e.preventDefault(); const bad = target==="plan" && !r.inPlan && !!conflictOf(r);
+    c.classList.toggle("drop",!bad); c.classList.toggle("drop-bad",bad); e.dataTransfer.dropEffect=bad?"none":"move"; });
+  c.addEventListener("dragleave",e=>{ if(e.target===c) clearDrop(); });
+  c.addEventListener("drop",e=>{ e.preventDefault(); const r=items.find(x=>x.id===draggedId); clearDrop(); if(!r)return;
+    if(target==="plan"){ if(!r.inPlan && !conflictOf(r)){ r.inPlan=true; selected=r.id; } }
+    else { if(r.inPlan){ r.inPlan=false; selected=r.id; } }
+    draggedId=null; render(); }); }
+setupDrop("segmentsList","segments"); setupDrop("planList","plan");
+
+initMap(); buildLegend(); render();
+</script>
+</body>
+</html>
