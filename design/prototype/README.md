@@ -34,6 +34,11 @@ the look, layout, and interactions can be evaluated quickly in a browser.
 - **Plan building**: auto-generated gap rows (time + distance) between consecutive
   records, long-layover and impossible-connection warnings, and a totals footer
   (legs, nights, span, cost).
+- **Contextual gap actions**: a gap that spans **one or more nights** offers a
+  **🏨 Add hotel** button, and a gap whose ends are **geographically far apart**
+  (> 50 km) offers a **🧭 Add segment** button. Either one opens the modal
+  pre-filled with the surrounding locations and dates and drops the new record
+  straight into the plan to fill the gap.
 
 These behaviours are the specification the native GUI mirrors; see the repository
 root [`README.md`](../../README.md) for the full design write-up.
