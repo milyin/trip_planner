@@ -1,6 +1,4 @@
 import { fitAll } from '../map/mapView';
-import { clearAllStored } from '../state/attachments';
-import { emitChange, state } from '../state/store';
 import { byId } from './dom';
 import { openHotelModal, openModal } from './modal';
 import { toggleTheme } from './theme';
@@ -9,14 +7,6 @@ import { toggleTheme } from './theme';
 export function closeMenus(): void {
   byId('hamMenu').classList.remove('open');
   byId('hamBtn').setAttribute('aria-expanded', 'false');
-}
-
-function clearSegments(): void {
-  if (!confirm('Remove ALL segments (legs and hotels, including stored images)? This cannot be undone.')) return;
-  state.items = [];
-  state.selected = null;
-  void clearAllStored();
-  emitChange();
 }
 
 /** Wire the top bar (☰ menu) and the Map panel's Fit button. */
@@ -37,7 +27,6 @@ export function wireTopbar(): void {
   byId('addLegBtn').addEventListener('click', () => openModal(null));
   byId('addHotelBtn').addEventListener('click', () => openHotelModal(null));
   byId('themeBtn').addEventListener('click', toggleTheme);
-  byId('clearBtn').addEventListener('click', clearSegments);
   document.addEventListener('click', (e) => {
     if (!(e.target as HTMLElement).closest('.menu-wrap')) closeMenus();
   });

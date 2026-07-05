@@ -9,7 +9,7 @@
 <div class="app">
   <div class="topbar">
     <div class="brand"><div class="logo">✈</div>
-      <div><h1>Trip Planner</h1><small>workspace: <span id="brandWs"></span></small></div></div>
+      <div><h1 id="brandWs">Trip Planner</h1><small id="brandCities"></small></div></div>
     <div class="spacer"></div>
     <div class="menu-wrap">
       <button class="btn ghost icon" id="hamBtn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
@@ -26,7 +26,6 @@
         <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
         <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
         <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> LLM configuration</button>
-        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi" data-icon="trash"></span> Clear segments</button>
       </div>
     </div>
   </div>
@@ -53,7 +52,7 @@
     <section class="panel" data-tab="map">
       <div class="panel-head"><span class="title">Map</span>
         <span class="count" id="mapHint">drag to pan · scroll to zoom</span>
-        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments" aria-label="Zoom map to all segments">🗺</button></div>
+        <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments" aria-label="Zoom map to all segments" data-icon="fit"></button></div>
       <div class="map-wrap">
         <div id="map"></div>
         <div class="map-legend">

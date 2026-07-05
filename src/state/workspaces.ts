@@ -63,6 +63,31 @@ export const activeWorkspace = (): WorkspaceInfo =>
 
 export const listWorkspaces = (): WorkspaceInfo[] => [...registry.list];
 
+/** Unique cities of a workspace's stored items, in insertion order. */
+export function workspaceCities(id: string): string[] {
+  try {
+    const items = JSON.parse(localStorage.getItem(itemsKey(id)) || '[]') as (
+      | { kind: 'leg'; dep?: { city?: string }; arr?: { city?: string } }
+      | { kind: 'hotel'; city?: string }
+    )[];
+    const out: string[] = [];
+    const add = (c: string | undefined): void => {
+      const t = (c || '').trim();
+      if (t && !out.includes(t)) out.push(t);
+    };
+    for (const it of items) {
+      if (it.kind === 'hotel') add(it.city);
+      else {
+        add(it.dep?.city);
+        add(it.arr?.city);
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** Create a workspace (empty, not seeded) and return it. */
 export function createWorkspace(name: string): WorkspaceInfo {
   const ws: WorkspaceInfo = { id: genWorkspaceId(), name: name.trim() || 'Unnamed' };
@@ -109,7 +134,7 @@ export function deleteWorkspace(id: string): void {
     /* items unreadable — still drop the workspace */
   }
   registry.list.splice(idx, 1);
-  if (!registry.list.length) registry.list.push({ id: genWorkspaceId(), name: 'Default' });
+  if (!registry.list.length) registry.list.push({ id: genWorkspaceId(), name: 'New workspace' });
   if (registry.active === id) registry.active = registry.list[0].id;
   save(registry);
 }
