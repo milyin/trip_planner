@@ -9,13 +9,19 @@
 <div class="app">
   <div class="topbar">
     <div class="brand"><div class="logo">✈</div>
-      <div><h1>Trip Planner</h1><small>trip plan designer</small></div></div>
+      <div><h1>Trip Planner</h1><small>workspace: <span id="brandWs"></span></small></div></div>
     <div class="spacer"></div>
     <div class="menu-wrap">
       <button class="btn ghost icon" id="hamBtn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
       <div class="menu" id="hamMenu" role="menu">
         <button type="button" role="menuitem" id="addLegBtn"><span class="mi" data-icon="leg"></span> Add leg</button>
         <button type="button" role="menuitem" id="addHotelBtn"><span class="mi" data-icon="bed"></span> Add hotel</button>
+        <hr>
+        <button type="button" role="menuitem" id="wsNewBtn"><span class="mi">🆕</span> New workspace</button>
+        <button type="button" role="menuitem" id="wsSelectBtn"><span class="mi">🗂</span> Select workspace…</button>
+        <button type="button" role="menuitem" id="wsRenameBtn"><span class="mi">✏️</span> Rename workspace</button>
+        <button type="button" role="menuitem" id="wsShareBtn"><span class="mi">🔗</span> Share workspace</button>
+        <button type="button" role="menuitem" id="wsDeleteBtn" class="danger-item"><span class="mi">🗑</span> Delete workspace</button>
         <hr>
         <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
         <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
@@ -152,6 +158,19 @@
     <div class="modal-foot">
       <div class="spacer"></div>
       <button class="btn primary" id="parserDoneBtn">Done</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="wsOverlay">
+  <div class="modal narrow">
+    <div class="modal-head"><h3>Select workspace</h3><div class="x" id="closeWs">✕</div></div>
+    <div class="modal-body single">
+      <div id="wsList" class="parser-list"></div>
+    </div>
+    <div class="modal-foot">
+      <div class="spacer"></div>
+      <button class="btn ghost" id="wsCancelBtn">Cancel</button>
     </div>
   </div>
 </div>

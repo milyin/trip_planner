@@ -157,6 +157,18 @@ export async function geocodeAddress(city: string, addr: string, opts?: GeocodeO
   }
 }
 
+/** Snapshot of the persistent geocode cache (for workspace sharing). */
+export const exportGeoCache = (): Record<string, LatLng> => ({ ...cache });
+
+/** Merge shared geocode entries into the cache (imported workspaces bring
+ * their sender's lookups along, saving the receiver the network round). */
+export function mergeGeoCache(entries: Record<string, LatLng>): void {
+  for (const [k, v] of Object.entries(entries)) {
+    if (Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])) cache[k] = v;
+  }
+  saveCache();
+}
+
 /** Fill in missing coordinates on stored records in the background.
  * Calls `onUpdate` after each record that gained coordinates. */
 export function backfillCoordinates(items: Segment[], onUpdate: () => void): void {

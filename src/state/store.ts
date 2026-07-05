@@ -67,6 +67,14 @@ export function deleteItemById(id: string): void {
   state.selected = null;
 }
 
+/** Reload the (possibly different) active workspace's items into the state.
+ * Callers emitChange() afterwards. */
+export function reloadActiveWorkspace(): void {
+  state.items = loadItems();
+  state.selected = null;
+  state.draggedId = null;
+}
+
 /** Delete a segment together with its locally stored image and LLM exchange
  * (legs and hotels both carry attachments). Callers still emitChange(). */
 export function deleteSegment(id: string): void {

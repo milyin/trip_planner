@@ -48,6 +48,12 @@ Useful hooks in the app:
   Chromium keeps them as on-disk references) and `exchanges` (per-leg LLM exchange, keyed
   by leg id — shown in the LLM tab when editing a saved leg).
 - Stored items with old `kind: 'segment'` migrate to `'leg'` on load (persist.ts).
+- Workspaces: registry `tripPlanner.workspaces.v1` {active, list:[{id,name}]}; items per
+  workspace under `tripPlanner.items.<id>` (legacy `tripPlanner.items.v1` migrates to a
+  Default workspace). ☰ menu: `#wsNewBtn` (prompt), `#wsSelectBtn` → `#wsOverlay` rows,
+  `#wsRenameBtn` (prompt), `#wsShareBtn` (clipboard `#ws=` URL — grant clipboard-read/write
+  permissions in Playwright), `#wsDeleteBtn` (confirm). Brand shows `#brandWs`. Share URLs
+  import on load AND on hashchange; payload = gzip+base64url of {v,name,items,geo}.
 - LLM endpoints: `generativelanguage.googleapis.com` (Gemini SDK) and
   `openrouter.ai/api/v1/chat/completions` (plain fetch — easy to mock with `ctx.route`
   fulfilling a canned `{choices:[{message:{content: JSON.stringify({legs:[...]})}}]}`).
