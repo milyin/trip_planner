@@ -1,9 +1,9 @@
 import type { ResolvedParser } from '../state/settings';
 import { beginExchange } from './debugLog';
 import {
-  AuthError, type ExtractInput, type ExtractedHotel, type ExtractedLeg, type LegExtractor,
+  AuthError, type AutoExtract, type ExtractInput, type ExtractedHotel, type ExtractedLeg, type LegExtractor,
 } from './extractor';
-import { assertFileSize, buildPrompt, CURRENCIES, fileToDataUrl, HOTEL_PROMPT, PROMPT, TRANSPORTS } from './shared';
+import { assertFileSize, AUTO_PROMPT, buildPrompt, CURRENCIES, fileToDataUrl, HOTEL_PROMPT, PROMPT, TRANSPORTS } from './shared';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -142,5 +142,22 @@ export const openrouterExtractor: LegExtractor = {
     })) as { hotel?: ExtractedHotel };
     if (!result.hotel || !Object.keys(result.hotel).length) throw new Error('No hotel found in the input.');
     return result.hotel;
+  },
+
+  async extractAuto(input: ExtractInput, parser: ResolvedParser): Promise<AutoExtract> {
+    const result = (await request(input, parser, AUTO_PROMPT, 'trip_import', {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['legs', 'hotel'] },
+        legs: { type: 'array', items: LEG_SCHEMA },
+        hotel: HOTEL_SCHEMA,
+      },
+      required: ['kind'],
+    })) as { kind?: string; legs?: ExtractedLeg[]; hotel?: ExtractedHotel };
+    if (result.kind === 'hotel' && result.hotel && Object.keys(result.hotel).length) {
+      return { hotel: result.hotel };
+    }
+    if (result.legs?.length) return { legs: result.legs };
+    throw new Error('Neither transport legs nor a hotel found in the input.');
   },
 };
