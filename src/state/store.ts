@@ -1,4 +1,5 @@
 import type { Segment } from '../domain/types';
+import { deleteAttachment, deleteExchange } from './attachments';
 import { loadItems, saveItems } from './persist';
 
 /** Mutable application state. UI reads this directly and re-renders on change. */
@@ -72,4 +73,15 @@ export function reloadActiveWorkspace(): void {
   state.items = loadItems();
   state.selected = null;
   state.draggedId = null;
+}
+
+/** Delete a segment together with its locally stored image and LLM exchange.
+ * Callers still emitChange() afterwards. */
+export function deleteSegment(id: string): void {
+  const r = findItem(id);
+  if (r && r.kind === 'leg') {
+    void deleteAttachment(r.attachment);
+    void deleteExchange(r.id);
+  }
+  deleteItemById(id);
 }
