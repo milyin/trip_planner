@@ -1,5 +1,5 @@
 import type { Hotel, Leg, Segment } from '../domain/types';
-import { esc, fmtTime, money, tripDur } from '../domain/format';
+import { esc, fmtTime, fmtTimeParts, money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
 import { conflictOf } from '../domain/plan';
 import { TRANSPORT_ICON } from '../domain/transport';
@@ -12,6 +12,13 @@ import { selectAndShowOnMap } from './selection';
 import { hotelColor, transportColor } from './theme';
 
 export type CardMode = 'list' | 'plan';
+
+/** Date and time as separate spans so a narrow (mobile) cell can wrap the time
+ * onto its own line under the date instead of trimming it (#43). */
+const timeHtml = (s: string): string => {
+  const { date, time } = fmtTimeParts(s);
+  return `<span class="td">${esc(date)}</span> <span class="tc">${esc(time)}</span>`;
+};
 
 /** Build the card element for any record. */
 export const itemCard = (r: Segment, mode: CardMode): HTMLDivElement =>
@@ -106,9 +113,9 @@ function legCard(r: Leg, mode: CardMode): HTMLDivElement {
       <div class="leg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr || '—'}</div>
       <div class="card-cost c2 r2" title="Fare">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached ticket image">🎫</span>' : ''}</div>
       <div class="leg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr || '—'}</div>
-      <div class="leg-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
+      <div class="leg-sub leg-time c1 r3" title="${esc(fmtTime(r.dep.time))}">${timeHtml(r.dep.time)}</div>
       <div class="leg-sub c2 r3" title="${esc(r.transfersInfo || '')}">${tripDur(r)}${r.transfers > 0 ? ` · ${r.transfers}⇄` : ''}</div>
-      <div class="leg-sub c3 r3" title="${esc(fmtTime(r.arr.time))}">${fmtTime(r.arr.time)}</div>
+      <div class="leg-sub leg-time c3 r3" title="${esc(fmtTime(r.arr.time))}">${timeHtml(r.arr.time)}</div>
     </div>
     ${disabled ? `<div class="warn">⚠ Overlaps plan: ${conflict!.dep.city} → ${conflict!.arr.city}</div>` : ''}
     <div class="card-actions"></div>`;
@@ -152,7 +159,7 @@ function hotelCard(r: Hotel, mode: CardMode): HTMLDivElement {
       <div class="card-cost hc2 hr1" title="Price">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached booking image">🎫</span>' : ''}</div>
       <div class="hotel-loc hc1 hr2" title="${esc(r.city + (r.addr ? ' · ' + r.addr : ''))}">${r.city}${r.addr ? ' · ' + r.addr : ''}</div>
       <div class="hc2 hr2"></div>
-      <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn) + ' → ' + fmtTime(r.checkOut))}">${fmtTime(r.checkIn)} → ${fmtTime(r.checkOut)}</div>
+      <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn) + ' → ' + fmtTime(r.checkOut))}">${timeHtml(r.checkIn)} → ${timeHtml(r.checkOut)}</div>
       <div class="hotel-nights hc2 hr3">${n} night${n > 1 ? 's' : ''}</div>
     </div>
     <div class="card-actions"></div>`;

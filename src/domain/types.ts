@@ -11,8 +11,10 @@ export type CurrencyCode = 'EUR' | 'USD' | 'GBP' | 'CHF';
 export interface Place {
   city: string;
   addr: string;
-  /** `datetime-local` string, e.g. `"2026-05-01T12:00"`. */
+  /** `datetime-local` string, e.g. `"2026-05-01T12:00"`, local to this place. */
   time: string;
+  /** IANA time zone for `time` (e.g. `"Europe/Paris"`); absent = browser-local. */
+  tz?: string;
   ll: LatLng | null;
 }
 
@@ -46,6 +48,8 @@ export interface Hotel {
   checkIn: string;
   /** `datetime-local` check-out string. */
   checkOut: string;
+  /** IANA time zone for check-in/out (e.g. `"Europe/Paris"`); absent = browser-local. */
+  tz?: string;
   cost: number;
   currency: CurrencyCode;
   /** `attachment:<id>` reference to the locally stored booking image, if any. */
