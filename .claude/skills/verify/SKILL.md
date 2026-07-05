@@ -33,7 +33,9 @@ Useful hooks in the app:
   (`#legBody` / `#hotelBody`, `#saveBtn`, `#cancelBtn`, `#delBtn`); tabs `#mtabForm` /
   `#mtabLlm` (LLM exchange dump in `#llmDump`).
 - Ticket recognition lives inside the leg dialog: drop zone `#importZone` (hidden input
-  `#legFile`, preview `#filePreview`, hint `#dropHint`), note `#fNote`, parser combo
+  `#legFile`, MULTIPLE; preview `#filePreview` — pending images render as a `.gallery` of
+  `.thumb`s with `.thumb-rm` remove buttons; recognition is explicit via the button, never
+  on paste/pick; extractors take `files: File[]`), note `#fNote`, parser combo
   `#fParser`, config shortcut `#cfgParsersBtn`, button `#recogniseBtn`. LLM configuration:
   `#settingsBtn` menu item → `#parserOverlay` with two inline-editable lists — `#accountList`
   (provider select + key input per row) and `#parserList` (account select + model input per
