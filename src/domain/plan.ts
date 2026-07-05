@@ -5,13 +5,51 @@ import {
 } from './item';
 import { bufferMin, LONG_GAP_MIN, REMOTE_KM } from './transport';
 
+/** Compare two segments chronologically, handling equal start times by trace connection. */
+export function compareSegments(a: Segment, b: Segment): number {
+  const aStart = startMs(a);
+  const bStart = startMs(b);
+  const diff = aStart - bStart;
+  if (!isNaN(diff) && diff !== 0) return diff;
+
+  // Handle NaNs (push invalid/missing dates to the end)
+  if (isNaN(aStart) && !isNaN(bStart)) return 1;
+  if (!isNaN(aStart) && isNaN(bStart)) return -1;
+  if (isNaN(aStart) && isNaN(bStart)) return 0;
+
+  // If start times are equal, check if they connect:
+  // e.g. a arrives in the city b departs from, so a should be before b
+  const aEndCity = (endCity(a) || '').trim().toLowerCase();
+  const bStartCity = (startCity(b) || '').trim().toLowerCase();
+  const bEndCity = (endCity(b) || '').trim().toLowerCase();
+  const aStartCity = (startCity(a) || '').trim().toLowerCase();
+
+  const aBeforeB = aEndCity && bStartCity && aEndCity === bStartCity;
+  const bBeforeA = bEndCity && aStartCity && bEndCity === aStartCity;
+
+  if (aBeforeB && !bBeforeA) return -1;
+  if (bBeforeA && !aBeforeB) return 1;
+
+  // If they don't form a direct connection, sort by end time
+  const aEnd = endMs(a);
+  const bEnd = endMs(b);
+  const endDiff = aEnd - bEnd;
+  if (!isNaN(endDiff) && endDiff !== 0) return endDiff;
+
+  // Handle endMs NaNs
+  if (isNaN(aEnd) && !isNaN(bEnd)) return 1;
+  if (!isNaN(aEnd) && isNaN(bEnd)) return -1;
+
+  return 0;
+}
+
 /** Plan items (those flagged `inPlan`) ordered chronologically. */
 export const planItems = (items: Segment[]): Segment[] =>
-  items.filter((r) => r.inPlan).sort((a, b) => startMs(a) - startMs(b));
+  items.filter((r) => r.inPlan).sort(compareSegments);
 
 /** Not-yet-planned items ordered chronologically (the Segments panel). */
 export const listItems = (items: Segment[]): Segment[] =>
-  items.filter((r) => !r.inPlan).sort((a, b) => startMs(a) - startMs(b));
+  items.filter((r) => !r.inPlan).sort(compareSegments);
 
 /** The plan segment a not-yet-planned segment time-overlaps (or `null`). */
 export function conflictOf(items: Segment[], r: Segment): Leg | null {

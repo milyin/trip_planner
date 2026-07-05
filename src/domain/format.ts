@@ -2,7 +2,30 @@ import type { Leg } from './types';
 import { currencySymbol } from './transport';
 
 /** Parse a `datetime-local` string to epoch milliseconds. */
-export const toMs = (s: string): number => new Date(s).getTime();
+export const toMs = (s: string): number => {
+  if (!s) return NaN;
+  let normalized = s.trim();
+
+  // Convert space to 'T' for ISO conformity (and Safari compatibility)
+  normalized = normalized.replace(' ', 'T');
+
+  // If format is DD/MM/YYYY or DD-MM-YYYY (with optional time), convert to YYYY-MM-DD
+  const dmyMatch = normalized.match(/^(\d{2})[-/](\d{2})[-/](\d{4})(?:T(\d{2}):(\d{2}))?$/);
+  if (dmyMatch) {
+    normalized = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}T${dmyMatch[4] || '00'}:${dmyMatch[5] || '00'}`;
+  }
+
+  // If format is YYYY/MM/DD, normalize slashes to hyphens
+  normalized = normalized.replace(/\//g, '-');
+
+  // If it's a date-only string (YYYY-MM-DD), append 'T00:00' to force local timezone parsing,
+  // preventing JS from parsing it as UTC (which causes timezone/sorting offsets).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    normalized += 'T00:00';
+  }
+
+  return new Date(normalized).getTime();
+};
 
 /** Format a duration (ms) as a compact `1d 2h 30m` string; negatives keep a `-`. */
 export function fmtDur(ms: number): string {
