@@ -102,8 +102,8 @@ function showBody(kind: 'leg' | 'hotel'): void {
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
     kind === 'hotel'
-      ? '📎 Drop a screenshot of a hotel listing or booking here, or click to choose'
-      : '📎 Drop a screenshot of a flight / train listing here, or click to choose';
+      ? '📎 Drop or paste (Ctrl+V) a screenshot of a hotel listing or booking, or click to choose'
+      : '📎 Drop or paste (Ctrl+V) a screenshot of a flight / train listing, or click to choose';
   applyTabs();
 }
 
@@ -593,6 +593,17 @@ export function wireModal(): void {
     zone.classList.remove('dragover');
     const f = e.dataTransfer?.files?.[0];
     if (f) setPendingFile(f);
+  });
+  // Paste (Ctrl/Cmd+V) an image while the Recognize tab is open — e.g. a
+  // screenshot taken straight to the clipboard.
+  document.addEventListener('paste', (e) => {
+    if (!byId('overlay').classList.contains('open') || activeTab !== 'rec') return;
+    const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
+    const f = item?.getAsFile();
+    if (f) {
+      e.preventDefault();
+      setPendingFile(new File([f], f.name || 'pasted-image.png', { type: f.type }));
+    }
   });
   byId('recogniseBtn').onclick = () => void recognise();
   byId('cfgParsersBtn').onclick = async () => {
