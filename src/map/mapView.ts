@@ -1,6 +1,6 @@
 import L from 'leaflet';
 import type { LatLng, TransportKind } from '../domain/types';
-import { money, tripDur } from '../domain/format';
+import { fmtTime, money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
 import { conflictOf } from '../domain/plan';
 import { TRANSPORT_KINDS } from '../domain/transport';
@@ -54,13 +54,15 @@ function arrowMarker(color: string, halo: string, reg: Map<string, string>): str
   marker.setAttribute('viewBox', '0 0 12 12');
   marker.setAttribute('refX', '6'); // centred on the vertex so the head straddles the midpoint
   marker.setAttribute('refY', '6');
-  marker.setAttribute('markerWidth', '13');
-  marker.setAttribute('markerHeight', '13');
+  // at least twice the leg width (weight 4) so the direction reads instantly
+  marker.setAttribute('markerWidth', '20');
+  marker.setAttribute('markerHeight', '20');
   marker.setAttribute('markerUnits', 'userSpaceOnUse');
   marker.setAttribute('orient', 'auto');
   const tip = document.createElementNS(SVGNS, 'path');
   tip.setAttribute('d', 'M1.5,1.5 L11,6 L1.5,10.5 Z');
-  tip.setAttribute('fill', color);
+  // slightly brighter than the leg so the head pops against its own line
+  tip.setAttribute('fill', `color-mix(in srgb, ${color} 72%, white)`);
   tip.setAttribute('stroke', halo);
   tip.setAttribute('stroke-width', '1.4');
   tip.setAttribute('stroke-linejoin', 'round');
@@ -238,7 +240,7 @@ export function drawMap(): void {
     // bubblingMouseEvents:false → clicking selects without firing the map's "click empty → unselect"
     const hit = L.polyline(line, { color: '#000', opacity: 0, weight: HITW, lineCap: 'round', bubblingMouseEvents: false }).addTo(segmentLayer);
     hit.bindTooltip(
-      `${r.dep.city} → ${r.arr.city}<br><small>${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,
+      `${r.dep.city} → ${r.arr.city}<br><small>${fmtTime(r.dep.time)} · ${r.transport} · ${money(r)} · ⏱ ${tripDur(r)}</small>${tip}`,
       { className: 'segment-tip', sticky: true },
     );
     hit.on('click', () => selectFromMap(r));
@@ -355,7 +357,11 @@ export function fitAll(): void {
     if (r.dep.ll) b.push(r.dep.ll);
     if (r.arr.ll) b.push(r.arr.ll);
   });
-  if (b.length) map.fitBounds(L.latLngBounds(b), { padding: [50, 50], maxZoom: 6 });
+  if (!b.length) return;
+  // The panel may have been resized/shown since the last draw — Leaflet must
+  // re-measure the container or it fits to a stale (smaller) viewport.
+  map.invalidateSize();
+  map.fitBounds(L.latLngBounds(b), { padding: [40, 40], maxZoom: 12 });
 }
 
 /** Recompute map size + legend (after a resize or layout change). */

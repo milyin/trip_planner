@@ -96,3 +96,5 @@
 /* Workspace-select rows. */
 .ws-row .pname{font-size:13px}
 .ws-row.current .pname{color:var(--accent)}
+.ws-row .pname{display:flex; flex-direction:column; gap:2px; min-width:0}
+.ws-cities{color:var(--faint); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
