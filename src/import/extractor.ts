@@ -20,6 +20,18 @@ export interface ExtractedLeg {
   currency?: CurrencyCode;
 }
 
+/** One hotel stay extracted from the user's screenshot and/or note. */
+export interface ExtractedHotel {
+  name?: string;
+  city?: string;
+  addr?: string;
+  /** `datetime-local` strings (`YYYY-MM-DDTHH:MM`). */
+  checkIn?: string;
+  checkOut?: string;
+  cost?: number;
+  currency?: CurrencyCode;
+}
+
 /** What the user provides for recognition: a screenshot, a free-form note,
  * or both. */
 export interface ExtractInput {
@@ -27,9 +39,10 @@ export interface ExtractInput {
   note: string;
 }
 
-/** A pluggable LLM backend that turns the input into segment legs. */
+/** A pluggable LLM backend that turns the input into records. */
 export interface LegExtractor {
   extract(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedLeg[]>;
+  extractHotel(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedHotel>;
 }
 
 /** Thrown when the provider rejects the parser's API key. */

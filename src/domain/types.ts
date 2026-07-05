@@ -44,7 +44,8 @@ export interface Hotel {
   checkOut: string;
   cost: number;
   currency: CurrencyCode;
-  link: string | null;
+  /** `attachment:<id>` reference to the locally stored booking image, if any. */
+  attachment: string | null;
   ll: LatLng | null;
   inPlan: boolean;
 }
