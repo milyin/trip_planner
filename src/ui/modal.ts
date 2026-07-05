@@ -1,6 +1,7 @@
 import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/types';
 import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
+import { tzForLatLng } from '../domain/tz';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
@@ -181,6 +182,45 @@ const slots = Object.fromEntries(
   (Object.keys(GEO_SLOTS) as SlotKey[]).map((k) => [k, { ll: null, status: 'empty', token: 0 }]),
 ) as Record<SlotKey, SlotGeo>;
 
+// --- date/time split fields --------------------------------------------------
+// The dialog edits date and time separately (#43); records still store one
+// `YYYY-MM-DDTHH:MM` wall-clock string, so split on load and rejoin on save.
+const splitDT = (s: string): { date: string; time: string } => {
+  const [d, t = ''] = (s || '').split('T');
+  return { date: d || '', time: t.slice(0, 5) };
+};
+const joinDT = (date: string, time: string): string => (date ? `${date}T${time || '00:00'}` : '');
+const setDT = (dateId: string, timeId: string, s: string): void => {
+  const { date, time } = splitDT(s);
+  setVal(dateId, date);
+  setVal(timeId, time);
+};
+const getDT = (dateId: string, timeId: string): string => joinDT(getVal(dateId), getVal(timeId));
+
+// --- automatic time zone from the city --------------------------------------
+// Each place's slots feed a time-zone input, auto-filled from the resolved
+// coordinates. `tzAuto[field]` is cleared once the user types their own value,
+// so a later geocode never overwrites a manual choice.
+const TZ_FIELD: Partial<Record<SlotKey, string>> = {
+  depCity: 'fDepTz', depAddr: 'fDepTz',
+  arrCity: 'fArrTz', arrAddr: 'fArrTz',
+  hotCity: 'hTz', hotAddr: 'hTz',
+};
+const tzAuto: Record<string, boolean> = {};
+
+function maybeAutoTz(key: SlotKey, ll: LatLng | null): void {
+  const field = TZ_FIELD[key];
+  if (!field || !ll) return;
+  if (getVal(field).trim() && !tzAuto[field]) return; // user set it — leave it
+  const tok = slots[key].token;
+  void tzForLatLng(ll).then((tz) => {
+    if (!tz || slots[key].token !== tok) return; // field changed while looking up
+    if (getVal(field).trim() && !tzAuto[field]) return;
+    setVal(field, tz);
+    tzAuto[field] = true;
+  });
+}
+
 function renderGeoChip(key: SlotKey): void {
   const chip = byId<HTMLButtonElement>(GEO_SLOTS[key].chip);
   const g = slots[key];
@@ -210,6 +250,7 @@ function setSlot(key: SlotKey, ll: LatLng | null, hasText: boolean): void {
   slots[key].ll = ll;
   slots[key].status = ll ? 'ok' : hasText ? 'stale' : 'empty';
   renderGeoChip(key);
+  maybeAutoTz(key, ll);
 }
 
 /** Look up one field and show the outcome on its chip. */
@@ -234,6 +275,7 @@ function resolveSlot(key: SlotKey, force = false): void {
     g.ll = ll;
     g.status = ll ? 'ok' : 'fail';
     renderGeoChip(key);
+    maybeAutoTz(key, ll);
   });
 }
 
@@ -289,10 +331,10 @@ function fillLegFields(leg: ExtractedLeg): void {
   };
   set('fDepCity', leg.depCity);
   set('fDepAddr', leg.depAddr);
-  set('fDepTime', leg.depTime);
+  if (leg.depTime) setDT('fDepDate', 'fDepTime', leg.depTime);
   set('fArrCity', leg.arrCity);
   set('fArrAddr', leg.arrAddr);
-  set('fArrTime', leg.arrTime);
+  if (leg.arrTime) setDT('fArrDate', 'fArrTime', leg.arrTime);
   set('fTransport', leg.transport);
   set('fCompany', leg.company);
   set('fTransfers', leg.transfers);
@@ -402,8 +444,8 @@ function fillHotelFields(h: ExtractedHotel): void {
   set('hName', h.name);
   set('hCity', h.city);
   set('hAddr', h.addr);
-  set('hIn', h.checkIn);
-  set('hOut', h.checkOut);
+  if (h.checkIn) setDT('hInDate', 'hInTime', h.checkIn);
+  if (h.checkOut) setDT('hOutDate', 'hOutTime', h.checkOut);
   set('hCost', h.cost);
   set('hCur', h.currency);
   // The recognised places are new text — locate them right away.
@@ -433,10 +475,14 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   }
   setVal('fDepCity', r ? r.dep.city : P.depCity ?? '');
   setVal('fDepAddr', r ? r.dep.addr : P.depAddr ?? '');
-  setVal('fDepTime', r ? r.dep.time : P.depTime ?? '2026-05-01T12:00');
+  setDT('fDepDate', 'fDepTime', r ? r.dep.time : P.depTime ?? '2026-05-01T12:00');
   setVal('fArrCity', r ? r.arr.city : P.arrCity ?? '');
   setVal('fArrAddr', r ? r.arr.addr : P.arrAddr ?? '');
-  setVal('fArrTime', r ? r.arr.time : P.arrTime ?? '2026-05-01T14:00');
+  setDT('fArrDate', 'fArrTime', r ? r.arr.time : P.arrTime ?? '2026-05-01T14:00');
+  const depTz = r ? r.dep.tz ?? '' : '';
+  const arrTz = r ? r.arr.tz ?? '' : '';
+  setVal('fDepTz', depTz); tzAuto.fDepTz = !depTz;
+  setVal('fArrTz', arrTz); tzAuto.fArrTz = !arrTz;
   setVal('fTransport', r ? r.transport : P.transport ?? 'Plane');
   setVal('fCompany', r ? r.company : P.company ?? '');
   setVal('fTransfers', r ? r.transfers : P.transfers ?? 0);
@@ -475,8 +521,10 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hName', h ? h.name : P.name ?? '');
   setVal('hCity', h ? h.city : P.city ?? '');
   setVal('hAddr', h ? h.addr : P.addr ?? '');
-  setVal('hIn', h ? h.checkIn : P.checkIn ?? '2026-05-01T15:00');
-  setVal('hOut', h ? h.checkOut : P.checkOut ?? '2026-05-03T11:00');
+  setDT('hInDate', 'hInTime', h ? h.checkIn : P.checkIn ?? '2026-05-01T15:00');
+  setDT('hOutDate', 'hOutTime', h ? h.checkOut : P.checkOut ?? '2026-05-03T11:00');
+  const hTz = h ? h.tz ?? '' : '';
+  setVal('hTz', hTz); tzAuto.hTz = !hTz;
   setVal('hCost', h ? h.cost : P.cost ?? '');
   setVal('hCur', h ? h.currency : P.currency ?? 'EUR');
   setVal('fNote', '');
@@ -541,8 +589,14 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
   const seg: Leg = {
     id: segId,
     kind: 'leg',
-    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: placeLl('depCity', 'depAddr') },
-    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: placeLl('arrCity', 'arrAddr') },
+    dep: {
+      city: dc, addr: getVal('fDepAddr'), time: getDT('fDepDate', 'fDepTime'),
+      tz: getVal('fDepTz').trim() || undefined, ll: placeLl('depCity', 'depAddr'),
+    },
+    arr: {
+      city: ac, addr: getVal('fArrAddr'), time: getDT('fArrDate', 'fArrTime'),
+      tz: getVal('fArrTz').trim() || undefined, ll: placeLl('arrCity', 'arrAddr'),
+    },
     transport: getVal('fTransport') as TransportKind,
     company: getVal('fCompany'),
     transfers: Math.max(0, Math.round(Number(getVal('fTransfers') || 0))),
@@ -593,8 +647,9 @@ async function saveHotel(): Promise<void> {
       name,
       city,
       addr: getVal('hAddr'),
-      checkIn: getVal('hIn'),
-      checkOut: getVal('hOut'),
+      checkIn: getDT('hInDate', 'hInTime'),
+      checkOut: getDT('hOutDate', 'hOutTime'),
+      tz: getVal('hTz').trim() || undefined,
       cost: Number(getVal('hCost') || 0),
       currency: getVal('hCur') as CurrencyCode,
       attachment,
@@ -622,6 +677,14 @@ export function wireModal(): void {
   byId('saveBtn').onclick = saveModal;
   byId('delBtn').onclick = deleteItem;
   byId('fTransport').onchange = bufHint;
+  // Populate the time-zone suggestions once; typing in a tz field opts it out of
+  // auto-fill so a later geocode can't overwrite a manual choice.
+  const zones = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
+    .supportedValuesOf?.('timeZone') ?? [];
+  byId('tzList').innerHTML = zones.map((z) => `<option value="${z}"></option>`).join('');
+  for (const id of ['fDepTz', 'fArrTz', 'hTz']) {
+    byId(id).addEventListener('input', () => { tzAuto[id] = false; });
+  }
   byId('mtabForm').onclick = () => {
     activeTab = 'form';
     applyTabs();

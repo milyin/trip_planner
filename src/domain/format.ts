@@ -1,31 +1,6 @@
 import type { Leg } from './types';
 import { currencySymbol } from './transport';
-
-/** Parse a `datetime-local` string to epoch milliseconds. */
-export const toMs = (s: string): number => {
-  if (!s) return NaN;
-  let normalized = s.trim();
-
-  // Convert space to 'T' for ISO conformity (and Safari compatibility)
-  normalized = normalized.replace(' ', 'T');
-
-  // If format is DD/MM/YYYY or DD-MM-YYYY (with optional time), convert to YYYY-MM-DD
-  const dmyMatch = normalized.match(/^(\d{2})[-/](\d{2})[-/](\d{4})(?:T(\d{2}):(\d{2}))?$/);
-  if (dmyMatch) {
-    normalized = `${dmyMatch[3]}-${dmyMatch[2]}-${dmyMatch[1]}T${dmyMatch[4] || '00'}:${dmyMatch[5] || '00'}`;
-  }
-
-  // If format is YYYY/MM/DD, normalize slashes to hyphens
-  normalized = normalized.replace(/\//g, '-');
-
-  // If it's a date-only string (YYYY-MM-DD), append 'T00:00' to force local timezone parsing,
-  // preventing JS from parsing it as UTC (which causes timezone/sorting offsets).
-  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    normalized += 'T00:00';
-  }
-
-  return new Date(normalized).getTime();
-};
+import { zonedMs } from './tz';
 
 /** Format a duration (ms) as a compact `1d 2h 30m` string; negatives keep a `-`. */
 export function fmtDur(ms: number): string {
@@ -43,14 +18,21 @@ export function fmtDur(ms: number): string {
   return (neg ? '-' : '') + out.join(' ');
 }
 
+/** Split a `datetime-local` string into its display date and time parts, e.g.
+ * `{ date: 'May 1', time: '12:00' }`. The stored wall clock is shown as entered
+ * (local to the place); the browser's own zone only affects rendering style. */
+export function fmtTimeParts(s: string): { date: string; time: string } {
+  const d = new Date(s);
+  return {
+    date: d.toLocaleDateString([], { month: 'short', day: 'numeric' }),
+    time: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+}
+
 /** Format a `datetime-local` string as e.g. `May 1 12:00`. */
 export function fmtTime(s: string): string {
-  const d = new Date(s);
-  return (
-    d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
-    ' ' +
-    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  );
+  const { date, time } = fmtTimeParts(s);
+  return `${date} ${time}`;
 }
 
 /** Format a record's cost with its currency symbol (whole units). */
@@ -58,9 +40,9 @@ export function money(r: { cost: number; currency: string }): string {
   return currencySymbol(r.currency) + Number(r.cost).toFixed(0);
 }
 
-/** Travel duration of a segment (departure → arrival). */
+/** Travel duration of a segment (departure → arrival), across time zones. */
 export function tripDur(r: Leg): string {
-  return fmtDur(toMs(r.arr.time) - toMs(r.dep.time));
+  return fmtDur(zonedMs(r.arr.time, r.arr.tz) - zonedMs(r.dep.time, r.dep.tz));
 }
 
 /** Escape a value for safe interpolation into an HTML attribute / text node. */
