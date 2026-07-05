@@ -30,7 +30,12 @@ export interface Settings {
   /** Index into `parsers` of the last parser used. */
   activeParser: number;
   theme: 'dark' | 'light';
+  /** ISO 4217 code every cost is converted to for the plan totals. */
+  baseCurrency: string;
 }
+
+/** Default base currency for a fresh install. */
+export const DEFAULT_BASE_CURRENCY = 'EUR';
 
 export const DEFAULT_MODELS: Record<LlmProvider, string> = {
   gemini: 'gemini-2.5-flash',
@@ -72,6 +77,7 @@ function load(): Settings {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<Settings> & LegacySettings;
     const theme: Settings['theme'] = raw.theme === 'light' ? 'light' : 'dark';
+    const baseCurrency = typeof raw.baseCurrency === 'string' && raw.baseCurrency ? raw.baseCurrency : DEFAULT_BASE_CURRENCY;
     const accounts: LlmAccount[] = [];
     const parsers: ImageParser[] = [];
     const addAccount = (provider: LlmProvider, apiKey: string): string => {
@@ -89,6 +95,7 @@ function load(): Settings {
         parsers: (raw.parsers as ImageParser[]) ?? [],
         activeParser: raw.activeParser ?? 0,
         theme,
+        baseCurrency,
       };
     }
     if (Array.isArray(raw.parsers)) {
@@ -96,7 +103,7 @@ function load(): Settings {
       for (const p of raw.parsers as { provider: LlmProvider; model: string; apiKey: string }[]) {
         parsers.push({ accountId: addAccount(p.provider, p.apiKey), model: p.model });
       }
-      return { accounts, parsers, activeParser: raw.activeParser ?? 0, theme };
+      return { accounts, parsers, activeParser: raw.activeParser ?? 0, theme, baseCurrency };
     }
     // Oldest shape: one key per provider.
     if (raw.geminiApiKey) {
@@ -115,9 +122,9 @@ function load(): Settings {
       0,
       accounts.findIndex((a) => a.provider === raw.provider),
     );
-    return { accounts, parsers, activeParser, theme };
+    return { accounts, parsers, activeParser, theme, baseCurrency };
   } catch {
-    return { accounts: [], parsers: [], activeParser: 0, theme: 'dark' };
+    return { accounts: [], parsers: [], activeParser: 0, theme: 'dark', baseCurrency: DEFAULT_BASE_CURRENCY };
   }
 }
 

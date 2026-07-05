@@ -3,7 +3,7 @@ import { beginExchange } from './debugLog';
 import {
   AuthError, type AutoExtract, type ExtractInput, type ExtractedHotel, type ExtractedLeg, type LegExtractor,
 } from './extractor';
-import { assertFileSize, AUTO_PROMPT, buildPrompt, CURRENCIES, fileToBase64, HOTEL_PROMPT, PROMPT, TRANSPORTS } from './shared';
+import { assertFileSize, AUTO_PROMPT, buildPrompt, fileToBase64, HOTEL_PROMPT, PROMPT, TRANSPORTS } from './shared';
 
 type GenaiModule = typeof import('@google/genai');
 
@@ -23,7 +23,7 @@ function legSchema({ Type }: GenaiModule): unknown {
       transfers: { type: Type.NUMBER, description: 'Number of transfers (0 = direct)' },
       transfersInfo: { type: Type.STRING, description: 'Transfer details: intermediate cities, durations' },
       cost: { type: Type.NUMBER, description: 'Price as a number' },
-      currency: { type: Type.STRING, enum: CURRENCIES },
+      currency: { type: Type.STRING, description: 'ISO 4217 code shown, e.g. EUR, USD, JPY' },
     },
   };
 }
@@ -39,7 +39,7 @@ function hotelSchema({ Type }: GenaiModule): unknown {
       checkIn: { type: Type.STRING, description: 'Check-in, YYYY-MM-DDTHH:MM' },
       checkOut: { type: Type.STRING, description: 'Check-out, YYYY-MM-DDTHH:MM' },
       cost: { type: Type.NUMBER, description: 'Total price as a number' },
-      currency: { type: Type.STRING, enum: CURRENCIES },
+      currency: { type: Type.STRING, description: 'ISO 4217 code shown, e.g. EUR, USD, JPY' },
     },
   };
 }

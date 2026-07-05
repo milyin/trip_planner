@@ -1,17 +1,40 @@
+import { backfillConversions } from '../domain/convert';
 import {
   accountName, DEFAULT_MODELS, genAccountId, saveSettings, settings, type LlmProvider,
 } from '../state/settings';
+import { emitChange, state } from '../state/store';
+import { fillCurrencySelect } from './currency';
 import { byId, mkBtn } from './dom';
 
 const PROVIDERS: LlmProvider[] = ['gemini', 'openrouter', 'anthropic'];
 
 let resolveClose: (() => void) | null = null;
 
-/** Wire the ⚙ topbar button and the LLM configuration dialog (once, at startup). */
+/** Show the General or LLM tab of the Settings dialog. */
+function showSettingsTab(tab: 'general' | 'llm'): void {
+  byId('settGeneral').style.display = tab === 'general' ? '' : 'none';
+  byId('settLlm').style.display = tab === 'llm' ? '' : 'none';
+  byId('stabGeneral').classList.toggle('active', tab === 'general');
+  byId('stabLlm').classList.toggle('active', tab === 'llm');
+}
+
+/** Wire the Settings dialog: tabs, base-currency picker, and LLM lists. */
 export function wireParserSettings(): void {
   byId('settingsBtn').onclick = () => void openParserSettings();
   byId('closeParsers').onclick = close;
   byId('parserDoneBtn').onclick = close;
+  byId('stabGeneral').onclick = () => showSettingsTab('general');
+  byId('stabLlm').onclick = () => showSettingsTab('llm');
+  const cur = byId<HTMLSelectElement>('baseCurSel');
+  cur.onchange = () => {
+    settings.baseCurrency = cur.value;
+    saveSettings();
+    // Auto-conversions were computed for the previous base — drop them so the
+    // backfill recomputes for the new one; manual values are kept.
+    for (const it of state.items) if (!it.costConvertedManual) it.costConverted = undefined;
+    emitChange();
+    backfillConversions(state.items, settings.baseCurrency, emitChange);
+  };
   byId('addAccountBtn').onclick = () => {
     settings.accounts.push({ id: genAccountId(), provider: 'gemini', apiKey: '' });
     saveSettings();
@@ -30,9 +53,12 @@ export function wireParserSettings(): void {
   };
 }
 
-/** Open the LLM configuration; resolves when the user closes it. */
-export function openParserSettings(): Promise<void> {
+/** Open the Settings dialog on the given tab (default General); resolves when
+ * the user closes it. The recognize flow opens it straight on the LLM tab. */
+export function openParserSettings(tab: 'general' | 'llm' = 'general'): Promise<void> {
+  fillCurrencySelect(byId<HTMLSelectElement>('baseCurSel'), settings.baseCurrency);
   renderLists();
+  showSettingsTab(tab);
   byId('parserOverlay').classList.add('open');
   return new Promise((resolve) => {
     resolveClose = resolve;

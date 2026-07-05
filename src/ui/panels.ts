@@ -7,6 +7,7 @@ import {
 import { classifyGap, conflictOf, gapNights, gapRemote, listItems, planItems, planTotals } from '../domain/plan';
 import { currencySymbol } from '../domain/transport';
 import { isShowPool, togglePool } from '../map/mapView';
+import { settings } from '../state/settings';
 import { deleteSegment, emitChange, findItem, state } from '../state/store';
 import { itemCard } from './cards';
 import { byId, mkBtn } from './dom';
@@ -132,10 +133,10 @@ function renderPlanFoot(plan: Segment[], badCount: number): void {
     foot.innerHTML = `<span style="color:var(--faint)">Add segments to see totals.</span>`;
     return;
   }
-  const { legs, nightsTotal, spanMs, byCurrency } = planTotals(plan);
-  const totalStr = Object.entries(byCurrency)
-    .map(([c, v]) => currencySymbol(c) + v.toFixed(0))
-    .join(' + ');
+  const { legs, nightsTotal, spanMs, base, totalBase, incomplete, hasForeign } = planTotals(plan, settings.baseCurrency);
+  // "≈" when any leg/hotel was in another currency (converted); "…" while a
+  // conversion is still pending so the sum is not yet complete.
+  const totalStr = (hasForeign ? '≈ ' : '') + currencySymbol(base) + totalBase.toFixed(0) + (incomplete ? ' …' : '');
   const span = fmtDur(spanMs);
   foot.innerHTML = `
     <div class="stat"><small>Legs</small><b>${legs}</b></div>

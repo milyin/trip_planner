@@ -4,8 +4,9 @@ export type LatLng = [number, number];
 /** Transport modes for a segment (mirrors the original Rust `Transport` enum). */
 export type TransportKind = 'Plane' | 'Train' | 'Bus' | 'Taxi' | 'Car' | 'Other';
 
-/** Supported currency codes (mirrors `Money.currency`). */
-export type CurrencyCode = 'EUR' | 'USD' | 'GBP' | 'CHF';
+/** An ISO 4217 currency code, e.g. `"EUR"`, `"USD"`, `"JPY"`. Any real code is
+ * accepted (the picker offers the full `Intl.supportedValuesOf('currency')` set). */
+export type CurrencyCode = string;
 
 /** One end of a segment: a place (city + address) resolved at a moment in time. */
 export interface Place {
@@ -28,6 +29,10 @@ export interface Leg {
   company: string;
   cost: number;
   currency: CurrencyCode;
+  /** Cost expressed in the settings' base currency (auto-converted or entered). */
+  costConverted?: number;
+  /** True once the user typed a converted cost — auto-conversion won't overwrite it. */
+  costConvertedManual?: boolean;
   /** Number of transfers/connections on this leg (0 = direct). */
   transfers: number;
   /** Free-form transfer details (intermediate cities, durations, …). */
@@ -52,6 +57,10 @@ export interface Hotel {
   tz?: string;
   cost: number;
   currency: CurrencyCode;
+  /** Cost expressed in the settings' base currency (auto-converted or entered). */
+  costConverted?: number;
+  /** True once the user typed a converted cost — auto-conversion won't overwrite it. */
+  costConvertedManual?: boolean;
   /** `attachment:<id>` reference to the locally stored booking image, if any. */
   attachment: string | null;
   ll: LatLng | null;

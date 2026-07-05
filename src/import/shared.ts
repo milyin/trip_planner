@@ -4,7 +4,6 @@
 export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 
 export const TRANSPORTS = ['Plane', 'Train', 'Bus', 'Taxi', 'Car', 'Other'];
-export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 
 /** Plain JSON-Schema for one leg / one hotel — shared by every provider that
  * speaks JSON Schema (OpenRouter's response_format, Anthropic's tool input). */
@@ -22,7 +21,7 @@ export const LEG_SCHEMA = {
     transfers: { type: 'number', description: 'Number of transfers (0 = direct)' },
     transfersInfo: { type: 'string', description: 'Transfer details: intermediate cities, durations' },
     cost: { type: 'number', description: 'Price as a number' },
-    currency: { type: 'string', enum: CURRENCIES },
+    currency: { type: 'string', description: 'ISO 4217 code shown, e.g. EUR, USD, JPY' },
   },
 };
 
@@ -35,7 +34,7 @@ export const HOTEL_SCHEMA = {
     checkIn: { type: 'string', description: 'Check-in, YYYY-MM-DDTHH:MM' },
     checkOut: { type: 'string', description: 'Check-out, YYYY-MM-DDTHH:MM' },
     cost: { type: 'number', description: 'Total price as a number' },
-    currency: { type: 'string', enum: CURRENCIES },
+    currency: { type: 'string', description: 'ISO 4217 code shown, e.g. EUR, USD, JPY' },
   },
 };
 
@@ -47,7 +46,7 @@ const LEG_RULES = `- If the input shows several alternatives, extract the one th
 - "company" is the carrier operating the leg.
 - "transfers" is the number of transfers/connections shown for the leg (0 for direct). When intermediate cities, stations or transfer durations are shown, describe them in free form in "transfersInfo" (e.g. "via Lyon Part-Dieu, 1h 20m").
 - If one price covers the whole itinerary, put it on the first leg and 0 on the rest.
-- Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
+- Set "currency" to the ISO 4217 code of the currency actually shown (e.g. EUR, USD, JPY, GBP); infer it from the currency symbol when only a symbol is printed. Do not convert to another currency.
 - Omit any field the input does not state; never invent values.`;
 
 const HOTEL_RULES = `- If the input shows several hotels, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.
@@ -55,7 +54,7 @@ const HOTEL_RULES = `- If the input shows several hotels, extract the one the us
 - This is a planner for FUTURE trips. If the year is not printed, assume the closest matching date AFTER the current date; if a weekday is printed, pick the occurrence falling on that weekday.
 - "addr" is the street address if shown.
 - "cost" is the total price for the stay if shown, as a number.
-- Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
+- Set "currency" to the ISO 4217 code of the currency actually shown (e.g. EUR, USD, JPY, GBP); infer it from the currency symbol when only a symbol is printed. Do not convert to another currency.
 - Omit any field the input does not state; never invent values.`;
 
 export const PROMPT = `You help fill in the leg form (one transport ride) of a trip-planning app.

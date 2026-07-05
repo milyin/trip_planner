@@ -98,17 +98,37 @@ export interface PlanTotals {
   legs: number;
   nightsTotal: number;
   spanMs: number;
-  byCurrency: Record<string, number>;
+  /** The base currency the total is expressed in. */
+  base: string;
+  /** Sum of every cost converted to `base` (costs not yet converted are skipped). */
+  totalBase: number;
+  /** True when some foreign cost has no converted value yet (total is partial). */
+  incomplete: boolean;
+  /** True when any cost was in a currency other than `base` (total is approximate). */
+  hasForeign: boolean;
 }
 
-/** Aggregate totals for the plan footer. */
-export function planTotals(plan: Segment[]): PlanTotals {
-  const byCurrency: Record<string, number> = {};
+/** The cost of a record expressed in `base`, or `null` if not yet convertible. */
+function baseEquivalent(r: Segment, base: string): number | null {
+  const cost = Number(r.cost) || 0;
+  if (!cost) return 0;
+  if (r.currency === base) return cost;
+  return r.costConverted != null ? Number(r.costConverted) : null;
+}
+
+/** Aggregate totals for the plan footer, with cost summed in the base currency. */
+export function planTotals(plan: Segment[], base: string): PlanTotals {
+  let totalBase = 0;
+  let incomplete = false;
+  let hasForeign = false;
   plan.forEach((r) => {
-    byCurrency[r.currency] = (byCurrency[r.currency] || 0) + Number(r.cost);
+    if ((Number(r.cost) || 0) && r.currency !== base) hasForeign = true;
+    const eq = baseEquivalent(r, base);
+    if (eq == null) incomplete = true;
+    else totalBase += eq;
   });
   const legs = plan.filter((p) => p.kind === 'leg').length;
   const nightsTotal = plan.reduce((s, h) => s + (h.kind === 'hotel' ? nights(h) : 0), 0);
   const spanMs = plan.length ? endMs(plan[plan.length - 1]) - startMs(plan[0]) : 0;
-  return { legs, nightsTotal, spanMs, byCurrency };
+  return { legs, nightsTotal, spanMs, base, totalBase, incomplete, hasForeign };
 }

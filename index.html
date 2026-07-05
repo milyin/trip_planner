@@ -26,7 +26,7 @@
         <hr>
         <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
         <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
-        <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> LLM configuration</button>
+        <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> Settings</button>
       </div>
     </div>
   </div>
@@ -123,8 +123,9 @@
       <div class="field full"><label>Transfers — count &amp; details</label>
         <div class="tr-row"><input id="fTransfers" class="tr-count" type="number" min="0" step="1" placeholder="0"><input id="fTransfersInfo" placeholder="via Lyon (1h 20m), Dijon (45m)"></div></div>
       <div class="field"><label>Cost</label><input id="fCost" type="number" min="0" step="0.01" placeholder="100.00"></div>
-      <div class="field"><label>Currency</label>
-        <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+      <div class="field"><label>Currency</label><select id="fCur"></select></div>
+      <div class="field full"><label>Converted cost <span id="fConvCur" class="hint"></span> <button type="button" class="geo-chip" id="fConvChip"></button></label>
+        <input id="fCostConv" type="number" min="0" step="0.01" placeholder="auto from rate"></div>
     </div>
     <div class="modal-body" id="hotelBody" style="display:none">
       <div class="leg">Stay</div>
@@ -135,8 +136,9 @@
       <div class="field"><label>Check-out</label><div class="dt-row"><input id="hOutDate" type="date"><input id="hOutTime" type="time"></div></div>
       <div class="field full"><label>Timezone</label><input id="hTz" list="tzList" placeholder="auto from city" autocomplete="off"></div>
       <div class="field"><label>Price</label><input id="hCost" type="number" min="0" step="0.01" placeholder="240.00"></div>
-      <div class="field"><label>Currency</label>
-        <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
+      <div class="field"><label>Currency</label><select id="hCur"></select></div>
+      <div class="field full"><label>Converted cost <span id="hConvCur" class="hint"></span> <button type="button" class="geo-chip" id="hConvChip"></button></label>
+        <input id="hCostConv" type="number" min="0" step="0.01" placeholder="auto from rate"></div>
     </div>
     <datalist id="tzList"></datalist>
     <div class="modal-foot">
@@ -151,8 +153,17 @@
 
 <div class="overlay" id="parserOverlay">
   <div class="modal narrow">
-    <div class="modal-head"><h3>LLM configuration</h3><div class="x" id="closeParsers">✕</div></div>
-    <div class="modal-body single">
+    <div class="modal-tabs">
+      <button type="button" class="mtab active" id="stabGeneral">User settings</button>
+      <button type="button" class="mtab" id="stabLlm">LLM</button>
+      <div class="x" id="closeParsers">✕</div>
+    </div>
+    <div class="modal-body single" id="settGeneral">
+      <div class="leg">Preferences</div>
+      <div class="field full"><label>Base currency <span class="hint">plan totals are shown in this currency</span></label>
+        <select id="baseCurSel"></select></div>
+    </div>
+    <div class="modal-body single" id="settLlm" style="display:none">
       <div class="leg">Accounts — provider + API key</div>
       <div id="accountList" class="parser-list"></div>
       <button class="btn ghost" id="addAccountBtn">＋ Add account</button>
