@@ -85,12 +85,12 @@
       </div>
     </div>
     <div class="modal-body" id="legBody">
-      <div class="leg col">Departure <button type="button" class="geo-chip" id="depGeo" title="Locate this place on the map"></button></div>
-      <div class="leg col">Arrival <button type="button" class="geo-chip" id="arrGeo" title="Locate this place on the map"></button></div>
-      <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
-      <div class="field"><label>City</label><input id="fArrCity" placeholder="Paris"></div>
-      <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
-      <div class="field"><label>Address / stop</label><input id="fArrAddr" placeholder="CDG"></div>
+      <div class="leg col">Departure</div>
+      <div class="leg col">Arrival</div>
+      <div class="field"><label>City <button type="button" class="geo-chip" id="depCityGeo"></button></label><input id="fDepCity" placeholder="Marseille"></div>
+      <div class="field"><label>City <button type="button" class="geo-chip" id="arrCityGeo"></button></label><input id="fArrCity" placeholder="Paris"></div>
+      <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="depAddrGeo"></button></label><input id="fDepAddr" placeholder="Airport"></div>
+      <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="arrAddrGeo"></button></label><input id="fArrAddr" placeholder="CDG"></div>
       <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
       <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
       <div class="leg">Details</div>
@@ -104,10 +104,10 @@
         <select id="fCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
     </div>
     <div class="modal-body" id="hotelBody" style="display:none">
-      <div class="leg">Stay <button type="button" class="geo-chip" id="hotGeo" title="Locate this place on the map"></button></div>
+      <div class="leg">Stay</div>
       <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
-      <div class="field"><label>City</label><input id="hCity" placeholder="Paris"></div>
-      <div class="field"><label>Address</label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
+      <div class="field"><label>City <button type="button" class="geo-chip" id="hotCityGeo"></button></label><input id="hCity" placeholder="Paris"></div>
+      <div class="field"><label>Address <button type="button" class="geo-chip" id="hotAddrGeo"></button></label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
       <div class="field"><label>Check-in</label><input id="hIn" type="datetime-local"></div>
       <div class="field"><label>Check-out</label><input id="hOut" type="datetime-local"></div>
       <div class="field"><label>Price</label><input id="hCost" type="number" min="0" step="0.01" placeholder="240.00"></div>

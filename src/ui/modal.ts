@@ -1,5 +1,5 @@
 import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/types';
-import { geocodePlace } from '../domain/geocode';
+import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
@@ -102,69 +102,86 @@ function showBody(kind: 'leg' | 'hotel'): void {
   applyTabs();
 }
 
-// --- per-place geocoding, explicit in the dialog ---------------------------
+// --- per-field geocoding, explicit in the dialog ----------------------------
+// Every city and address field has its own status chip. City chips resolve the
+// city; address chips resolve "addr, city" with no city fallback, so each chip
+// honestly reports its own field. The saved coordinates prefer the address.
 
 type GeoStatus = 'empty' | 'stale' | 'busy' | 'ok' | 'fail';
-type PlaceKey = 'dep' | 'arr' | 'hot';
+type SlotKey = 'depCity' | 'depAddr' | 'arrCity' | 'arrAddr' | 'hotCity' | 'hotAddr';
 
-const GEO_FIELDS: Record<PlaceKey, { chip: string; city: string; addr: string }> = {
-  dep: { chip: 'depGeo', city: 'fDepCity', addr: 'fDepAddr' },
-  arr: { chip: 'arrGeo', city: 'fArrCity', addr: 'fArrAddr' },
-  hot: { chip: 'hotGeo', city: 'hCity', addr: 'hAddr' },
+interface SlotSpec {
+  chip: string;
+  input: string;
+  /** Present on address slots: the city field the address belongs to. */
+  cityInput?: string;
+}
+
+const GEO_SLOTS: Record<SlotKey, SlotSpec> = {
+  depCity: { chip: 'depCityGeo', input: 'fDepCity' },
+  depAddr: { chip: 'depAddrGeo', input: 'fDepAddr', cityInput: 'fDepCity' },
+  arrCity: { chip: 'arrCityGeo', input: 'fArrCity' },
+  arrAddr: { chip: 'arrAddrGeo', input: 'fArrAddr', cityInput: 'fArrCity' },
+  hotCity: { chip: 'hotCityGeo', input: 'hCity' },
+  hotAddr: { chip: 'hotAddrGeo', input: 'hAddr', cityInput: 'hCity' },
 };
 
-interface PlaceGeo {
+/** The city slot next to an address slot and vice versa. */
+const SIBLING: Record<SlotKey, SlotKey> = {
+  depCity: 'depAddr', depAddr: 'depCity',
+  arrCity: 'arrAddr', arrAddr: 'arrCity',
+  hotCity: 'hotAddr', hotAddr: 'hotCity',
+};
+
+interface SlotGeo {
   ll: LatLng | null;
   status: GeoStatus;
   /** Invalidates in-flight lookups when fields change or the dialog reopens. */
   token: number;
 }
 
-const geo: Record<PlaceKey, PlaceGeo> = {
-  dep: { ll: null, status: 'empty', token: 0 },
-  arr: { ll: null, status: 'empty', token: 0 },
-  hot: { ll: null, status: 'empty', token: 0 },
-};
+const slots = Object.fromEntries(
+  (Object.keys(GEO_SLOTS) as SlotKey[]).map((k) => [k, { ll: null, status: 'empty', token: 0 }]),
+) as Record<SlotKey, SlotGeo>;
 
-function renderGeoChip(key: PlaceKey): void {
-  const chip = byId<HTMLButtonElement>(GEO_FIELDS[key].chip);
-  const g = geo[key];
+function renderGeoChip(key: SlotKey): void {
+  const chip = byId<HTMLButtonElement>(GEO_SLOTS[key].chip);
+  const g = slots[key];
   chip.className = 'geo-chip ' + g.status;
   const label: Record<GeoStatus, string> = {
-    empty: '',
+    empty: '·',
     stale: '📍 locate',
     busy: '⏳ locating…',
     ok: '✓ located',
-    fail: '✗ not found — retry',
+    fail: '✗ not found',
   };
-  chip.textContent = label[g.status] || '·';
+  chip.textContent = label[g.status];
   // visibility (not display) so an appearing chip never shifts the layout.
   chip.style.visibility = g.status === 'empty' ? 'hidden' : 'visible';
   if (g.status === 'ok' && g.ll) {
     chip.title = `Located at ${g.ll[0].toFixed(4)}, ${g.ll[1].toFixed(4)} — click to look up again`;
   } else if (g.status === 'fail') {
-    chip.title = 'The geocoder could not find this place — check spelling and retry';
+    chip.title = 'Not found — check spelling and click to retry';
   } else {
-    chip.title = 'Locate this place on the map';
+    chip.title = 'Locate on the map';
   }
 }
 
-/** Set a place's coordinates directly (record being edited). */
-function setPlaceGeo(key: PlaceKey, ll: LatLng | null, hasText: boolean): void {
-  geo[key].token++;
-  geo[key].ll = ll;
-  geo[key].status = ll ? 'ok' : hasText ? 'stale' : 'empty';
+/** Set a slot's coordinates directly (record being edited). */
+function setSlot(key: SlotKey, ll: LatLng | null, hasText: boolean): void {
+  slots[key].token++;
+  slots[key].ll = ll;
+  slots[key].status = ll ? 'ok' : hasText ? 'stale' : 'empty';
   renderGeoChip(key);
 }
 
-/** Look up a place's fields and show the outcome on its chip. */
-function resolvePlace(key: PlaceKey, force = false): void {
-  const f = GEO_FIELDS[key];
-  const city = getVal(f.city).trim();
-  const addr = getVal(f.addr).trim();
-  const g = geo[key];
+/** Look up one field and show the outcome on its chip. */
+function resolveSlot(key: SlotKey, force = false): void {
+  const spec = GEO_SLOTS[key];
+  const text = getVal(spec.input).trim();
+  const g = slots[key];
   const token = ++g.token;
-  if (!city && !addr) {
+  if (!text) {
     g.ll = null;
     g.status = 'empty';
     renderGeoChip(key);
@@ -172,19 +189,36 @@ function resolvePlace(key: PlaceKey, force = false): void {
   }
   g.status = 'busy';
   renderGeoChip(key);
-  void geocodePlace(city, addr, { priority: true, force }).then((ll) => {
-    if (g.token !== token) return; // fields changed meanwhile
+  const lookup = spec.cityInput
+    ? geocodeAddress(getVal(spec.cityInput).trim(), text, { priority: true, force })
+    : geocodePlace(text, undefined, { priority: true, force });
+  void lookup.then((ll) => {
+    if (g.token !== token) return; // field changed meanwhile
     g.ll = ll;
     g.status = ll ? 'ok' : 'fail';
     renderGeoChip(key);
   });
 }
 
-/** Mark a place unresolved after its fields were edited. */
-function stalePlace(key: PlaceKey): void {
-  const f = GEO_FIELDS[key];
-  const hasText = !!(getVal(f.city).trim() || getVal(f.addr).trim());
-  setPlaceGeo(key, null, hasText);
+/** Mark a slot unresolved after its field (or its city) was edited. */
+function staleSlot(key: SlotKey): void {
+  setSlot(key, null, !!getVal(GEO_SLOTS[key].input).trim());
+}
+
+/** Coordinates a place saves: the specific address if located, else the city. */
+const placeLl = (cityKey: SlotKey, addrKey: SlotKey): LatLng | null =>
+  slots[addrKey].ll ?? slots[cityKey].ll;
+
+/** Initialize a place's two slots when the dialog opens. */
+function initPlaceSlots(cityKey: SlotKey, addrKey: SlotKey, storedLl: LatLng | null): void {
+  const cityText = !!getVal(GEO_SLOTS[cityKey].input).trim();
+  const addrText = !!getVal(GEO_SLOTS[addrKey].input).trim();
+  // Stored coordinates are adopted by the city slot so an untouched record
+  // keeps them even if the geocoder is unreachable.
+  setSlot(cityKey, storedLl, cityText);
+  setSlot(addrKey, null, addrText);
+  if (!storedLl && cityText) resolveSlot(cityKey);
+  if (addrText) resolveSlot(addrKey);
 }
 
 function bufHint(): void {
@@ -228,8 +262,7 @@ function fillLegFields(leg: ExtractedLeg): void {
   set('fCur', leg.currency);
   bufHint();
   // The recognised places are new text — locate them right away.
-  resolvePlace('dep');
-  resolvePlace('arr');
+  for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
 
 async function recognise(): Promise<void> {
@@ -298,19 +331,8 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   setVal('fNote', '');
   refreshParserCombo();
   bufHint();
-  if (r) {
-    // Editing: adopt the stored coordinates; look up only what's missing.
-    setPlaceGeo('dep', r.dep.ll, !!(r.dep.city || r.dep.addr));
-    setPlaceGeo('arr', r.arr.ll, !!(r.arr.city || r.arr.addr));
-    if (!r.dep.ll) resolvePlace('dep');
-    if (!r.arr.ll) resolvePlace('arr');
-  } else {
-    // New leg: locate prefilled places right away, stay quiet when blank.
-    setPlaceGeo('dep', null, !!(P.depCity || P.depAddr));
-    setPlaceGeo('arr', null, !!(P.arrCity || P.arrAddr));
-    if (P.depCity || P.depAddr) resolvePlace('dep');
-    if (P.arrCity || P.arrAddr) resolvePlace('arr');
-  }
+  initPlaceSlots('depCity', 'depAddr', r ? r.dep.ll : null);
+  initPlaceSlots('arrCity', 'arrAddr', r ? r.arr.ll : null);
   byId('overlay').classList.add('open');
   renderPreview(pendingFile ?? existingAttachment);
 }
@@ -334,13 +356,7 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hCost', h ? h.cost : P.cost ?? '');
   setVal('hCur', h ? h.currency : P.currency ?? 'EUR');
   setVal('hLink', h ? h.link || '' : P.link ?? '');
-  if (h) {
-    setPlaceGeo('hot', h.ll, !!(h.city || h.addr));
-    if (!h.ll) resolvePlace('hot');
-  } else {
-    setPlaceGeo('hot', null, !!(P.city || P.addr));
-    if (P.city || P.addr) resolvePlace('hot');
-  }
+  initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
   byId('overlay').classList.add('open');
   renderPreview(null);
 }
@@ -399,8 +415,8 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
   const seg: Leg = {
     id: segId,
     kind: 'leg',
-    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: geo.dep.ll },
-    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: geo.arr.ll },
+    dep: { city: dc, addr: getVal('fDepAddr'), time: getVal('fDepTime'), ll: placeLl('depCity', 'depAddr') },
+    arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: placeLl('arrCity', 'arrAddr') },
     transport: getVal('fTransport') as TransportKind,
     company: getVal('fCompany'),
     cost: Number(getVal('fCost') || 0),
@@ -440,7 +456,7 @@ function saveHotel(): void {
     cost: Number(getVal('hCost') || 0),
     currency: getVal('hCur') as CurrencyCode,
     link: getVal('hLink').trim() || null,
-    ll: geo.hot.ll,
+    ll: placeLl('hotCity', 'hotAddr'),
     inPlan: existing ? existing.inPlan : newInPlan,
   };
   upsertItem(h);
@@ -477,15 +493,24 @@ export function wireModal(): void {
     activeTab = 'llm';
     applyTabs();
   };
-  // Geo chips: click retries the lookup; editing a place's fields marks it
-  // unresolved immediately and re-locates once the field loses focus.
-  for (const key of ['dep', 'arr', 'hot'] as PlaceKey[]) {
-    const f = GEO_FIELDS[key];
-    byId(f.chip).onclick = () => resolvePlace(key, true);
-    for (const id of [f.city, f.addr]) {
-      byId(id).addEventListener('input', () => stalePlace(key));
-      byId(id).addEventListener('change', () => resolvePlace(key));
-    }
+  // Geo chips: click retries the lookup; editing a field marks its slot (and,
+  // for city fields, the dependent address slot) unresolved immediately and
+  // re-locates once the field loses focus.
+  for (const key of Object.keys(GEO_SLOTS) as SlotKey[]) {
+    const spec = GEO_SLOTS[key];
+    const isCity = !spec.cityInput;
+    byId(spec.chip).onclick = (e) => {
+      e.preventDefault(); // chips live inside <label>: don't focus the input
+      resolveSlot(key, true);
+    };
+    byId(spec.input).addEventListener('input', () => {
+      staleSlot(key);
+      if (isCity) staleSlot(SIBLING[key]); // the address lookup uses the city
+    });
+    byId(spec.input).addEventListener('change', () => {
+      resolveSlot(key);
+      if (isCity && getVal(GEO_SLOTS[SIBLING[key]].input).trim()) resolveSlot(SIBLING[key]);
+    });
   }
   const zone = byId('importZone');
   zone.onclick = (e) => {

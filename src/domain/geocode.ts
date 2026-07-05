@@ -131,6 +131,32 @@ export async function geocodePlace(city: string, addr?: string, opts?: GeocodeOp
   }
 }
 
+/** Resolve a specific address/stop within a city — no bare-city fallback, so
+ * a miss genuinely means "this address wasn't found" (the city may still be). */
+export async function geocodeAddress(city: string, addr: string, opts?: GeocodeOptions): Promise<LatLng | null> {
+  const c = (city || '').trim();
+  const a = (addr || '').trim();
+  if (!a) return null;
+  // 'x:' namespace: legacy combined-lookup entries may hold city-fallback coords.
+  const key = `x:${c}|${a}`.toLowerCase();
+  if (cache[key]) return cache[key];
+  if (misses.has(key) && !opts?.force) return null;
+  try {
+    const ll = await enqueue(() => search(c ? `${a}, ${c}` : a), !!opts?.priority);
+    if (ll) {
+      cache[key] = ll;
+      misses.delete(key);
+      saveCache();
+      return ll;
+    }
+    misses.add(key);
+    return null;
+  } catch {
+    misses.add(key);
+    return null;
+  }
+}
+
 /** Fill in missing coordinates on stored records in the background.
  * Calls `onUpdate` after each record that gained coordinates. */
 export function backfillCoordinates(items: Segment[], onUpdate: () => void): void {
