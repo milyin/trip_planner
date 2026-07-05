@@ -71,12 +71,12 @@
 
 <div class="overlay" id="overlay">
   <div class="modal">
-    <div class="modal-head"><h3 id="modalTitle">New leg</h3><div class="x" id="closeModal">✕</div></div>
     <div class="modal-tabs" id="modalTabs">
-      <button type="button" class="mtab active" id="mtabForm">Details</button>
-      <button type="button" class="mtab" id="mtabLlm">LLM exchange</button>
+      <button type="button" class="mtab active" id="mtabForm">Edit leg</button>
+      <button type="button" class="mtab" id="mtabRecognize">Recognize</button>
+      <div class="x" id="closeModal">✕</div>
     </div>
-    <div class="leg-import" id="legImport">
+    <div class="leg-import" id="legImport" style="display:none">
       <div class="import-zone" id="importZone" title="Click to choose an image or PDF, or drop one here (replaces the current one)">
         <div class="file-preview" id="filePreview" style="display:none"></div>
         <div class="drop-hint" id="dropHint">📎 Drop a screenshot of a flight / train listing here, or click to choose</div>
@@ -86,18 +86,25 @@
         <input id="fNote" placeholder="Optional note for the model — e.g. “the 20:09 direct train”">
         <select id="fParser" title="Image parser"></select>
         <button class="btn icon ghost" id="cfgParsersBtn" title="Configure LLM accounts &amp; parsers">⚙</button>
-        <button class="btn" id="recogniseBtn" title="Extract the fields below from the image and note">Recognise</button>
       </div>
+      <details class="llm-details" id="llmDetails">
+        <summary>LLM exchange</summary>
+        <pre id="llmDump"></pre>
+      </details>
     </div>
     <div class="modal-body" id="legBody">
-      <div class="leg col">Departure</div>
-      <div class="leg col">Arrival</div>
-      <div class="field"><label>City <button type="button" class="geo-chip" id="depCityGeo"></button></label><input id="fDepCity" placeholder="Marseille"></div>
-      <div class="field"><label>City <button type="button" class="geo-chip" id="arrCityGeo"></button></label><input id="fArrCity" placeholder="Paris"></div>
-      <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="depAddrGeo"></button></label><input id="fDepAddr" placeholder="Airport"></div>
-      <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="arrAddrGeo"></button></label><input id="fArrAddr" placeholder="CDG"></div>
-      <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
-      <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
+      <div class="fcol">
+        <div class="leg">Departure</div>
+        <div class="field"><label>City <button type="button" class="geo-chip" id="depCityGeo"></button></label><input id="fDepCity" placeholder="Marseille"></div>
+        <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="depAddrGeo"></button></label><input id="fDepAddr" placeholder="Airport"></div>
+        <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
+      </div>
+      <div class="fcol">
+        <div class="leg">Arrival</div>
+        <div class="field"><label>City <button type="button" class="geo-chip" id="arrCityGeo"></button></label><input id="fArrCity" placeholder="Paris"></div>
+        <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="arrAddrGeo"></button></label><input id="fArrAddr" placeholder="CDG"></div>
+        <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
+      </div>
       <div class="leg">Details</div>
       <div class="field"><label>Transport</label>
         <select id="fTransport"><option>Plane</option><option>Train</option><option>Bus</option>
@@ -120,11 +127,11 @@
         <select id="hCur"><option>EUR</option><option>USD</option><option>GBP</option><option>CHF</option></select></div>
       <div class="field full"><label>Link (optional)</label><input id="hLink" type="url" placeholder="https://…"></div>
     </div>
-    <div class="modal-body llm" id="llmBody" style="display:none"><pre id="llmDump"></pre></div>
     <div class="modal-foot">
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
       <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn primary" id="recogniseBtn" style="display:none" title="Extract the fields from the image and note">Recognise</button>
       <button class="btn primary" id="saveBtn">Save leg</button>
     </div>
   </div>

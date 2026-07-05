@@ -7,15 +7,14 @@
 .modal-head, .modal-foot, .leg-import, .modal-tabs{flex:0 0 auto}
 .modal-body{overflow-y:auto}
 
-.modal-tabs{display:flex; gap:2px; padding:0 20px; border-bottom:1px solid var(--border)}
+.modal-tabs{display:flex; gap:2px; padding:0 20px; border-bottom:1px solid var(--border); align-items:center}
+.modal-tabs .x{margin-left:auto; cursor:pointer; color:var(--muted); font-size:18px; line-height:1; padding:8px 0 8px 12px}
 .mtab{background:none; border:none; border-bottom:2px solid transparent; color:var(--muted);
   padding:9px 12px; margin-bottom:-1px; cursor:pointer; font:inherit; font-size:13px}
 .mtab:hover{color:var(--text)}
 .mtab.active{color:var(--text); border-bottom-color:var(--accent)}
 
-.modal-body.llm{display:block}
-#llmDump{margin:0; white-space:pre-wrap; word-break:break-word; user-select:text;
-  font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; line-height:1.55; color:var(--text)}
+
 @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}
 .modal-head{display:flex; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border)}
 .modal-head h3{margin:0; font-size:16px}
@@ -53,8 +52,15 @@
 .hint-block{grid-column:1/-1; margin:0; color:var(--faint); font-size:12px; line-height:1.4}
 
 /* Preview of the ticket file attached to a segment (shown above the form). */
-/* Ticket image zone at the top of the segment form: preview or drop hint. */
-.leg-import{border-bottom:1px solid var(--border)}
+/* Recognize tab: image zone, note/parser controls, collapsible LLM dump. */
+.leg-import{border-bottom:1px solid var(--border); overflow-y:auto}
+.llm-details{border-top:1px solid var(--border); padding:8px 20px 12px}
+.llm-details summary{cursor:pointer; color:var(--muted); font-size:12px; font-weight:600; padding:4px 0}
+.llm-details pre{margin:8px 0 0; white-space:pre-wrap; word-break:break-word; user-select:text; max-height:32vh; overflow-y:auto;
+  font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:11px; line-height:1.55; color:var(--text)}
+
+/* Two-column dep/arr wrappers: DOM order gives natural Tab-key order. */
+.fcol{display:flex; flex-direction:column; gap:14px}
 .import-zone{position:relative; background:var(--panel-2); cursor:pointer}
 .import-zone.dragover{outline:2px dashed var(--accent); outline-offset:-6px}
 .drop-hint{display:flex; align-items:center; justify-content:center; text-align:center;
