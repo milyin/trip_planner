@@ -51,6 +51,10 @@ Useful hooks in the app:
 - LLM endpoints: `generativelanguage.googleapis.com` (Gemini SDK) and
   `openrouter.ai/api/v1/chat/completions` (plain fetch — easy to mock with `ctx.route`
   fulfilling a canned `{choices:[{message:{content: JSON.stringify({legs:[...]})}}]}`).
+- Geocoding: `nominatim.openstreetmap.org/search?...&q=<query>` — mock with
+  `[{lat:'49.49',lon:'0.11'}]`. Cache in localStorage `tripPlanner.geocache.v1`; requests
+  are queued ≥1.1s apart, so mocked multi-lookup tests need generous timeouts. Startup
+  backfill re-geocodes records with missing `ll`.
 - Persistence: items + settings in `localStorage` (`tripPlanner.items.v1`,
   `tripPlanner.settings.v1` — settings hold a `parsers` array), files in IndexedDB db
   `tripPlanner`, store `attachments`. Segments reference images via `attachment` field.
