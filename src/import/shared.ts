@@ -6,6 +6,39 @@ export const MAX_FILE_BYTES = 15 * 1024 * 1024;
 export const TRANSPORTS = ['Plane', 'Train', 'Bus', 'Taxi', 'Car', 'Other'];
 export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 
+/** Plain JSON-Schema for one leg / one hotel — shared by every provider that
+ * speaks JSON Schema (OpenRouter's response_format, Anthropic's tool input). */
+export const LEG_SCHEMA = {
+  type: 'object',
+  properties: {
+    depCity: { type: 'string', description: 'Departure city' },
+    depAddr: { type: 'string', description: 'Departure airport/station/stop' },
+    depTime: { type: 'string', description: 'Departure time, YYYY-MM-DDTHH:MM, local' },
+    arrCity: { type: 'string', description: 'Arrival city' },
+    arrAddr: { type: 'string', description: 'Arrival airport/station/stop' },
+    arrTime: { type: 'string', description: 'Arrival time, YYYY-MM-DDTHH:MM, local' },
+    transport: { type: 'string', enum: TRANSPORTS },
+    company: { type: 'string', description: 'Carrier name' },
+    transfers: { type: 'number', description: 'Number of transfers (0 = direct)' },
+    transfersInfo: { type: 'string', description: 'Transfer details: intermediate cities, durations' },
+    cost: { type: 'number', description: 'Price as a number' },
+    currency: { type: 'string', enum: CURRENCIES },
+  },
+};
+
+export const HOTEL_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', description: 'Hotel name' },
+    city: { type: 'string', description: 'City' },
+    addr: { type: 'string', description: 'Street address' },
+    checkIn: { type: 'string', description: 'Check-in, YYYY-MM-DDTHH:MM' },
+    checkOut: { type: 'string', description: 'Check-out, YYYY-MM-DDTHH:MM' },
+    cost: { type: 'number', description: 'Total price as a number' },
+    currency: { type: 'string', enum: CURRENCIES },
+  },
+};
+
 const LEG_RULES = `- If the input shows several alternatives, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.
 - An itinerary may consist of several legs (connections); return each leg separately, in travel order.
 - Times must be local to the place they refer to, formatted exactly as YYYY-MM-DDTHH:MM.

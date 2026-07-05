@@ -1,5 +1,6 @@
 import type { CurrencyCode, TransportKind } from '../domain/types';
 import type { LlmProvider, ResolvedParser } from '../state/settings';
+import { anthropicExtractor } from './anthropic';
 import { geminiExtractor } from './gemini';
 import { openrouterExtractor } from './openrouter';
 
@@ -60,6 +61,7 @@ export class AuthError extends Error {}
 const extractors: Record<LlmProvider, LegExtractor> = {
   gemini: geminiExtractor,
   openrouter: openrouterExtractor,
+  anthropic: anthropicExtractor,
 };
 
 export const getExtractor = (parser: ResolvedParser): LegExtractor => extractors[parser.provider];

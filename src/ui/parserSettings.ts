@@ -3,7 +3,7 @@ import {
 } from '../state/settings';
 import { byId, mkBtn } from './dom';
 
-const PROVIDERS: LlmProvider[] = ['gemini', 'openrouter'];
+const PROVIDERS: LlmProvider[] = ['gemini', 'openrouter', 'anthropic'];
 
 let resolveClose: (() => void) | null = null;
 

@@ -2,7 +2,7 @@
  * app name because `<user>.github.io` is one origin shared by every GitHub
  * Pages project of the account. */
 
-export type LlmProvider = 'gemini' | 'openrouter';
+export type LlmProvider = 'gemini' | 'openrouter' | 'anthropic';
 
 /** A provider credential; several parsers can share one account. */
 export interface LlmAccount {
@@ -35,6 +35,7 @@ export interface Settings {
 export const DEFAULT_MODELS: Record<LlmProvider, string> = {
   gemini: 'gemini-2.5-flash',
   openrouter: 'google/gemini-2.5-flash',
+  anthropic: 'claude-haiku-4-5',
 };
 
 export const genAccountId = (): string =>
