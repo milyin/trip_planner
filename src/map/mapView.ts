@@ -26,6 +26,22 @@ export function togglePool(): boolean {
   return showPool;
 }
 
+/** Whether available (not-in-plan) records are currently shown on the map. */
+export const isShowPool = (): boolean => showPool;
+
+/** Set pool visibility without redrawing (caller triggers the redraw). Used to
+ * default shared links to a plan-only map. */
+export function setShowPool(v: boolean): void {
+  showPool = v;
+}
+
+/** Re-arm the one-shot auto-fit so the next draw fits the map again — called when
+ * the workspace content is replaced (shared-link import, workspace switch). */
+export function resetInitialFit(): void {
+  initialFit = true;
+  mobileFitted = false;
+}
+
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 /** The overlay-pane <svg>'s <defs> (created on first use), or null if not ready yet. */
@@ -279,8 +295,10 @@ export function drawMap(): void {
   });
 
   if (initialFit && bounds.length) {
-    map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 6 });
+    // Fit the same way the Fit button does, so the app opens framed tightly on
+    // the itinerary instead of a loose default view.
     initialFit = false;
+    fitAll();
   }
   buildLegend(usedTransports);
   placeLegend();

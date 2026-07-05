@@ -4,22 +4,25 @@ import {
   AuthError, type AutoExtract, type ExtractInput, type ExtractedHotel, type ExtractedLeg, type LegExtractor,
 } from './extractor';
 import {
-  assertFileSize, AUTO_PROMPT, buildPrompt, fileToDataUrl, HOTEL_PROMPT, HOTEL_SCHEMA, LEG_SCHEMA, PROMPT,
+  assertFileSize, AUTO_PROMPT, buildPrompt, fileToBase64, HOTEL_PROMPT, HOTEL_SCHEMA, LEG_SCHEMA, PROMPT,
 } from './shared';
 
-const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
+const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const API_VERSION = '2023-06-01';
+const TOOL_NAME = 'record';
 
-interface ChatCompletion {
-  choices?: { message?: { content?: string } }[];
+interface AnthropicResponse {
+  content?: { type: string; name?: string; input?: unknown }[];
   error?: { message?: string };
 }
 
-/** One structured-output chat request; returns the parsed JSON content. */
+/** One structured request: the model must call the `record` tool, whose input
+ * schema is the JSON shape we want — the most reliable way to get structured
+ * output across every Claude model (no beta headers, no per-model quirks). */
 async function request(
   { files, note }: ExtractInput,
   parser: ResolvedParser,
   basePrompt: string,
-  schemaName: string,
   rootSchema: unknown,
 ): Promise<unknown> {
   for (const f of files) assertFileSize(f);
@@ -31,62 +34,57 @@ async function request(
     startedAt: Date.now(),
   });
   try {
-    // PDFs go through OpenRouter's file parser (native engine when the model
-    // reads PDFs itself, OCR otherwise); images use the standard vision part.
+    // Images use an image block; PDFs use a document block (both base64).
     const filePart = async (file: File): Promise<unknown> => {
-      const dataUrl = await fileToDataUrl(file);
+      const data = await fileToBase64(file);
+      const media_type = file.type || 'application/octet-stream';
       return file.type === 'application/pdf'
-        ? { type: 'file', file: { filename: file.name || 'ticket.pdf', file_data: dataUrl } }
-        : { type: 'image_url', image_url: { url: dataUrl } };
+        ? { type: 'document', source: { type: 'base64', media_type, data } }
+        : { type: 'image', source: { type: 'base64', media_type, data } };
     };
-    const elidedParts = files.map((file) =>
-      file.type === 'application/pdf'
-        ? { type: 'file', file: { filename: file.name, file_data: `<${file.size} bytes elided>` } }
-        : { type: 'image_url', image_url: { url: `<${file.size} bytes elided>` } },
-    );
-    const body = (fps: unknown[]): unknown => ({
+    const elidedParts = files.map((file) => ({
+      type: file.type === 'application/pdf' ? 'document' : 'image',
+      source: { type: 'base64', media_type: file.type, data: `<${file.size} bytes elided>` },
+    }));
+    const tools = [{ name: TOOL_NAME, description: 'Record the extracted trip data.', input_schema: rootSchema }];
+    const body = (parts: unknown[]): unknown => ({
       model: parser.model,
-      messages: [
-        { role: 'user', content: [...fps, { type: 'text', text: buildPrompt(note, basePrompt) }] },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: schemaName, schema: rootSchema },
-      },
+      max_tokens: 4096,
+      tools,
+      tool_choice: { type: 'tool', name: TOOL_NAME },
+      messages: [{ role: 'user', content: [...parts, { type: 'text', text: buildPrompt(note, basePrompt) }] }],
     });
     ex.request = body(elidedParts);
 
     const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${parser.apiKey}`,
         'Content-Type': 'application/json',
-        // Optional app attribution (shows up in the user's OpenRouter stats).
-        'HTTP-Referer': 'https://milyin.github.io/trip_planner/',
-        'X-Title': 'Trip Planner',
+        'x-api-key': parser.apiKey,
+        'anthropic-version': API_VERSION,
+        // Anthropic gates browser (CORS) access behind this explicit opt-in.
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
       body: JSON.stringify(body(await Promise.all(files.map(filePart)))),
     });
     ex.status = `HTTP ${res.status}`;
     const raw = await res.text();
     ex.rawResponse = raw;
-    if (res.status === 401 || res.status === 403) throw new AuthError('OpenRouter rejected the API key.');
-    let parsed: ChatCompletion;
+    if (res.status === 401 || res.status === 403) throw new AuthError('Anthropic rejected the API key.');
+    let parsed: AnthropicResponse;
     try {
-      parsed = JSON.parse(raw) as ChatCompletion;
+      parsed = JSON.parse(raw) as AnthropicResponse;
     } catch {
-      throw new Error(`OpenRouter returned HTTP ${res.status} with a non-JSON body.`);
+      throw new Error(`Anthropic returned HTTP ${res.status} with a non-JSON body.`);
     }
     if (!res.ok || parsed.error) {
-      throw new Error(parsed.error?.message || `OpenRouter returned HTTP ${res.status}.`);
+      throw new Error(parsed.error?.message || `Anthropic returned HTTP ${res.status}.`);
     }
-    const content = parsed.choices?.[0]?.message?.content;
-    if (!content) throw new Error('OpenRouter returned an empty response.');
-    // Models without structured-output support may wrap the JSON in a fence.
-    const json = content.replace(/^\s*```(?:json)?\s*|\s*```\s*$/g, '');
-    const result = JSON.parse(json) as unknown;
-    ex.legs = result;
-    return result;
+    // The forced tool call carries the structured result in its `input`.
+    const toolUse = parsed.content?.find((b) => b.type === 'tool_use' && b.name === TOOL_NAME);
+    if (!toolUse || toolUse.input == null) throw new Error('Anthropic returned no structured result.');
+    ex.legs = toolUse.input;
+    return toolUse.input;
   } catch (e) {
     ex.error = e instanceof Error ? e.message : String(e);
     throw e;
@@ -95,9 +93,9 @@ async function request(
   }
 }
 
-export const openrouterExtractor: LegExtractor = {
+export const anthropicExtractor: LegExtractor = {
   async extract(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedLeg[]> {
-    const result = (await request(input, parser, PROMPT, 'itinerary_legs', {
+    const result = (await request(input, parser, PROMPT, {
       type: 'object',
       properties: { legs: { type: 'array', items: LEG_SCHEMA } },
       required: ['legs'],
@@ -107,7 +105,7 @@ export const openrouterExtractor: LegExtractor = {
   },
 
   async extractHotel(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedHotel> {
-    const result = (await request(input, parser, HOTEL_PROMPT, 'hotel_stay', {
+    const result = (await request(input, parser, HOTEL_PROMPT, {
       type: 'object',
       properties: { hotel: HOTEL_SCHEMA },
       required: ['hotel'],
@@ -117,7 +115,7 @@ export const openrouterExtractor: LegExtractor = {
   },
 
   async extractAuto(input: ExtractInput, parser: ResolvedParser): Promise<AutoExtract> {
-    const result = (await request(input, parser, AUTO_PROMPT, 'trip_import', {
+    const result = (await request(input, parser, AUTO_PROMPT, {
       type: 'object',
       properties: {
         kind: { type: 'string', enum: ['legs', 'hotel'] },

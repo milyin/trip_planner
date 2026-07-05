@@ -6,7 +6,7 @@ import {
 } from '../domain/item';
 import { classifyGap, conflictOf, gapNights, gapRemote, listItems, planItems, planTotals } from '../domain/plan';
 import { currencySymbol } from '../domain/transport';
-import { togglePool } from '../map/mapView';
+import { isShowPool, togglePool } from '../map/mapView';
 import { deleteSegment, emitChange, findItem, state } from '../state/store';
 import { itemCard } from './cards';
 import { byId, mkBtn } from './dom';
@@ -22,13 +22,21 @@ export function wirePanelActions(): void {
     deleteSegment(state.selected);
     emitChange();
   };
-  const eye = byId('phToggleMap');
-  eye.onclick = () => {
-    const shown = togglePool();
-    eye.innerHTML = getIcon(shown ? 'eye' : 'eye-off');
-    eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
-    eye.title = shown ? 'Hide available segments on map' : 'Show available segments on map';
+  byId('phToggleMap').onclick = () => {
+    togglePool();
+    syncEyeButton();
   };
+}
+
+/** Reflect the current map pool-visibility on the eye toggle button (icon,
+ * pressed state, tooltip). Called after a click and when a shared link defaults
+ * the map to plan-only. */
+export function syncEyeButton(): void {
+  const eye = byId('phToggleMap');
+  const shown = isShowPool();
+  eye.innerHTML = getIcon(shown ? 'eye' : 'eye-off');
+  eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+  eye.title = shown ? 'Hide available segments on map' : 'Show available segments on map';
 }
 
 /** Render the Segments panel (not-yet-planned records). */
