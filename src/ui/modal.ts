@@ -3,8 +3,8 @@ import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
-import type { ExtractedLeg } from '../import/extractor';
-import { runRecognition } from '../import/recognise';
+import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
+import { runHotelRecognition, runRecognition } from '../import/recognise';
 import {
   deleteAttachment, deleteExchange, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
 } from '../state/attachments';
@@ -26,7 +26,7 @@ export interface LegPrefill {
 export interface HotelPrefill {
   inPlan?: boolean;
   name?: string; city?: string; addr?: string;
-  checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode; link?: string;
+  checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode;
 }
 
 let editingId: string | null = null;
@@ -99,9 +99,11 @@ function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
   byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
-  // Recognition only applies to legs (hotels get it in #15).
-  byId('mtabRecognize').style.display = kind === 'leg' ? '' : 'none';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
+  byId('dropHint').textContent =
+    kind === 'hotel'
+      ? '📎 Drop a screenshot of a hotel listing or booking here, or click to choose'
+      : '📎 Drop a screenshot of a flight / train listing here, or click to choose';
   applyTabs();
 }
 
@@ -292,20 +294,51 @@ async function recognise(): Promise<void> {
     alert('Attach a screenshot or write a note first.');
     return;
   }
-  const legs = await runRecognition(file, note, parser);
-  dialogExchange = lastExchange();
-  if (!legs) {
-    // failure: refresh and unfold the exchange dump so the cause is one look away
-    byId('llmDump').textContent = formatExchange(dialogExchange);
-    byId<HTMLDetailsElement>('llmDetails').open = true;
-    return;
+  if (editKind === 'hotel') {
+    const hotel = await runHotelRecognition(file, note, parser);
+    dialogExchange = lastExchange();
+    if (!hotel) {
+      recogniseFailed();
+      return;
+    }
+    fillHotelFields(hotel);
+  } else {
+    const legs = await runRecognition(file, note, parser);
+    dialogExchange = lastExchange();
+    if (!legs) {
+      recogniseFailed();
+      return;
+    }
+    fillLegFields(legs[0]);
+    queuedLegs = legs.slice(1);
+    queuedFile = queuedLegs.length ? file : null;
   }
-  fillLegFields(legs[0]);
-  queuedLegs = legs.slice(1);
-  queuedFile = queuedLegs.length ? file : null;
   // success: jump to the edit form with the extracted values
   activeTab = 'form';
   applyTabs();
+}
+
+/** Failure: refresh and unfold the exchange dump so the cause is one look away. */
+function recogniseFailed(): void {
+  byId('llmDump').textContent = formatExchange(dialogExchange);
+  byId<HTMLDetailsElement>('llmDetails').open = true;
+}
+
+/** Fill the hotel form from an extracted stay (only fields the model set). */
+function fillHotelFields(h: ExtractedHotel): void {
+  const set = (id: string, v: unknown): void => {
+    if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
+  };
+  set('hName', h.name);
+  set('hCity', h.city);
+  set('hAddr', h.addr);
+  set('hIn', h.checkIn);
+  set('hOut', h.checkOut);
+  set('hCost', h.cost);
+  set('hCur', h.currency);
+  // The recognised places are new text — locate them right away.
+  resolveSlot('hotCity');
+  resolveSlot('hotAddr');
 }
 
 /** Open the leg dialog (new when `id` is null), optionally pre-filled. */
@@ -356,7 +389,17 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const h = (id ? findItem(id) : null) as Hotel | null;
   pendingFile = null;
-  existingAttachment = null;
+  existingAttachment = h ? h.attachment : null;
+  dialogExchange = null;
+  if (id) {
+    // Show the exchange that produced this hotel, if one was stored.
+    void getExchange(id).then((ex) => {
+      if (ex && editingId === id) {
+        dialogExchange = ex;
+        if (activeTab === 'rec') applyTabs();
+      }
+    });
+  }
   setVal('hName', h ? h.name : P.name ?? '');
   setVal('hCity', h ? h.city : P.city ?? '');
   setVal('hAddr', h ? h.addr : P.addr ?? '');
@@ -364,10 +407,11 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hOut', h ? h.checkOut : P.checkOut ?? '2026-05-03T11:00');
   setVal('hCost', h ? h.cost : P.cost ?? '');
   setVal('hCur', h ? h.currency : P.currency ?? 'EUR');
-  setVal('hLink', h ? h.link || '' : P.link ?? '');
+  setVal('fNote', '');
+  refreshParserCombo();
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
   byId('overlay').classList.add('open');
-  renderPreview(null);
+  renderPreview(existingAttachment);
 }
 
 export function closeModal(): void {
@@ -440,44 +484,61 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
 
 function saveModal(): void {
   if (editKind === 'hotel') {
-    saveHotel();
+    void saveHotel();
     return;
   }
   void saveLeg();
 }
 
-function saveHotel(): void {
+async function saveHotel(): Promise<void> {
   const name = getVal('hName');
   const city = getVal('hCity');
   if (!name || !city) {
     alert('Hotel name and city are required.');
     return;
   }
-  const existing = editingId ? findItem(editingId) : undefined;
-  const h: Hotel = {
-    id: existing?.id ?? nextId(),
-    kind: 'hotel',
-    name,
-    city,
-    addr: getVal('hAddr'),
-    checkIn: getVal('hIn'),
-    checkOut: getVal('hOut'),
-    cost: Number(getVal('hCost') || 0),
-    currency: getVal('hCur') as CurrencyCode,
-    link: getVal('hLink').trim() || null,
-    ll: placeLl('hotCity', 'hotAddr'),
-    inPlan: existing ? existing.inPlan : newInPlan,
-  };
-  upsertItem(h);
-  closeModal();
-  emitChange();
+  // Storing the image is async — block a double-click on Save meanwhile.
+  const saveBtn = byId<HTMLButtonElement>('saveBtn');
+  if (saveBtn.disabled) return;
+  saveBtn.disabled = true;
+  try {
+    const existing = editingId ? findItem(editingId) : undefined;
+    let attachment = existingAttachment;
+    if (pendingFile) {
+      // A newly picked image replaces the stored one.
+      if (existingAttachment) void deleteAttachment(existingAttachment);
+      attachment = await putAttachment(pendingFile);
+    }
+    const hotelId = existing?.id ?? nextId();
+    if (dialogExchange) await putExchange(hotelId, dialogExchange);
+    const h: Hotel = {
+      id: hotelId,
+      kind: 'hotel',
+      name,
+      city,
+      addr: getVal('hAddr'),
+      checkIn: getVal('hIn'),
+      checkOut: getVal('hOut'),
+      cost: Number(getVal('hCost') || 0),
+      currency: getVal('hCur') as CurrencyCode,
+      attachment,
+      ll: placeLl('hotCity', 'hotAddr'),
+      inPlan: existing ? existing.inPlan : newInPlan,
+    };
+    upsertItem(h);
+    closeModal();
+    emitChange();
+  } finally {
+    saveBtn.disabled = false;
+  }
 }
 
 function deleteItem(): void {
   if (editingId) {
     const r = findItem(editingId);
-    // Deleting the record deletes its locally stored image and exchange too.
-    if (r && r.kind === 'leg') {
+    // Deleting the record deletes its locally stored image and exchange too
+    // (legs and hotels both carry attachments now).
+    if (r) {
       void deleteAttachment(r.attachment);
       void deleteExchange(r.id);
     }
