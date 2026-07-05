@@ -9,7 +9,7 @@ export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF'];
 const LEG_RULES = `- If the input shows several alternatives, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.
 - An itinerary may consist of several legs (connections); return each leg separately, in travel order.
 - Times must be local to the place they refer to, formatted exactly as YYYY-MM-DDTHH:MM.
-- If the year is not printed, infer it: prefer the nearest upcoming date, and if a weekday is printed pick the year where the date falls on that weekday.
+- This is a planner for FUTURE trips. If the year is not printed, assume the closest matching date AFTER the current date; if a weekday is printed, pick the occurrence falling on that weekday.
 - "addr" is the airport, station or stop name (e.g. "CDG", "St-Charles"), not a street address, and not a repetition of the city name.
 - "company" is the carrier operating the leg.
 - If one price covers the whole itinerary, put it on the first leg and 0 on the rest.
@@ -18,7 +18,7 @@ const LEG_RULES = `- If the input shows several alternatives, extract the one th
 
 const HOTEL_RULES = `- If the input shows several hotels, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.
 - "checkIn"/"checkOut" must be datetime-local strings, formatted exactly as YYYY-MM-DDTHH:MM. When only dates are shown, use 15:00 for check-in and 11:00 for check-out.
-- If the year is not printed, infer it: prefer the nearest upcoming date, and if a weekday is printed pick the year where the date falls on that weekday.
+- This is a planner for FUTURE trips. If the year is not printed, assume the closest matching date AFTER the current date; if a weekday is printed, pick the occurrence falling on that weekday.
 - "addr" is the street address if shown.
 - "cost" is the total price for the stay if shown, as a number.
 - Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
@@ -45,9 +45,15 @@ ${LEG_RULES}
 Rules when kind is "hotel":
 ${HOTEL_RULES}`;
 
-/** Final prompt text: the instructions plus the user's note, if any. */
-export const buildPrompt = (note: string, base: string = PROMPT): string =>
-  note.trim() ? `${base}\n\nUser note:\n${note.trim()}` : base;
+/** Final prompt text: the current date, the instructions, and the user's
+ * note, if any. The date anchors year inference — screenshots rarely print
+ * the year, and this is a planner for future trips. */
+export function buildPrompt(note: string, base: string = PROMPT): string {
+  const now = new Date();
+  const today = `Current date: ${now.toISOString().slice(0, 10)} (${now.toLocaleDateString('en-GB', { weekday: 'long' })}).`;
+  const body = `${today}\n${base}`;
+  return note.trim() ? `${body}\n\nUser note:\n${note.trim()}` : body;
+}
 
 /** Read a file as a `data:<mime>;base64,…` URL. */
 export function fileToDataUrl(file: File): Promise<string> {
