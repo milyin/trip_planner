@@ -20,31 +20,32 @@ export interface LegPrefill {
   arrCity?: string; arrAddr?: string; arrTime?: string;
   transport?: TransportKind; company?: string; cost?: number; currency?: CurrencyCode;
   transfers?: number; transfersInfo?: string;
-  /** Ticket image carried into the dialog (queued multi-leg recognition). */
-  file?: File;
+  /** Ticket images carried into the dialog (queued multi-leg recognition). */
+  files?: File[];
 }
 
 export interface HotelPrefill {
   inPlan?: boolean;
   name?: string; city?: string; addr?: string;
   checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode;
-  /** Booking image carried into the dialog (auto-import from paste). */
-  file?: File;
+  /** Booking images carried into the dialog (auto-import from paste). */
+  files?: File[];
 }
 
 let editingId: string | null = null;
 let editKind: 'leg' | 'hotel' = 'leg';
 let newInPlan = false;
 let activeTab: 'form' | 'rec' = 'form';
-let previewUrl: string | null = null;
+let previewUrls: string[] = [];
 let hasPreview = false;
-/** Image picked/dropped in this dialog, not yet saved to IndexedDB. */
-let pendingFile: File | null = null;
+/** Images picked/dropped/pasted in this dialog, not yet saved to IndexedDB.
+ * Several can be collected before pressing Recognise (#30). */
+let pendingFiles: File[] = [];
 /** Attachment of the leg being edited (kept unless replaced). */
 let existingAttachment: string | null = null;
 /** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
 let queuedLegs: ExtractedLeg[] = [];
-let queuedFile: File | null = null;
+let queuedFiles: File[] = [];
 /** Exchange shown in this dialog: loaded from storage when editing, replaced
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
@@ -55,7 +56,8 @@ function applyTabs(): void {
   byId('legBody').style.display = form && editKind === 'leg' ? 'grid' : 'none';
   byId('hotelBody').style.display = form && editKind === 'hotel' ? 'grid' : 'none';
   byId('legImport').style.display = form ? 'none' : 'block';
-  byId('filePreview').style.display = hasPreview ? 'block' : 'none';
+  // clearing the inline display lets the stylesheet pick block vs gallery flex
+  byId('filePreview').style.display = hasPreview ? '' : 'none';
   byId('dropHint').style.display = hasPreview ? 'none' : 'flex';
   byId('mtabForm').classList.toggle('active', form);
   byId('mtabRecognize').classList.toggle('active', !form);
@@ -65,37 +67,64 @@ function applyTabs(): void {
   if (!form) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
-/** Render the ticket image (or PDF) preview inside the drop zone. */
-function renderPreview(src: File | string | null): void {
+function revokePreviews(): void {
+  for (const u of previewUrls) URL.revokeObjectURL(u);
+  previewUrls = [];
+}
+
+/** Render the pending images as a removable thumbnail gallery, or — with no
+ * pending images — the stored attachment of the record being edited. */
+function renderPreview(): void {
   const box = byId('filePreview');
-  if (previewUrl) {
-    URL.revokeObjectURL(previewUrl);
-    previewUrl = null;
-  }
+  revokePreviews();
   hasPreview = false;
   box.innerHTML = '';
-  const show = (url: string, type: string): void => {
-    previewUrl = url;
-    box.innerHTML = type.startsWith('image/')
-      ? `<img src="${url}" alt="Attached ticket preview">`
-      : `<embed src="${url}" type="${type}">`;
+  box.classList.toggle('gallery', pendingFiles.length > 0);
+  if (pendingFiles.length) {
+    pendingFiles.forEach((f, i) => {
+      const url = URL.createObjectURL(f);
+      previewUrls.push(url);
+      const cell = document.createElement('div');
+      cell.className = 'thumb';
+      cell.innerHTML = f.type.startsWith('image/')
+        ? `<img src="${url}" alt="Pending image ${i + 1}">`
+        : `<embed src="${url}" type="${f.type}">`;
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'thumb-rm';
+      rm.title = 'Remove this image';
+      rm.textContent = '✕';
+      rm.onclick = (e) => {
+        e.stopPropagation();
+        pendingFiles.splice(i, 1);
+        renderPreview();
+      };
+      cell.appendChild(rm);
+      box.appendChild(cell);
+    });
     hasPreview = true;
     applyTabs();
-  };
-  if (src instanceof File) {
-    show(URL.createObjectURL(src), src.type);
     return;
   }
   applyTabs();
-  if (!src) return;
-  void resolveLink(src).then((r) => {
-    if (r && byId('overlay').classList.contains('open')) show(r.url, r.type);
+  const att = existingAttachment;
+  if (!att) return;
+  void resolveLink(att).then((r) => {
+    if (!r || !byId('overlay').classList.contains('open') || pendingFiles.length) return;
+    previewUrls.push(r.url);
+    box.innerHTML = r.type.startsWith('image/')
+      ? `<img src="${r.url}" alt="Attached ticket preview">`
+      : `<embed src="${r.url}" type="${r.type}">`;
+    hasPreview = true;
+    applyTabs();
   });
 }
 
-function setPendingFile(f: File): void {
-  pendingFile = f;
-  renderPreview(f);
+/** Append picked/dropped/pasted files to the pending list (no recognition —
+ * the user collects images and presses Recognise explicitly). */
+function addPendingFiles(fs: Iterable<File>): void {
+  for (const f of fs) pendingFiles.push(f);
+  renderPreview();
 }
 
 function showBody(kind: 'leg' | 'hotel'): void {
@@ -105,8 +134,8 @@ function showBody(kind: 'leg' | 'hotel'): void {
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
     kind === 'hotel'
-      ? '📎 Drop or paste (Ctrl+V) a screenshot of a hotel listing or booking, or click to choose'
-      : '📎 Drop or paste (Ctrl+V) a screenshot of a flight / train listing, or click to choose';
+      ? '📎 Drop or paste (Ctrl+V) screenshots of a hotel listing or booking, or click to choose'
+      : '📎 Drop or paste (Ctrl+V) screenshots of a flight / train listing, or click to choose';
   applyTabs();
 }
 
@@ -298,17 +327,17 @@ async function recognise(): Promise<void> {
   const parser = await ensureParser();
   if (!parser) return;
   const note = getVal('fNote');
-  let file = pendingFile;
-  if (!file && existingAttachment) {
+  let files = [...pendingFiles];
+  if (!files.length && existingAttachment) {
     const rec = await getAttachment(existingAttachment);
-    if (rec) file = new File([rec.blob], rec.name, { type: rec.type });
+    if (rec) files = [new File([rec.blob], rec.name, { type: rec.type })];
   }
-  if (!file && !note.trim()) {
+  if (!files.length && !note.trim()) {
     alert('Attach a screenshot or write a note first.');
     return;
   }
   if (editKind === 'hotel') {
-    const hotel = await runHotelRecognition(file, note, parser);
+    const hotel = await runHotelRecognition(files, note, parser);
     dialogExchange = lastExchange();
     if (!hotel) {
       recogniseFailed();
@@ -316,7 +345,7 @@ async function recognise(): Promise<void> {
     }
     fillHotelFields(hotel);
   } else {
-    const legs = await runRecognition(file, note, parser);
+    const legs = await runRecognition(files, note, parser);
     dialogExchange = lastExchange();
     if (!legs) {
       recogniseFailed();
@@ -324,7 +353,7 @@ async function recognise(): Promise<void> {
     }
     fillLegFields(legs[0]);
     queuedLegs = legs.slice(1);
-    queuedFile = queuedLegs.length ? file : null;
+    queuedFiles = queuedLegs.length ? files : [];
   }
   // success: jump to the edit form with the extracted values
   activeTab = 'form';
@@ -344,22 +373,22 @@ function recogniseFailed(): void {
 export async function importPastedImage(file: File): Promise<void> {
   const parser = await ensureParser();
   if (!parser) return;
-  const result = await runAutoRecognition(file, '', parser);
+  const result = await runAutoRecognition([file], '', parser);
   if (!result) {
     // Open a blank leg dialog with the image so the exchange is inspectable
     // and the user can adjust the note and retry.
-    openModal(null, { file });
+    openModal(null, { files: [file] });
     dialogExchange = lastExchange();
     recogniseFailed();
     return;
   }
   if ('hotel' in result) {
-    openHotelModal(null, { ...result.hotel, file });
+    openHotelModal(null, { ...result.hotel, files: [file] });
   } else {
     const [first, ...rest] = result.legs;
-    openModal(null, { ...first, file });
+    openModal(null, { ...first, files: [file] });
     queuedLegs = rest;
-    queuedFile = rest.length ? file : null;
+    queuedFiles = rest.length ? [file] : [];
   }
   // The exchange belongs to the record(s) just opened; openModal cleared it.
   dialogExchange = lastExchange();
@@ -390,7 +419,7 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   newInPlan = P.inPlan === true;
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const r = (id ? findItem(id) : null) as Leg | null;
-  pendingFile = P.file ?? null;
+  pendingFiles = P.files ? [...P.files] : [];
   existingAttachment = r ? r.attachment : null;
   dialogExchange = null;
   if (id) {
@@ -420,7 +449,7 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   initPlaceSlots('depCity', 'depAddr', r ? r.dep.ll : null);
   initPlaceSlots('arrCity', 'arrAddr', r ? r.arr.ll : null);
   byId('overlay').classList.add('open');
-  renderPreview(pendingFile ?? existingAttachment);
+  renderPreview();
 }
 
 /** Open the hotel dialog (new when `id` is null), optionally pre-filled. */
@@ -431,7 +460,7 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   newInPlan = P.inPlan === true;
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const h = (id ? findItem(id) : null) as Hotel | null;
-  pendingFile = P.file ?? null;
+  pendingFiles = P.files ? [...P.files] : [];
   existingAttachment = h ? h.attachment : null;
   dialogExchange = null;
   if (id) {
@@ -454,22 +483,22 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   refreshParserCombo();
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
   byId('overlay').classList.add('open');
-  renderPreview(pendingFile ?? existingAttachment);
+  renderPreview();
 }
 
 export function closeModal(): void {
   byId('overlay').classList.remove('open');
-  renderPreview(null);
-  pendingFile = null;
+  pendingFiles = [];
   existingAttachment = null;
+  renderPreview();
   const ex = dialogExchange;
   dialogExchange = null;
   if (queuedLegs.length) {
     const [leg, ...rest] = queuedLegs;
     queuedLegs = [];
-    const f = queuedFile;
-    if (!rest.length) queuedFile = null;
-    openModal(null, { ...leg, file: f ?? undefined });
+    const f = queuedFiles;
+    if (!rest.length) queuedFiles = [];
+    openModal(null, { ...leg, files: f.length ? f : undefined });
     queuedLegs = rest;
     // Every leg of the itinerary came from the same recognition.
     dialogExchange = ex;
@@ -497,10 +526,11 @@ async function saveLeg(): Promise<void> {
 async function doSaveLeg(dc: string, ac: string): Promise<void> {
   const existing = editingId ? (findItem(editingId) as Leg | undefined) : undefined;
   let attachment = existingAttachment;
-  if (pendingFile) {
-    // A newly picked image replaces the stored one.
+  if (pendingFiles.length) {
+    // Newly picked images replace the stored one; the first is kept as the
+    // record's attachment.
     if (existingAttachment) void deleteAttachment(existingAttachment);
-    attachment = await putAttachment(pendingFile);
+    attachment = await putAttachment(pendingFiles[0]);
   }
   const segId = existing?.id ?? nextId();
   // Persist the exchange that filled this leg, next to the image. Awaited so
@@ -549,10 +579,11 @@ async function saveHotel(): Promise<void> {
   try {
     const existing = editingId ? findItem(editingId) : undefined;
     let attachment = existingAttachment;
-    if (pendingFile) {
-      // A newly picked image replaces the stored one.
+    if (pendingFiles.length) {
+      // Newly picked images replace the stored one; the first is kept as the
+      // record's attachment.
       if (existingAttachment) void deleteAttachment(existingAttachment);
-      attachment = await putAttachment(pendingFile);
+      attachment = await putAttachment(pendingFiles[0]);
     }
     const hotelId = existing?.id ?? nextId();
     if (dialogExchange) await putExchange(hotelId, dialogExchange);
@@ -624,9 +655,9 @@ export function wireModal(): void {
   };
   byId<HTMLInputElement>('legFile').onchange = (e) => {
     const input = e.target as HTMLInputElement;
-    const f = input.files?.[0];
-    input.value = ''; // allow re-selecting the same file
-    if (f) setPendingFile(f);
+    const fs = input.files ? [...input.files] : [];
+    input.value = ''; // allow re-selecting the same files
+    if (fs.length) addPendingFiles(fs);
   };
   zone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -636,27 +667,29 @@ export function wireModal(): void {
   zone.addEventListener('drop', (e) => {
     e.preventDefault();
     zone.classList.remove('dragover');
-    const f = e.dataTransfer?.files?.[0];
-    if (f) setPendingFile(f);
+    const fs = e.dataTransfer?.files;
+    if (fs?.length) addPendingFiles(fs);
   });
   // Paste (Ctrl/Cmd+V) an image — e.g. a screenshot taken straight to the
   // clipboard. With the edit dialog open (either tab) it becomes the dialog's
   // image; in the main window it auto-detects leg vs hotel and opens the
   // matching dialog prefilled. Other dialogs / busy states are left alone.
   document.addEventListener('paste', (e) => {
-    const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
-    const raw = item?.getAsFile();
-    if (!raw) return;
-    const f = new File([raw], raw.name || 'pasted-image.png', { type: raw.type });
+    const imgs = Array.from(e.clipboardData?.items ?? [])
+      .filter((i) => i.type.startsWith('image/'))
+      .map((i) => i.getAsFile())
+      .filter((f): f is File => !!f)
+      .map((f, i) => new File([f], f.name || `pasted-image-${i + 1}.png`, { type: f.type }));
+    if (!imgs.length) return;
     if (byId('overlay').classList.contains('open')) {
       e.preventDefault();
-      setPendingFile(f);
-      // make the pasted image visible right away
+      addPendingFiles(imgs);
+      // make the pasted images visible right away
       activeTab = 'rec';
       applyTabs();
     } else if (!document.querySelector('.overlay.open') && byId('importBusy').style.display !== 'flex') {
       e.preventDefault();
-      void importPastedImage(f);
+      void importPastedImage(imgs[0]);
     }
   });
   byId('recogniseBtn').onclick = () => void recognise();

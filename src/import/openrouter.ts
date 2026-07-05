@@ -45,46 +45,45 @@ interface ChatCompletion {
 
 /** One structured-output chat request; returns the parsed JSON content. */
 async function request(
-  { file, note }: ExtractInput,
+  { files, note }: ExtractInput,
   parser: ResolvedParser,
   basePrompt: string,
   schemaName: string,
   rootSchema: unknown,
 ): Promise<unknown> {
-  if (file) assertFileSize(file);
+  for (const f of files) assertFileSize(f);
   const ex = beginExchange({
     provider: parser.provider,
     model: parser.model,
-    file: file ? { name: file.name, type: file.type, size: file.size } : null,
+    files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
     note,
     startedAt: Date.now(),
   });
   try {
     // PDFs go through OpenRouter's file parser (native engine when the model
     // reads PDFs itself, OCR otherwise); images use the standard vision part.
-    const filePart = async (): Promise<unknown> => {
-      if (!file) return null;
+    const filePart = async (file: File): Promise<unknown> => {
       const dataUrl = await fileToDataUrl(file);
       return file.type === 'application/pdf'
         ? { type: 'file', file: { filename: file.name || 'ticket.pdf', file_data: dataUrl } }
         : { type: 'image_url', image_url: { url: dataUrl } };
     };
-    const elidedPart = file
-      ? file.type === 'application/pdf'
+    const elidedParts = files.map((file) =>
+      file.type === 'application/pdf'
         ? { type: 'file', file: { filename: file.name, file_data: `<${file.size} bytes elided>` } }
-        : { type: 'image_url', image_url: { url: `<${file.size} bytes elided>` } }
-      : null;
-    const body = (fp: unknown): unknown => ({
+        : { type: 'image_url', image_url: { url: `<${file.size} bytes elided>` } },
+    );
+    const body = (fps: unknown[]): unknown => ({
       model: parser.model,
       messages: [
-        { role: 'user', content: [...(fp ? [fp] : []), { type: 'text', text: buildPrompt(note, basePrompt) }] },
+        { role: 'user', content: [...fps, { type: 'text', text: buildPrompt(note, basePrompt) }] },
       ],
       response_format: {
         type: 'json_schema',
         json_schema: { name: schemaName, schema: rootSchema },
       },
     });
-    ex.request = body(elidedPart);
+    ex.request = body(elidedParts);
 
     const res = await fetch(ENDPOINT, {
       method: 'POST',
@@ -95,7 +94,7 @@ async function request(
         'HTTP-Referer': 'https://milyin.github.io/trip_planner/',
         'X-Title': 'Trip Planner',
       },
-      body: JSON.stringify(body(await filePart())),
+      body: JSON.stringify(body(await Promise.all(files.map(filePart)))),
     });
     ex.status = `HTTP ${res.status}`;
     const raw = await res.text();

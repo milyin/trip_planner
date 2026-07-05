@@ -1,10 +1,19 @@
 /** In-memory record of the most recent LLM exchange, shown in the segment
  * dialog's "LLM exchange" tab for debugging extraction problems. */
 
+interface FileMeta {
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface LlmExchange {
   provider: string;
   model: string;
-  file: { name: string; type: string; size: number } | null;
+  /** All images sent with the request (empty = note only). */
+  files?: FileMeta[];
+  /** Legacy single-file field (exchanges stored before multi-image). */
+  file?: FileMeta | null;
   note: string;
   startedAt: number;
   durationMs?: number;
@@ -33,11 +42,12 @@ export function formatExchange(x: LlmExchange | null): string {
   if (!x) {
     return 'No LLM exchange in this session yet.\nAttach a screenshot (or write a note) and press Recognise.';
   }
+  const files = x.files ?? (x.file ? [x.file] : []);
   const lines = [
     `Parser: ${x.provider} ${x.model}`,
-    x.file
-      ? `File: ${x.file.name} (${x.file.type || 'unknown type'}, ${(x.file.size / 1024).toFixed(1)} KB)`
-      : 'File: (none — note only)',
+    files.length
+      ? `Files: ${files.map((f) => `${f.name || 'image'} (${f.type || 'unknown type'}, ${(f.size / 1024).toFixed(1)} KB)`).join(', ')}`
+      : 'Files: (none — note only)',
     `Note: ${x.note.trim() || '(none)'}`,
     `When: ${new Date(x.startedAt).toLocaleString()}${x.durationMs != null ? ` · took ${(x.durationMs / 1000).toFixed(1)} s` : ''}`,
     `Status: ${x.status ?? '—'}`,

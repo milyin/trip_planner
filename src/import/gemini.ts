@@ -46,16 +46,16 @@ function hotelSchema({ Type }: GenaiModule): unknown {
 
 /** One structured-output generateContent request; returns the parsed JSON. */
 async function request(
-  { file, note }: ExtractInput,
+  { files, note }: ExtractInput,
   parser: ResolvedParser,
   basePrompt: string,
   rootSchema: (m: GenaiModule) => unknown,
 ): Promise<unknown> {
-  if (file) assertFileSize(file);
+  for (const f of files) assertFileSize(f);
   const ex = beginExchange({
     provider: parser.provider,
     model: parser.model,
-    file: file ? { name: file.name, type: file.type, size: file.size } : null,
+    files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
     note,
     startedAt: Date.now(),
   });
@@ -72,7 +72,7 @@ async function request(
     contents: [
       {
         role: 'user',
-        parts: [...(file ? [{ inlineData: `<${file.size} bytes elided>` }] : []), { text: prompt }],
+        parts: [...files.map((f) => ({ inlineData: `<${f.size} bytes elided>` })), { text: prompt }],
       },
     ],
     config,
@@ -82,19 +82,14 @@ async function request(
     const ai = new GoogleGenAI({ apiKey: parser.apiKey });
     let text: string | undefined;
     try {
+      const imageParts = await Promise.all(
+        files.map(async (f) => ({
+          inlineData: { mimeType: f.type || 'application/octet-stream', data: await fileToBase64(f) },
+        })),
+      );
       const res = await ai.models.generateContent({
         model: parser.model,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              ...(file
-                ? [{ inlineData: { mimeType: file.type || 'application/octet-stream', data: await fileToBase64(file) } }]
-                : []),
-              { text: prompt },
-            ],
-          },
-        ],
+        contents: [{ role: 'user', parts: [...imageParts, { text: prompt }] }],
         config,
       });
       ex.status = 'HTTP 200';

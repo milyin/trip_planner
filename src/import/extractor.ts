@@ -36,10 +36,10 @@ export interface ExtractedHotel {
   currency?: CurrencyCode;
 }
 
-/** What the user provides for recognition: a screenshot, a free-form note,
- * or both. */
+/** What the user provides for recognition: screenshots (possibly several,
+ * e.g. a listing plus a details view), a free-form note, or both. */
 export interface ExtractInput {
-  file: File | null;
+  files: File[];
   note: string;
 }
 
