@@ -6,20 +6,33 @@ import {
 } from '../domain/item';
 import { classifyGap, conflictOf, gapNights, gapRemote, listItems, planItems, planTotals } from '../domain/plan';
 import { currencySymbol } from '../domain/transport';
-import { emitChange, findItem, state } from '../state/store';
+import { deleteSegment, emitChange, findItem, state } from '../state/store';
 import { itemCard } from './cards';
 import { byId, mkBtn } from './dom';
 import { openHotelModal, openModal } from './modal';
 
+/** Wire the Segments panel-head action buttons (once, at startup). */
+export function wirePanelActions(): void {
+  byId('phAddLeg').onclick = () => openModal(null);
+  byId('phAddHotel').onclick = () => openHotelModal(null);
+  byId('phDelete').onclick = () => {
+    if (!state.selected) return;
+    deleteSegment(state.selected);
+    emitChange();
+  };
+}
+
 /** Render the Segments panel (not-yet-planned records). */
 export function renderSegments(): void {
+  // The head's delete button follows the selection (re-rendered on every change).
+  byId<HTMLButtonElement>('phDelete').disabled = !state.selected;
   const rl = byId('segmentsList');
   rl.innerHTML = '';
   const list = listItems(state.items);
   byId('segmentsCount').textContent = String(list.length);
   byId('tabSegCount').textContent = String(list.length);
   if (!list.length) {
-    rl.innerHTML = `<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a leg or hotel via the ☰ menu.</div>`;
+    rl.innerHTML = `<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a leg or hotel via the panel buttons or ☰ menu.</div>`;
   }
   list.forEach((r) => rl.appendChild(itemCard(r, 'list')));
 }

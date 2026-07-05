@@ -7,7 +7,7 @@ import { settings } from './state/settings';
 import { emitChange, state, subscribe } from './state/store';
 import { wireGlobal } from './ui/global';
 import { wireModal } from './ui/modal';
-import { setupDrop } from './ui/panels';
+import { setupDrop, wirePanelActions } from './ui/panels';
 import { wireParserSettings } from './ui/parserSettings';
 import { renderAll } from './ui/render';
 import { setTab, syncMode, wireTabbar } from './ui/tabbar';
@@ -22,6 +22,7 @@ wireTabbar();
 wireGlobal();
 setupDrop('segmentsList', 'segments');
 setupDrop('planList', 'plan');
+wirePanelActions();
 applyTheme(settings.theme);
 
 subscribe(renderAll);
