@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
-  <script type="module" crossorigin src="/trip_planner/assets/index-BWZjA8qs.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-D2EMeNNH.css">
+  <script type="module" crossorigin src="/trip_planner/assets/index-C-K-pdGO.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-0G40w64j.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -89,10 +89,10 @@
     <div class="modal-body" id="legBody">
       <div class="leg col">Departure</div>
       <div class="leg col">Arrival</div>
-      <div class="field"><label>City</label><input id="fDepCity" placeholder="Marseille"></div>
-      <div class="field"><label>City</label><input id="fArrCity" placeholder="Paris"></div>
-      <div class="field"><label>Address / stop</label><input id="fDepAddr" placeholder="Airport"></div>
-      <div class="field"><label>Address / stop</label><input id="fArrAddr" placeholder="CDG"></div>
+      <div class="field"><label>City <button type="button" class="geo-chip" id="depCityGeo"></button></label><input id="fDepCity" placeholder="Marseille"></div>
+      <div class="field"><label>City <button type="button" class="geo-chip" id="arrCityGeo"></button></label><input id="fArrCity" placeholder="Paris"></div>
+      <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="depAddrGeo"></button></label><input id="fDepAddr" placeholder="Airport"></div>
+      <div class="field"><label>Address / stop <button type="button" class="geo-chip" id="arrAddrGeo"></button></label><input id="fArrAddr" placeholder="CDG"></div>
       <div class="field"><label>Time</label><input id="fDepTime" type="datetime-local"></div>
       <div class="field"><label>Time</label><input id="fArrTime" type="datetime-local"></div>
       <div class="leg">Details</div>
@@ -108,8 +108,8 @@
     <div class="modal-body" id="hotelBody" style="display:none">
       <div class="leg">Stay</div>
       <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
-      <div class="field"><label>City</label><input id="hCity" placeholder="Paris"></div>
-      <div class="field"><label>Address</label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
+      <div class="field"><label>City <button type="button" class="geo-chip" id="hotCityGeo"></button></label><input id="hCity" placeholder="Paris"></div>
+      <div class="field"><label>Address <button type="button" class="geo-chip" id="hotAddrGeo"></button></label><input id="hAddr" placeholder="12 Rue de Rivoli"></div>
       <div class="field"><label>Check-in</label><input id="hIn" type="datetime-local"></div>
       <div class="field"><label>Check-out</label><input id="hOut" type="datetime-local"></div>
       <div class="field"><label>Price</label><input id="hCost" type="number" min="0" step="0.01" placeholder="240.00"></div>
