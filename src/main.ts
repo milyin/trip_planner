@@ -2,14 +2,14 @@ import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
 import { backfillCoordinates } from './domain/geocode';
-import { initMap } from './map/mapView';
+import { initMap, resetInitialFit, setShowPool } from './map/mapView';
 import { settings } from './state/settings';
 import { importSharedFromHash } from './state/share';
 import { emitChange, reloadActiveWorkspace, state, subscribe } from './state/store';
 import { wireGlobal } from './ui/global';
 import { applyIcons } from './ui/icons';
 import { wireModal } from './ui/modal';
-import { setupDrop, wirePanelActions } from './ui/panels';
+import { setupDrop, syncEyeButton, wirePanelActions } from './ui/panels';
 import { wireParserSettings } from './ui/parserSettings';
 import { renderAll } from './ui/render';
 import { setTab, syncMode, wireTabbar } from './ui/tabbar';
@@ -41,6 +41,13 @@ function handleShareHash(): Promise<boolean> {
     if (imported) {
       reloadActiveWorkspace();
       refreshWorkspaceUi();
+      // Present a shared plan cleanly: hide the pool (plan-only map), re-fit to
+      // the imported itinerary, and land on the Plan tab (also matters when a
+      // link is pasted into an already-open app on another tab).
+      setShowPool(false);
+      syncEyeButton();
+      resetInitialFit();
+      setTab('plan');
       emitChange();
     }
     return imported;
