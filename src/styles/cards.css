@@ -35,11 +35,11 @@ body.mobile .leg-tr .co{text-decoration:underline; text-decoration-style:dotted;
 
 /* hotel (stay) card: name | price on top, location · link, dates | nights */
 .hotel-grid{display:grid; grid-template-columns:minmax(0,1fr) auto; column-gap:10px; row-gap:3px; margin-left:6px; align-items:center}
-.hotel-grid > .hc1{grid-column:1; min-width:0; text-align:left; justify-self:start}
+.hotel-grid > .hc1{grid-column:1; min-width:0; text-align:left; justify-self:stretch}
 .hotel-grid > .hc2{grid-column:2; justify-self:end; text-align:right; white-space:nowrap}
 .hotel-grid > .hr1{grid-row:1} .hotel-grid > .hr2{grid-row:2} .hotel-grid > .hr3{grid-row:3}
 .hotel-name{font-weight:700; font-size:14px; display:flex; align-items:center; gap:6px; min-width:0}
-.hotel-name .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.hotel-name .nm{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .hotel-loc{color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .hotel-dates{color:var(--muted); font-size:12px; white-space:nowrap}
 .hotel-nights{color:var(--muted); font-size:12px; white-space:nowrap}

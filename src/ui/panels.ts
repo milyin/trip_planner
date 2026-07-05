@@ -6,9 +6,11 @@ import {
 } from '../domain/item';
 import { classifyGap, conflictOf, gapNights, gapRemote, listItems, planItems, planTotals } from '../domain/plan';
 import { currencySymbol } from '../domain/transport';
+import { togglePool } from '../map/mapView';
 import { deleteSegment, emitChange, findItem, state } from '../state/store';
 import { itemCard } from './cards';
 import { byId, mkBtn } from './dom';
+import { getIcon } from './icons';
 import { openHotelModal, openModal } from './modal';
 
 /** Wire the Segments panel-head action buttons (once, at startup). */
@@ -19,6 +21,13 @@ export function wirePanelActions(): void {
     if (!state.selected) return;
     deleteSegment(state.selected);
     emitChange();
+  };
+  const eye = byId('phToggleMap');
+  eye.onclick = () => {
+    const shown = togglePool();
+    eye.innerHTML = getIcon(shown ? 'eye' : 'eye-off');
+    eye.setAttribute('aria-pressed', shown ? 'false' : 'true');
+    eye.title = shown ? 'Hide available segments on map' : 'Show available segments on map';
   };
 }
 

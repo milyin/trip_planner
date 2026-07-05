@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import bed from '../icons/bed.svg?raw';
 import type { LatLng, TransportKind } from '../domain/types';
 import { fmtTime, money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
@@ -14,6 +15,16 @@ let darkTiles: L.TileLayer;
 let lightTiles: L.TileLayer;
 let initialFit = true;
 let mobileFitted = false;
+// When false, available (not-in-plan) records are hidden from the map so only
+// the plan shows — toggled by the eye button in the Segments panel head.
+let showPool = true;
+
+/** Toggle map visibility of not-in-plan records; redraws and returns the new state. */
+export function togglePool(): boolean {
+  showPool = !showPool;
+  drawMap();
+  return showPool;
+}
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -126,7 +137,12 @@ function arcPoints(a: LatLng, b: LatLng, seed: number): LatLng[] {
 
 /** Create the Leaflet map, tile layers, and global map interactions. */
 export function initMap(): void {
-  map = L.map('map', { worldCopyJump: true, minZoom: 2, zoomControl: true }).setView([45, 6], 5);
+  map = L.map('map', {
+    worldCopyJump: true, minZoom: 2, zoomControl: true,
+    // finer zoom granularity: half-step +/- buttons, quarter-step fit snapping,
+    // and a slower scroll wheel so an exact scale is easier to reach
+    zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 120,
+  }).setView([45, 6], 5);
   darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap · © CARTO',
   });
@@ -169,12 +185,15 @@ export function drawMap(): void {
   const arrowReg = new Map<string, string>();
 
   state.items.forEach((r) => {
+    // "eye" toggle: hide available (not-in-plan) records, but keep the selected
+    // one visible so revealing a card from the pool still works
+    const hidden = !showPool && !r.inPlan && state.selected !== r.id;
     if (r.kind === 'hotel') {
-      if (!r.ll) return;
+      if (!r.ll || hidden) return;
       const isSel = state.selected === r.id;
       const cls = 'hotel-pin' + (r.inPlan ? ' plan' : '') + (isSel ? ' sel' : '');
       const m = L.marker(r.ll, {
-        icon: L.divIcon({ html: '🏨', className: cls, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        icon: L.divIcon({ html: bed, className: cls, iconSize: [26, 26], iconAnchor: [13, 13] }),
         opacity: r.inPlan ? 1 : 0.65,
         zIndexOffset: r.inPlan ? 600 : 300,
       }).addTo(segmentLayer);
@@ -187,7 +206,7 @@ export function drawMap(): void {
       return;
     }
 
-    if (!r.dep.ll || !r.arr.ll) return;
+    if (!r.dep.ll || !r.arr.ll || hidden) return;
     const col = transportColor(r.transport);
     const conflict = conflictOf(state.items, r);
     const isSel = state.selected === r.id;
@@ -260,7 +279,7 @@ export function drawMap(): void {
   });
 
   if (initialFit && bounds.length) {
-    map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], maxZoom: 6 });
+    map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 6 });
     initialFit = false;
   }
   buildLegend(usedTransports);
@@ -361,7 +380,7 @@ export function fitAll(): void {
   // The panel may have been resized/shown since the last draw — Leaflet must
   // re-measure the container or it fits to a stale (smaller) viewport.
   map.invalidateSize();
-  map.fitBounds(L.latLngBounds(b), { padding: [40, 40], maxZoom: 12 });
+  map.fitBounds(L.latLngBounds(b), { padding: [20, 20], maxZoom: 13 });
 }
 
 /** Recompute map size + legend (after a resize or layout change). */
