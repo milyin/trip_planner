@@ -12,6 +12,7 @@ const LEG_RULES = `- If the input shows several alternatives, extract the one th
 - This is a planner for FUTURE trips. If the year is not printed, assume the closest matching date AFTER the current date; if a weekday is printed, pick the occurrence falling on that weekday.
 - "addr" is the airport, station or stop name (e.g. "CDG", "St-Charles"), not a street address, and not a repetition of the city name.
 - "company" is the carrier operating the leg.
+- "transfers" is the number of transfers/connections shown for the leg (0 for direct). When intermediate cities, stations or transfer durations are shown, describe them in free form in "transfersInfo" (e.g. "via Lyon Part-Dieu, 1h 20m").
 - If one price covers the whole itinerary, put it on the first leg and 0 on the rest.
 - Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
 - Omit any field the input does not state; never invent values.`;

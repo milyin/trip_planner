@@ -20,6 +20,11 @@ export function loadItems(): Segment[] {
         rec.attachment = rec.link?.startsWith('attachment:') ? rec.link : null;
       }
       delete rec.link;
+      // Transfers fields arrived with #26.
+      if (rec.kind === 'leg') {
+        if (rec.transfers === undefined) rec.transfers = 0;
+        if (rec.transfersInfo === undefined) rec.transfersInfo = '';
+      }
     }
     return items;
   } catch {

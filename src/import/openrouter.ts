@@ -18,6 +18,8 @@ const LEG_SCHEMA = {
     arrTime: { type: 'string', description: 'Arrival time, YYYY-MM-DDTHH:MM, local' },
     transport: { type: 'string', enum: TRANSPORTS },
     company: { type: 'string', description: 'Carrier name' },
+    transfers: { type: 'number', description: 'Number of transfers (0 = direct)' },
+    transfersInfo: { type: 'string', description: 'Transfer details: intermediate cities, durations' },
     cost: { type: 'number', description: 'Price as a number' },
     currency: { type: 'string', enum: CURRENCIES },
   },

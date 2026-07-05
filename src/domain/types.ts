@@ -26,6 +26,10 @@ export interface Leg {
   company: string;
   cost: number;
   currency: CurrencyCode;
+  /** Number of transfers/connections on this leg (0 = direct). */
+  transfers: number;
+  /** Free-form transfer details (intermediate cities, durations, …). */
+  transfersInfo: string;
   /** `attachment:<id>` reference to the locally stored ticket image, if any. */
   attachment: string | null;
   inPlan: boolean;

@@ -19,6 +19,7 @@ export interface LegPrefill {
   depCity?: string; depAddr?: string; depTime?: string;
   arrCity?: string; arrAddr?: string; arrTime?: string;
   transport?: TransportKind; company?: string; cost?: number; currency?: CurrencyCode;
+  transfers?: number; transfersInfo?: string;
   /** Ticket image carried into the dialog (queued multi-leg recognition). */
   file?: File;
 }
@@ -265,6 +266,8 @@ function fillLegFields(leg: ExtractedLeg): void {
   set('fArrTime', leg.arrTime);
   set('fTransport', leg.transport);
   set('fCompany', leg.company);
+  set('fTransfers', leg.transfers);
+  set('fTransfersInfo', leg.transfersInfo);
   set('fCost', leg.cost);
   set('fCur', leg.currency);
   bufHint();
@@ -407,6 +410,8 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   setVal('fArrTime', r ? r.arr.time : P.arrTime ?? '2026-05-01T14:00');
   setVal('fTransport', r ? r.transport : P.transport ?? 'Plane');
   setVal('fCompany', r ? r.company : P.company ?? '');
+  setVal('fTransfers', r ? r.transfers : P.transfers ?? 0);
+  setVal('fTransfersInfo', r ? r.transfersInfo : P.transfersInfo ?? '');
   setVal('fCost', r ? r.cost : P.cost ?? '');
   setVal('fCur', r ? r.currency : P.currency ?? 'EUR');
   setVal('fNote', '');
@@ -510,6 +515,8 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
     arr: { city: ac, addr: getVal('fArrAddr'), time: getVal('fArrTime'), ll: placeLl('arrCity', 'arrAddr') },
     transport: getVal('fTransport') as TransportKind,
     company: getVal('fCompany'),
+    transfers: Math.max(0, Math.round(Number(getVal('fTransfers') || 0))),
+    transfersInfo: getVal('fTransfersInfo').trim(),
     cost: Number(getVal('fCost') || 0),
     currency: getVal('fCur') as CurrencyCode,
     attachment,

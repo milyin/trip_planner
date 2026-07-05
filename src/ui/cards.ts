@@ -107,13 +107,14 @@ function legCard(r: Leg, mode: CardMode): HTMLDivElement {
       <div class="card-cost c2 r2" title="Fare">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached ticket image">🎫</span>' : ''}</div>
       <div class="leg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr || '—'}</div>
       <div class="leg-sub c1 r3" title="${esc(fmtTime(r.dep.time))}">${fmtTime(r.dep.time)}</div>
-      <div class="leg-sub c2 r3">${tripDur(r)}</div>
+      <div class="leg-sub c2 r3" title="${esc(r.transfersInfo || '')}">${tripDur(r)}${r.transfers > 0 ? ` · ${r.transfers}⇄` : ''}</div>
       <div class="leg-sub c3 r3" title="${esc(fmtTime(r.arr.time))}">${fmtTime(r.arr.time)}</div>
     </div>
     ${disabled ? `<div class="warn">⚠ Overlaps plan: ${conflict!.dep.city} → ${conflict!.arr.city}</div>` : ''}
     <div class="card-actions"></div>`;
   el.title =
     `${r.dep.city} → ${r.arr.city}  ·  ${r.transport}${r.company ? ' · ' + r.company : ''}  ·  ${money(r)}  ·  ⏱ ${tripDur(r)}\n` +
+    (r.transfers > 0 ? `Transfers: ${r.transfers}${r.transfersInfo ? ' — ' + r.transfersInfo : ''}\n` : '') +
     `Depart: ${fmtTime(r.dep.time)} — ${r.dep.city}, ${r.dep.addr}\n` +
     `Arrive: ${fmtTime(r.arr.time)} — ${r.arr.city}, ${r.arr.addr}\n` +
     `(Click to select · double-click to edit · drag to move)`;
