@@ -81,9 +81,14 @@ export function renderPlan(): void {
       } else if (c.kind === 'long') {
         status = `<span class="status">⚠ Long layover</span>`;
       }
+      // When the gap stays in one place (e.g. after a hotel) show the city once
+      // instead of "Marseille → Marseille".
+      const from = endCity(prev);
+      const to = startCity(r);
+      const route = from.trim().toLowerCase() === to.trim().toLowerCase() ? from : `${from} → ${to}`;
       g.innerHTML = `<span class="pill">⏱ <b>${fmtDur(startMs(r) - endMs(prev))}</b></span>
         <span class="pill">📏 <b>${dist != null ? Math.round(dist) + ' km' : '—'}</b></span>
-        <span style="color:var(--faint)">${endCity(prev)} → ${startCity(r)}</span> ${status}`;
+        <span style="color:var(--faint)">${route}</span> ${status}`;
       if (c.kind !== 'bad') {
         const nN = gapNights(prev, r);
         const wantHotel = prev.kind !== 'hotel' && r.kind !== 'hotel' && nN >= 1; // overnight gap, no hotel yet
