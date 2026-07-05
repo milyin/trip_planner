@@ -1,9 +1,9 @@
 import type { ResolvedParser } from '../state/settings';
 import { beginExchange } from './debugLog';
 import {
-  AuthError, type ExtractInput, type ExtractedHotel, type ExtractedLeg, type LegExtractor,
+  AuthError, type AutoExtract, type ExtractInput, type ExtractedHotel, type ExtractedLeg, type LegExtractor,
 } from './extractor';
-import { assertFileSize, buildPrompt, CURRENCIES, fileToBase64, HOTEL_PROMPT, PROMPT, TRANSPORTS } from './shared';
+import { assertFileSize, AUTO_PROMPT, buildPrompt, CURRENCIES, fileToBase64, HOTEL_PROMPT, PROMPT, TRANSPORTS } from './shared';
 
 type GenaiModule = typeof import('@google/genai');
 
@@ -141,5 +141,22 @@ export const geminiExtractor: LegExtractor = {
     }))) as { hotel?: ExtractedHotel };
     if (!result.hotel || !Object.keys(result.hotel).length) throw new Error('No hotel found in the input.');
     return result.hotel;
+  },
+
+  async extractAuto(input: ExtractInput, parser: ResolvedParser): Promise<AutoExtract> {
+    const result = (await request(input, parser, AUTO_PROMPT, (m) => ({
+      type: m.Type.OBJECT,
+      properties: {
+        kind: { type: m.Type.STRING, enum: ['legs', 'hotel'] },
+        legs: { type: m.Type.ARRAY, items: legSchema(m) },
+        hotel: hotelSchema(m),
+      },
+      required: ['kind'],
+    }))) as { kind?: string; legs?: ExtractedLeg[]; hotel?: ExtractedHotel };
+    if (result.kind === 'hotel' && result.hotel && Object.keys(result.hotel).length) {
+      return { hotel: result.hotel };
+    }
+    if (result.legs?.length) return { legs: result.legs };
+    throw new Error('Neither transport legs nor a hotel found in the input.');
   },
 };

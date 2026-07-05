@@ -4,11 +4,11 @@ import { fmtDur } from '../domain/format';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
-import { runHotelRecognition, runRecognition } from '../import/recognise';
+import { runAutoRecognition, runHotelRecognition, runRecognition } from '../import/recognise';
 import {
   deleteAttachment, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
 } from '../state/attachments';
-import { parserName, resolveParser, saveSettings, settings } from '../state/settings';
+import { parserName, resolveParser, saveSettings, settings, type ResolvedParser } from '../state/settings';
 import { deleteSegment, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
 import { byId, getVal, setVal } from './dom';
@@ -27,6 +27,8 @@ export interface HotelPrefill {
   inPlan?: boolean;
   name?: string; city?: string; addr?: string;
   checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode;
+  /** Booking image carried into the dialog (auto-import from paste). */
+  file?: File;
 }
 
 let editingId: string | null = null;
@@ -102,8 +104,8 @@ function showBody(kind: 'leg' | 'hotel'): void {
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
     kind === 'hotel'
-      ? '📎 Drop a screenshot of a hotel listing or booking here, or click to choose'
-      : '📎 Drop a screenshot of a flight / train listing here, or click to choose';
+      ? '📎 Drop or paste (Ctrl+V) a screenshot of a hotel listing or booking, or click to choose'
+      : '📎 Drop or paste (Ctrl+V) a screenshot of a flight / train listing, or click to choose';
   applyTabs();
 }
 
@@ -270,11 +272,13 @@ function fillLegFields(leg: ExtractedLeg): void {
   for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
 
-async function recognise(): Promise<void> {
+/** Resolve the active parser, walking the user to the LLM configuration when
+ * none is usable yet. Returns `null` when still unconfigured. */
+async function ensureParser(): Promise<ResolvedParser | null> {
   if (!settings.parsers.length) {
     await openParserSettings();
     refreshParserCombo();
-    if (!settings.parsers.length) return;
+    if (!settings.parsers.length) return null;
   }
   const entry = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
   const parser = resolveParser(entry);
@@ -282,8 +286,14 @@ async function recognise(): Promise<void> {
     alert('The selected parser has no account key — fill it in the LLM configuration.');
     await openParserSettings();
     refreshParserCombo();
-    return;
+    return null;
   }
+  return parser;
+}
+
+async function recognise(): Promise<void> {
+  const parser = await ensureParser();
+  if (!parser) return;
   const note = getVal('fNote');
   let file = pendingFile;
   if (!file && existingAttachment) {
@@ -322,6 +332,34 @@ async function recognise(): Promise<void> {
 function recogniseFailed(): void {
   byId('llmDump').textContent = formatExchange(dialogExchange);
   byId<HTMLDetailsElement>('llmDetails').open = true;
+  activeTab = 'rec';
+  applyTabs();
+}
+
+/** Image pasted with no dialog open: auto-detect leg vs hotel, then open the
+ * matching dialog with the image attached and the fields filled. */
+export async function importPastedImage(file: File): Promise<void> {
+  const parser = await ensureParser();
+  if (!parser) return;
+  const result = await runAutoRecognition(file, '', parser);
+  if (!result) {
+    // Open a blank leg dialog with the image so the exchange is inspectable
+    // and the user can adjust the note and retry.
+    openModal(null, { file });
+    dialogExchange = lastExchange();
+    recogniseFailed();
+    return;
+  }
+  if ('hotel' in result) {
+    openHotelModal(null, { ...result.hotel, file });
+  } else {
+    const [first, ...rest] = result.legs;
+    openModal(null, { ...first, file });
+    queuedLegs = rest;
+    queuedFile = rest.length ? file : null;
+  }
+  // The exchange belongs to the record(s) just opened; openModal cleared it.
+  dialogExchange = lastExchange();
 }
 
 /** Fill the hotel form from an extracted stay (only fields the model set). */
@@ -388,7 +426,7 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   newInPlan = P.inPlan === true;
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const h = (id ? findItem(id) : null) as Hotel | null;
-  pendingFile = null;
+  pendingFile = P.file ?? null;
   existingAttachment = h ? h.attachment : null;
   dialogExchange = null;
   if (id) {
@@ -411,7 +449,7 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   refreshParserCombo();
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
   byId('overlay').classList.add('open');
-  renderPreview(existingAttachment);
+  renderPreview(pendingFile ?? existingAttachment);
 }
 
 export function closeModal(): void {
@@ -593,6 +631,26 @@ export function wireModal(): void {
     zone.classList.remove('dragover');
     const f = e.dataTransfer?.files?.[0];
     if (f) setPendingFile(f);
+  });
+  // Paste (Ctrl/Cmd+V) an image — e.g. a screenshot taken straight to the
+  // clipboard. With the edit dialog open (either tab) it becomes the dialog's
+  // image; in the main window it auto-detects leg vs hotel and opens the
+  // matching dialog prefilled. Other dialogs / busy states are left alone.
+  document.addEventListener('paste', (e) => {
+    const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'));
+    const raw = item?.getAsFile();
+    if (!raw) return;
+    const f = new File([raw], raw.name || 'pasted-image.png', { type: raw.type });
+    if (byId('overlay').classList.contains('open')) {
+      e.preventDefault();
+      setPendingFile(f);
+      // make the pasted image visible right away
+      activeTab = 'rec';
+      applyTabs();
+    } else if (!document.querySelector('.overlay.open') && byId('importBusy').style.display !== 'flex') {
+      e.preventDefault();
+      void importPastedImage(f);
+    }
   });
   byId('recogniseBtn').onclick = () => void recognise();
   byId('cfgParsersBtn').onclick = async () => {

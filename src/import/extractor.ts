@@ -39,10 +39,15 @@ export interface ExtractInput {
   note: string;
 }
 
+/** Result of an auto-detect extraction: transport legs or one hotel stay. */
+export type AutoExtract = { legs: ExtractedLeg[] } | { hotel: ExtractedHotel };
+
 /** A pluggable LLM backend that turns the input into records. */
 export interface LegExtractor {
   extract(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedLeg[]>;
   extractHotel(input: ExtractInput, parser: ResolvedParser): Promise<ExtractedHotel>;
+  /** Decide leg-vs-hotel from the input itself, then extract accordingly. */
+  extractAuto(input: ExtractInput, parser: ResolvedParser): Promise<AutoExtract>;
 }
 
 /** Thrown when the provider rejects the parser's API key. */

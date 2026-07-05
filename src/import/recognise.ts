@@ -1,6 +1,6 @@
 import type { ResolvedParser } from '../state/settings';
 import { byId } from '../ui/dom';
-import { AuthError, getExtractor, type ExtractedHotel, type ExtractedLeg } from './extractor';
+import { AuthError, getExtractor, type AutoExtract, type ExtractedHotel, type ExtractedLeg } from './extractor';
 
 /** Busy indicator + user-facing error handling around one extraction call. */
 async function guarded<T>(file: File | null, parser: ResolvedParser, work: () => Promise<T>): Promise<T | null> {
@@ -31,6 +31,14 @@ export const runRecognition = (
   note: string,
   parser: ResolvedParser,
 ): Promise<ExtractedLeg[] | null> => guarded(file, parser, () => getExtractor(parser).extract({ file, note }, parser));
+
+/** Auto-detect leg vs hotel and extract; `null` on failure. */
+export const runAutoRecognition = (
+  file: File | null,
+  note: string,
+  parser: ResolvedParser,
+): Promise<AutoExtract | null> =>
+  guarded(file, parser, () => getExtractor(parser).extractAuto({ file, note }, parser));
 
 /** Recognise one hotel stay; `null` on failure (exchange dump has details). */
 export const runHotelRecognition = (
