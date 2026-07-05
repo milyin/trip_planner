@@ -1,12 +1,13 @@
 import type { Leg, Segment } from '../domain/types';
 import { seedItems } from './seed';
+import { activeWorkspace, itemsKey } from './workspaces';
 
-const KEY = 'tripPlanner.items.v1';
-
-/** Load persisted trip items, seeding the demo data on first run. */
+/** Load the active workspace's items. A missing key means a fresh install
+ * (the legacy migration and explicit workspace creation both write one), so
+ * only then is the demo itinerary seeded. */
 export function loadItems(): Segment[] {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(itemsKey(activeWorkspace().id));
     if (!raw) return seedItems();
     const items = JSON.parse(raw) as Segment[];
     for (const it of items) {
@@ -28,7 +29,7 @@ export function loadItems(): Segment[] {
 
 export function saveItems(items: Segment[]): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(items));
+    localStorage.setItem(itemsKey(activeWorkspace().id), JSON.stringify(items));
   } catch {
     /* quota exceeded or storage disabled — items stay in-memory */
   }

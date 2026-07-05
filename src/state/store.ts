@@ -65,3 +65,11 @@ export function deleteItemById(id: string): void {
   state.items = state.items.filter((x) => x.id !== id);
   state.selected = null;
 }
+
+/** Reload the (possibly different) active workspace's items into the state.
+ * Callers emitChange() afterwards. */
+export function reloadActiveWorkspace(): void {
+  state.items = loadItems();
+  state.selected = null;
+  state.draggedId = null;
+}
