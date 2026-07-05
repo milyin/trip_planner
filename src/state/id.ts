@@ -1,4 +1,6 @@
-let seq = 1;
-
-/** Monotonic id generator for new records (`r1`, `r2`, …). */
-export const nextId = (): string => 'r' + seq++;
+/** Collision-proof id for new records. The previous session counter ('r1',
+ * 'r2', …) restarted on every page load while stored records kept their old
+ * ids — upsertItem then silently REPLACED old records with new ones. The
+ * timestamp+random shape matches attachment and workspace ids. */
+export const nextId = (): string =>
+  'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
