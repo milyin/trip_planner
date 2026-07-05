@@ -16,5 +16,9 @@ body[data-theme="light"] .dot.white{background:#111827; box-shadow:0 0 0 2px rgb
 .head-actions{display:inline-flex; gap:4px; margin-left:8px}
 .head-actions .btn.icon{width:26px; height:26px; padding:0}
 .head-actions svg{width:15px; height:15px; display:block}
+/* Map panel-head Fit button: reset the global .btn.icon padding (which, with
+   border-box, would crush the icon horizontally) and give it a clear glyph. */
+.panel-head > .btn.icon{width:28px; height:28px; padding:0; flex:0 0 auto}
+.panel-head > .btn.icon svg{width:16px; height:16px; display:block; flex:0 0 auto}
 .head-actions #phDelete:not(:disabled){color:var(--danger);
   border-color:color-mix(in srgb, var(--danger) 40%, var(--border))}
