@@ -6,14 +6,16 @@ import { initMap } from './map/mapView';
 import { settings } from './state/settings';
 import { emitChange, state, subscribe } from './state/store';
 import { wireGlobal } from './ui/global';
+import { applyIcons } from './ui/icons';
 import { wireModal } from './ui/modal';
-import { setupDrop } from './ui/panels';
+import { setupDrop, wirePanelActions } from './ui/panels';
 import { wireParserSettings } from './ui/parserSettings';
 import { renderAll } from './ui/render';
 import { setTab, syncMode, wireTabbar } from './ui/tabbar';
 import { applyTheme } from './ui/theme';
 import { wireTopbar } from './ui/topbar';
 
+applyIcons();
 initMap();
 wireTopbar();
 wireModal();
@@ -22,6 +24,7 @@ wireTabbar();
 wireGlobal();
 setupDrop('segmentsList', 'segments');
 setupDrop('planList', 'plan');
+wirePanelActions();
 applyTheme(settings.theme);
 
 subscribe(renderAll);

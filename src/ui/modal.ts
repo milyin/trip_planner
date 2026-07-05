@@ -6,10 +6,10 @@ import { formatExchange, lastExchange, type LlmExchange } from '../import/debugL
 import type { ExtractedLeg } from '../import/extractor';
 import { runRecognition } from '../import/recognise';
 import {
-  deleteAttachment, deleteExchange, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
+  deleteAttachment, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
 } from '../state/attachments';
 import { parserName, resolveParser, saveSettings, settings } from '../state/settings';
-import { deleteItemById, emitChange, findItem, upsertItem } from '../state/store';
+import { deleteSegment, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
 import { byId, getVal, setVal } from './dom';
 import { openParserSettings } from './parserSettings';
@@ -465,15 +465,7 @@ function saveHotel(): void {
 }
 
 function deleteItem(): void {
-  if (editingId) {
-    const r = findItem(editingId);
-    // Deleting the record deletes its locally stored image and exchange too.
-    if (r && r.kind === 'leg') {
-      void deleteAttachment(r.attachment);
-      void deleteExchange(r.id);
-    }
-    deleteItemById(editingId);
-  }
+  if (editingId) deleteSegment(editingId);
   closeModal();
   emitChange();
 }
