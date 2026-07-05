@@ -25,6 +25,10 @@ export function selectFromMap(r: Segment): void {
       setTab(tab);
       scrollSelectedIntoView();
     }, 0);
+  } else {
+    // Desktop: both lists are visible, but the selected card may be scrolled
+    // off in a long list — bring it into view (emitChange re-rendered it).
+    scrollSelectedIntoView();
   }
 }
 
