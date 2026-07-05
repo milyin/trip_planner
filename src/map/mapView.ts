@@ -70,16 +70,56 @@ function arrowMarker(color: string, halo: string, reg: Map<string, string>): str
   return id;
 }
 
+/** Deterministic pseudo-random in [0,1) from a leg id — the leg's "internal
+ * random value" that varies its arc radius, stable across sessions. FNV-1a
+ * plus a murmur-style finalizer: short sequential ids ("r1", "r2", …) would
+ * otherwise cluster and give near-identical arcs. */
+function idRand(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
 /**
- * Midpoint of the dep→arr leg in the map's projected (pixel) space, returned as a
- * LatLng. Inserted as a middle vertex so the arrowhead (marker-mid) sits at the visual
- * centre of the straight line. Using the projected — not the lat/lng — midpoint keeps
- * the inserted vertex exactly on the drawn line, so the leg stays straight at any zoom.
+ * Sample a quadratic-bezier arc between two points in the map's projected
+ * (pixel) space. The control point sits perpendicular to the chord at its
+ * midpoint; the bulge varies per leg (`seed`) and alternates side with the
+ * seed's parity, so several legs between the same cities separate visually.
+ * An odd sample count guarantees a true middle vertex for the direction
+ * arrowhead (marker-mid).
  */
-function projectedMidpoint(a: LatLng, b: LatLng): LatLng {
-  const mid = map.project(a).add(map.project(b)).divideBy(2);
-  const ll = map.unproject(mid);
-  return [ll.lat, ll.lng];
+function arcPoints(a: LatLng, b: LatLng, seed: number): LatLng[] {
+  const pa = map.project(a);
+  const pb = map.project(b);
+  const dx = pb.x - pa.x;
+  const dy = pb.y - pa.y;
+  const dist = Math.hypot(dx, dy) || 1;
+  const side = seed < 0.5 ? 1 : -1;
+  const bulge = dist * (0.08 + 0.2 * seed) * side;
+  // unit perpendicular to the chord
+  const px = -dy / dist;
+  const py = dx / dist;
+  const cx = (pa.x + pb.x) / 2 + px * bulge;
+  const cy = (pa.y + pb.y) / 2 + py * bulge;
+  const N = 25; // odd point count → sample N>>1 is the arc's apex
+  const pts: LatLng[] = [];
+  for (let i = 0; i < N; i++) {
+    const t = i / (N - 1);
+    const mt = 1 - t;
+    const x = mt * mt * pa.x + 2 * mt * t * cx + t * t * pb.x;
+    const y = mt * mt * pa.y + 2 * mt * t * cy + t * t * pb.y;
+    const ll = map.unproject(L.point(x, y));
+    pts.push([ll.lat, ll.lng]);
+  }
+  return pts;
 }
 
 /** Create the Leaflet map, tile layers, and global map interactions. */
@@ -151,48 +191,49 @@ export function drawMap(): void {
     const isSel = state.selected === r.id;
     if (conflict && !isSel) return; // overlapped: not drawn unless selected
 
-    let weight: number;
-    let opacity: number;
+    // planned and unplanned legs share one weight: planned solid, unplanned
+    // dashed (a selected unplanned leg KEEPS its dash — selection shows via
+    // the accent casing, not by changing the line style)
+    const weight = 4;
+    let opacity = 1;
     let dash: string | null = null;
     let lineCol = col;
-    if (r.inPlan) {
-      weight = 6;
-      opacity = 1;
-    } else if (conflict) {
-      weight = 3;
+    if (conflict) {
       opacity = 0.9;
       lineCol = danger;
       dash = '6 8';
-    } else {
-      weight = 3;
+    } else if (!r.inPlan) {
       opacity = 0.7;
       dash = '6 8';
     }
     const selHi = isSel && !conflict; // selected, non-conflicting → highlight
-    if (selHi) dash = null; // solid so the accent border reads cleanly
-    const mainW = selHi ? weight + 1 : weight; // don't thicken conflicting legs
-    // the mid vertex anchors the direction arrowhead (marker-mid) at the leg's centre
-    const line: LatLng[] = [r.dep.ll, projectedMidpoint(r.dep.ll, r.arr.ll), r.arr.ll];
+    const line = arcPoints(r.dep.ll, r.arr.ll, idRand(r.id));
 
     if (selHi) {
       // selection casing: accent border + neutral separator ring (keeps the border
       // visible even when the leg's own colour IS the accent, e.g. Plane) + soft glow —
       // mirrors the accent border/halo of a selected hotel pin (.hotel-pin.sel)
-      L.polyline(line, { color: accent, weight: mainW + 12, opacity: 0.28, interactive: false, lineCap: 'round' }).addTo(segmentLayer);
-      L.polyline(line, { color: accent, weight: mainW + 7, opacity: 1, interactive: false, lineCap: 'round' }).addTo(segmentLayer);
-      L.polyline(line, { color: halo, weight: mainW + 3, opacity: 1, interactive: false, lineCap: 'round' }).addTo(segmentLayer);
+      L.polyline(line, { color: accent, weight: weight + 12, opacity: 0.28, interactive: false, lineCap: 'round' }).addTo(segmentLayer);
+      L.polyline(line, { color: accent, weight: weight + 7, opacity: 1, interactive: false, lineCap: 'round' }).addTo(segmentLayer);
+      L.polyline(line, { color: halo, weight: weight + 3, opacity: 1, interactive: false, lineCap: 'round' }).addTo(segmentLayer);
     } else if (r.inPlan) {
       // decorative glow: never captures clicks
       L.polyline(line, { color: halo, weight: weight + 4, opacity: 0.6, interactive: false }).addTo(segmentLayer);
     }
     // visible line is decorative; a fat transparent "hit line" on top carries click + hover
-    // smoothFactor:0 keeps the collinear mid vertex (Leaflet would otherwise simplify it
-    // away), so the direction arrowhead (marker-mid) has a vertex to anchor to
-    const visible = L.polyline(line, { color: lineCol, weight: mainW, opacity, dashArray: dash ?? undefined, interactive: false, smoothFactor: 0 }).addTo(segmentLayer);
+    // smoothFactor:0 keeps every arc sample (Leaflet would otherwise simplify)
+    L.polyline(line, { color: lineCol, weight, opacity, dashArray: dash ?? undefined, interactive: false, smoothFactor: 0 }).addTo(segmentLayer);
     if (lineCol === col) usedTransports.add(r.transport); // legend lists only transports whose colour is on the map
+    // marker-mid renders on EVERY interior vertex, so the arrowhead rides a
+    // separate invisible 3-point carrier at the arc's apex (stroke-opacity 0
+    // hides the line; SVG markers paint regardless of stroke opacity)
     const arrowId = arrowMarker(lineCol, halo, arrowReg);
-    const vpath = (visible as unknown as { getElement(): SVGPathElement | null }).getElement();
-    if (vpath && arrowId) vpath.setAttribute('marker-mid', `url(#${arrowId})`);
+    const apex = line.length >> 1;
+    const carrier = L.polyline([line[apex - 1], line[apex], line[apex + 1]], {
+      color: lineCol, weight: 1, opacity: 0, interactive: false, smoothFactor: 0,
+    }).addTo(segmentLayer);
+    const cpath = (carrier as unknown as { getElement(): SVGPathElement | null }).getElement();
+    if (cpath && arrowId) cpath.setAttribute('marker-mid', `url(#${arrowId})`);
     const tip = conflict ? `<br><small style="color:${danger}">⚠ overlaps plan</small>` : '';
     // bubblingMouseEvents:false → clicking selects without firing the map's "click empty → unselect"
     const hit = L.polyline(line, { color: '#000', opacity: 0, weight: HITW, lineCap: 'round', bubblingMouseEvents: false }).addTo(segmentLayer);
