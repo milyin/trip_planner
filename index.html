@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
-  <script type="module" crossorigin src="/trip_planner/assets/index-C-K-pdGO.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-0G40w64j.css">
+  <script type="module" crossorigin src="/trip_planner/assets/index-CtYvTF9t.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-DMAY2WSJ.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -16,13 +16,13 @@
     <div class="menu-wrap">
       <button class="btn ghost icon" id="hamBtn" title="Menu" aria-haspopup="true" aria-expanded="false">☰</button>
       <div class="menu" id="hamMenu" role="menu">
-        <button type="button" role="menuitem" id="addLegBtn"><span class="mi">✈</span> Add leg</button>
-        <button type="button" role="menuitem" id="addHotelBtn"><span class="mi">🏨</span> Add hotel</button>
+        <button type="button" role="menuitem" id="addLegBtn"><span class="mi" data-icon="leg"></span> Add leg</button>
+        <button type="button" role="menuitem" id="addHotelBtn"><span class="mi" data-icon="bed"></span> Add hotel</button>
         <hr>
         <button type="button" role="menuitem" id="previewBtn"><span class="mi">📱</span> Mobile preview</button>
         <button type="button" role="menuitem" id="themeBtn"><span class="mi" id="themeIcon">🌙</span> <span id="themeLabel">Night theme</span></button>
         <button type="button" role="menuitem" id="settingsBtn"><span class="mi">⚙️</span> LLM configuration</button>
-        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi">🗑</span> Clear segments</button>
+        <button type="button" role="menuitem" id="clearBtn" class="danger-item"><span class="mi" data-icon="trash"></span> Clear segments</button>
       </div>
     </div>
   </div>
@@ -30,7 +30,12 @@
   <div class="layout">
     <section class="panel" data-tab="segments">
       <div class="panel-head"><span class="dot grey"></span><span class="title">Segments</span>
-        <span class="count" id="segmentsCount">0</span></div>
+        <span class="count" id="segmentsCount">0</span>
+        <span class="head-actions">
+          <button class="btn ghost icon" id="phAddLeg" title="Add leg" data-icon="leg"></button>
+          <button class="btn ghost icon" id="phAddHotel" title="Add hotel" data-icon="bed"></button>
+          <button class="btn ghost icon" id="phDelete" title="Delete selected segment" disabled data-icon="trash"></button>
+        </span></div>
       <div class="scroll" id="segmentsList"></div>
     </section>
 
