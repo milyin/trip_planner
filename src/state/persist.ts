@@ -1,4 +1,4 @@
-import type { Leg, Segment } from '../domain/types';
+import type { Hotel, Leg, Segment } from '../domain/types';
 import { seedItems } from './seed';
 import { activeWorkspace, itemsKey } from './workspaces';
 
@@ -13,13 +13,13 @@ export function loadItems(): Segment[] {
     for (const it of items) {
       // Transport records were called "segments" before the rename to "leg".
       if ((it.kind as string) === 'segment') (it as { kind: string }).kind = 'leg';
-      if (it.kind !== 'leg') continue;
-      const leg = it as Leg & { link?: string | null };
-      // Migrate from the earlier `link` field (URL or attachment reference).
-      if (leg.attachment === undefined) {
-        leg.attachment = leg.link?.startsWith('attachment:') ? leg.link : null;
+      // Migrate from the earlier `link` field (URL or attachment reference);
+      // hotels lose their plain-URL links (#15 removed the Link field).
+      const rec = it as (Leg | Hotel) & { link?: string | null };
+      if (rec.attachment === undefined) {
+        rec.attachment = rec.link?.startsWith('attachment:') ? rec.link : null;
       }
-      delete leg.link;
+      delete rec.link;
     }
     return items;
   } catch {

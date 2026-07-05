@@ -148,9 +148,9 @@ function hotelCard(r: Hotel, mode: CardMode): HTMLDivElement {
     <div class="stripe" style="background:${col}"></div>
     <div class="hotel-grid">
       <div class="hotel-name hc1 hr1"><span class="ti" style="color:${col}">🏨</span><span class="nm" title="${esc(r.name)}">${r.name || 'Hotel'}</span></div>
-      <div class="card-cost hc2 hr1" title="Price">${money(r)}</div>
+      <div class="card-cost hc2 hr1" title="Price">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached booking image">🎫</span>' : ''}</div>
       <div class="hotel-loc hc1 hr2" title="${esc(r.city + (r.addr ? ' · ' + r.addr : ''))}">${r.city}${r.addr ? ' · ' + r.addr : ''}</div>
-      <div class="hc2 hr2">${r.link ? `<a class="hotel-link" href="${esc(r.link)}" target="_blank" rel="noopener" title="Open booking link" onclick="event.stopPropagation()">🔗 Link</a>` : ''}</div>
+      <div class="hc2 hr2"></div>
       <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn) + ' → ' + fmtTime(r.checkOut))}">${fmtTime(r.checkIn)} → ${fmtTime(r.checkOut)}</div>
       <div class="hotel-nights hc2 hr3">${n} night${n > 1 ? 's' : ''}</div>
     </div>
@@ -158,9 +158,17 @@ function hotelCard(r: Hotel, mode: CardMode): HTMLDivElement {
   el.title =
     `🏨 ${r.name} — ${r.city}${r.addr ? ', ' + r.addr : ''}  ·  ${money(r)}  ·  ${n} night${n > 1 ? 's' : ''}\n` +
     `Check-in:  ${fmtTime(r.checkIn)}\n` +
-    `Check-out: ${fmtTime(r.checkOut)}${r.link ? '\nLink: ' + r.link : ''}\n` +
+    `Check-out: ${fmtTime(r.checkOut)}\n` +
     `(Click to select · double-click to edit · drag to move)`;
   cardActions(el, r, mode);
   makeDraggable(el, r);
+  const attEl = el.querySelector<HTMLElement>('.leg-link');
+  if (attEl && r.attachment) {
+    const att = r.attachment;
+    attEl.onclick = (e) => {
+      e.stopPropagation();
+      openAttachment(att);
+    };
+  }
   return el;
 }
