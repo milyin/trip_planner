@@ -21,7 +21,7 @@ export async function runRecognition(
     } else {
       alert(
         `Recognition failed: ${e instanceof Error ? e.message : e}\n` +
-          `See the "LLM exchange" tab for the full request and response.`,
+          `See the LLM exchange section below for the full request and response.`,
       );
     }
     return null;

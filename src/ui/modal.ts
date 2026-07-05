@@ -32,7 +32,7 @@ export interface HotelPrefill {
 let editingId: string | null = null;
 let editKind: 'leg' | 'hotel' = 'leg';
 let newInPlan = false;
-let activeTab: 'form' | 'llm' = 'form';
+let activeTab: 'form' | 'rec' = 'form';
 let previewUrl: string | null = null;
 let hasPreview = false;
 /** Image picked/dropped in this dialog, not yet saved to IndexedDB. */
@@ -46,17 +46,19 @@ let queuedFile: File | null = null;
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
 
-/** Show/hide the modal sections for the active tab (Details / LLM exchange). */
+/** Show/hide the modal sections for the active tab (Edit form / Recognize). */
 function applyTabs(): void {
   const form = activeTab === 'form';
   byId('legBody').style.display = form && editKind === 'leg' ? 'grid' : 'none';
   byId('hotelBody').style.display = form && editKind === 'hotel' ? 'grid' : 'none';
-  byId('legImport').style.display = form && editKind === 'leg' ? 'block' : 'none';
+  byId('legImport').style.display = form ? 'none' : 'block';
   byId('filePreview').style.display = hasPreview ? 'block' : 'none';
   byId('dropHint').style.display = hasPreview ? 'none' : 'flex';
-  byId('llmBody').style.display = form ? 'none' : 'block';
   byId('mtabForm').classList.toggle('active', form);
-  byId('mtabLlm').classList.toggle('active', !form);
+  byId('mtabRecognize').classList.toggle('active', !form);
+  // footer action follows the tab: Save on the edit form, Recognise otherwise
+  byId('saveBtn').style.display = form ? 'inline-flex' : 'none';
+  byId('recogniseBtn').style.display = form ? 'none' : 'inline-flex';
   if (!form) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
@@ -96,8 +98,9 @@ function setPendingFile(f: File): void {
 function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
-  // Recognition and the LLM exchange tab only apply to legs.
-  byId('modalTabs').style.display = kind === 'leg' ? 'flex' : 'none';
+  byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
+  // Recognition only applies to legs (hotels get it in #15).
+  byId('mtabRecognize').style.display = kind === 'leg' ? '' : 'none';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   applyTabs();
 }
@@ -291,10 +294,18 @@ async function recognise(): Promise<void> {
   }
   const legs = await runRecognition(file, note, parser);
   dialogExchange = lastExchange();
-  if (!legs) return;
+  if (!legs) {
+    // failure: refresh and unfold the exchange dump so the cause is one look away
+    byId('llmDump').textContent = formatExchange(dialogExchange);
+    byId<HTMLDetailsElement>('llmDetails').open = true;
+    return;
+  }
   fillLegFields(legs[0]);
   queuedLegs = legs.slice(1);
   queuedFile = queuedLegs.length ? file : null;
+  // success: jump to the edit form with the extracted values
+  activeTab = 'form';
+  applyTabs();
 }
 
 /** Open the leg dialog (new when `id` is null), optionally pre-filled. */
@@ -303,7 +314,6 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   showBody('leg');
   const P = prefill || {};
   newInPlan = P.inPlan === true;
-  byId('modalTitle').textContent = id ? 'Edit leg' : 'New leg';
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const r = (id ? findItem(id) : null) as Leg | null;
   pendingFile = P.file ?? null;
@@ -314,7 +324,7 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
     void getExchange(id).then((ex) => {
       if (ex && editingId === id) {
         dialogExchange = ex;
-        if (activeTab === 'llm') applyTabs();
+        if (activeTab === 'rec') applyTabs();
       }
     });
   }
@@ -343,7 +353,6 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   showBody('hotel');
   const P = prefill || {};
   newInPlan = P.inPlan === true;
-  byId('modalTitle').textContent = id ? 'Edit hotel' : 'New hotel';
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const h = (id ? findItem(id) : null) as Hotel | null;
   pendingFile = null;
@@ -489,8 +498,8 @@ export function wireModal(): void {
     activeTab = 'form';
     applyTabs();
   };
-  byId('mtabLlm').onclick = () => {
-    activeTab = 'llm';
+  byId('mtabRecognize').onclick = () => {
+    activeTab = 'rec';
     applyTabs();
   };
   // Geo chips: click retries the lookup; editing a field marks its slot (and,
