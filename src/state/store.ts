@@ -67,11 +67,11 @@ export function deleteItemById(id: string): void {
   state.selected = null;
 }
 
-/** Delete a segment together with its locally stored image and LLM exchange.
- * Callers still emitChange() afterwards. */
+/** Delete a segment together with its locally stored image and LLM exchange
+ * (legs and hotels both carry attachments). Callers still emitChange(). */
 export function deleteSegment(id: string): void {
   const r = findItem(id);
-  if (r && r.kind === 'leg') {
+  if (r) {
     void deleteAttachment(r.attachment);
     void deleteExchange(r.id);
   }

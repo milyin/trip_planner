@@ -19,9 +19,20 @@ Extract the transport legs of ONE itinerary:
 - Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
 - Omit any field the input does not state; never invent values.`;
 
+export const HOTEL_PROMPT = `You help fill in the hotel form (one overnight stay) of a trip-planning app.
+The user provides a screenshot and/or a free-form note. The screenshot is usually a hotel listing from a booking site or search engine — possibly showing several hotels — though it can also be a booking confirmation.
+Extract ONE hotel stay:
+- If the input shows several hotels, extract the one the user's note points to; without a note, take the highlighted/selected one, otherwise the first.
+- "checkIn"/"checkOut" must be datetime-local strings, formatted exactly as YYYY-MM-DDTHH:MM. When only dates are shown, use 15:00 for check-in and 11:00 for check-out.
+- If the year is not printed, infer it: prefer the nearest upcoming date, and if a weekday is printed pick the year where the date falls on that weekday.
+- "addr" is the street address if shown.
+- "cost" is the total price for the stay if shown, as a number.
+- Pick the currency from the allowed list; if another currency is shown, convert approximately and pick the closest match.
+- Omit any field the input does not state; never invent values.`;
+
 /** Final prompt text: the instructions plus the user's note, if any. */
-export const buildPrompt = (note: string): string =>
-  note.trim() ? `${PROMPT}\n\nUser note:\n${note.trim()}` : PROMPT;
+export const buildPrompt = (note: string, base: string = PROMPT): string =>
+  note.trim() ? `${base}\n\nUser note:\n${note.trim()}` : base;
 
 /** Read a file as a `data:<mime>;base64,…` URL. */
 export function fileToDataUrl(file: File): Promise<string> {
