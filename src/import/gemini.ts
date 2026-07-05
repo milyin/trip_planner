@@ -20,6 +20,8 @@ function legSchema({ Type }: GenaiModule): unknown {
       arrTime: { type: Type.STRING, description: 'Arrival time, YYYY-MM-DDTHH:MM, local' },
       transport: { type: Type.STRING, enum: TRANSPORTS },
       company: { type: Type.STRING, description: 'Carrier name' },
+      transfers: { type: Type.NUMBER, description: 'Number of transfers (0 = direct)' },
+      transfersInfo: { type: Type.STRING, description: 'Transfer details: intermediate cities, durations' },
       cost: { type: Type.NUMBER, description: 'Price as a number' },
       currency: { type: Type.STRING, enum: CURRENCIES },
     },

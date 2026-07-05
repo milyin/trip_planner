@@ -16,6 +16,10 @@ export interface ExtractedLeg {
   arrTime?: string;
   transport?: TransportKind;
   company?: string;
+  /** Number of transfers/connections (0 = direct). */
+  transfers?: number;
+  /** Free-form transfer details (intermediate cities, durations). */
+  transfersInfo?: string;
   cost?: number;
   currency?: CurrencyCode;
 }
