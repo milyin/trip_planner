@@ -1,8 +1,8 @@
 import { buildShareUrl } from '../state/share';
 import { emitChange, reloadActiveWorkspace, subscribe } from '../state/store';
 import {
-  activeWorkspace, createWorkspace, deleteWorkspace, listWorkspaces, renameWorkspace, setActiveWorkspace,
-  workspaceCities,
+  activeWorkspace, copyWorkspace, createWorkspace, deleteWorkspace, listWorkspaces, renameWorkspace,
+  setActiveWorkspace, workspaceCities,
 } from '../state/workspaces';
 import { byId, mkBtn } from './dom';
 
@@ -58,6 +58,12 @@ export function wireWorkspaces(): void {
   byId('wsNewBtn').addEventListener('click', () => {
     const ws = createWorkspace('New workspace');
     switchTo(ws.id);
+  });
+  byId('wsCopyBtn').addEventListener('click', () => {
+    const src = activeWorkspace();
+    const name = prompt('Name for the copy of this workspace:', `${src.name} (copy)`);
+    if (name === null || !name.trim()) return;
+    void copyWorkspace(src.id, name).then((ws) => switchTo(ws.id));
   });
   byId('wsSelectBtn').addEventListener('click', () => {
     renderWsList();

@@ -16,7 +16,7 @@ body.mobile .brand .logo{width:30px; height:30px; font-size:16px}
 
 body.mobile .layout{display:flex; grid-template-columns:none}
 body.mobile .panel{display:none; border-right:none; flex:1}
-body.mobile[data-tab="segments"] .panel[data-tab="segments"],
+body.mobile[data-tab="segmentsPool"] .panel[data-tab="segmentsPool"],
 body.mobile[data-tab="plan"]     .panel[data-tab="plan"],
 body.mobile[data-tab="map"]      .panel[data-tab="map"]{display:flex}
 

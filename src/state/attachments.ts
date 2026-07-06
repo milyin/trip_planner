@@ -95,6 +95,15 @@ export async function deleteAttachment(link: string | null): Promise<void> {
   await tx('readwrite', (s) => s.delete(link.slice(LINK_PREFIX.length)));
 }
 
+/** Duplicate a stored file under a fresh id; returns the new link (or `null`
+ * if the source is missing). Used when copying a whole workspace so the copy
+ * owns its own images and deleting the source can't break it. */
+export async function copyAttachment(link: string | null): Promise<string | null> {
+  const rec = link && isAttachmentLink(link) ? await getAttachment(link) : null;
+  if (!rec) return null;
+  return putAttachment(new File([rec.blob], rec.name, { type: rec.type }));
+}
+
 /** Resolve any link to an openable URL: object URL for attachments, the link
  * itself for plain URLs. Returns the mime type for preview rendering. */
 export async function resolveLink(link: string | null): Promise<{ url: string; type: string } | null> {
@@ -117,6 +126,12 @@ export async function getExchange(segmentId: string): Promise<LlmExchange | null
 
 export async function deleteExchange(segmentId: string): Promise<void> {
   await txIn(EX_STORE, 'readwrite', (s) => s.delete(segmentId));
+}
+
+/** Copy a record's stored LLM exchange to another record id (workspace copy). */
+export async function copyExchange(fromId: string, toId: string): Promise<void> {
+  const ex = await getExchange(fromId);
+  if (ex) await putExchange(toId, ex);
 }
 
 /** Wipe every stored file and exchange (used by "Clear all"). */

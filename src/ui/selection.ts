@@ -20,7 +20,7 @@ export function selectFromMap(r: Segment): void {
   select(r.id);
   emitChange();
   if (document.body.classList.contains('mobile')) {
-    const tab = r.inPlan ? 'plan' : 'segments';
+    const tab = r.inPlan ? 'plan' : 'segmentsPool';
     setTimeout(() => {
       setTab(tab);
       scrollSelectedIntoView();

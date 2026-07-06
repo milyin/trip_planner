@@ -41,14 +41,14 @@ export function syncEyeButton(): void {
 }
 
 /** Render the Segments panel (not-yet-planned records). */
-export function renderSegments(): void {
+export function renderSegmentsPool(): void {
   // The head's delete button follows the selection (re-rendered on every change).
   byId<HTMLButtonElement>('phDelete').disabled = !state.selected;
-  const rl = byId('segmentsList');
+  const rl = byId('segmentsPoolList');
   rl.innerHTML = '';
   const list = listItems(state.items);
-  byId('segmentsCount').textContent = String(list.length);
-  byId('tabSegCount').textContent = String(list.length);
+  byId('segmentsPoolCount').textContent = String(list.length);
+  byId('tabSegmentsPoolCount').textContent = String(list.length);
   if (!list.length) {
     rl.innerHTML = `<div class="empty"><span class="big">🧭</span>Nothing here.<br>Add a leg or hotel via the panel buttons or ☰ menu.</div>`;
   }
@@ -150,11 +150,11 @@ function renderPlanFoot(plan: Segment[], badCount: number): void {
 
 /** Clear any active drop-target highlight. */
 export function clearDrop(): void {
-  ['segmentsList', 'planList'].forEach((id) => byId(id).classList.remove('drop', 'drop-bad'));
+  ['segmentsPoolList', 'planList'].forEach((id) => byId(id).classList.remove('drop', 'drop-bad'));
 }
 
 /** Wire a panel as a drop target for cross-panel drag-and-drop. */
-export function setupDrop(id: string, target: 'segments' | 'plan'): void {
+export function setupDrop(id: string, target: 'segmentsPool' | 'plan'): void {
   const c = byId(id);
   c.addEventListener('dragover', (e) => {
     if (!state.draggedId) return;

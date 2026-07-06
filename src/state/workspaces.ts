@@ -1,7 +1,8 @@
 /** Named workspaces: each holds its own set of segments under its own
  * localStorage key; settings, theme and the geocode cache stay global. */
 
-import { deleteAttachment, deleteExchange } from './attachments';
+import { copyAttachment, copyExchange, deleteAttachment, deleteExchange } from './attachments';
+import { nextId } from './id';
 
 export interface WorkspaceInfo {
   id: string;
@@ -94,6 +95,38 @@ export function createWorkspace(name: string): WorkspaceInfo {
   registry.list.push(ws);
   try {
     localStorage.setItem(itemsKey(ws.id), '[]');
+  } catch {
+    /* storage disabled */
+  }
+  save(registry);
+  return ws;
+}
+
+/** Duplicate a workspace's whole content into a new one with a fresh name.
+ * Records get new ids, and their images and LLM exchanges are copied too, so
+ * the copy is fully independent of the source (deleting either leaves the
+ * other intact). Returns the new workspace. */
+export async function copyWorkspace(sourceId: string, name: string): Promise<WorkspaceInfo> {
+  interface Rec { id: string; attachment?: string | null }
+  let items: Rec[] = [];
+  try {
+    items = JSON.parse(localStorage.getItem(itemsKey(sourceId)) || '[]') as Rec[];
+  } catch {
+    items = [];
+  }
+  const copies: Rec[] = [];
+  for (const it of items) {
+    const clone = JSON.parse(JSON.stringify(it)) as Rec;
+    const oldId = clone.id;
+    clone.id = nextId();
+    if (clone.attachment) clone.attachment = await copyAttachment(clone.attachment);
+    await copyExchange(oldId, clone.id);
+    copies.push(clone);
+  }
+  const ws: WorkspaceInfo = { id: genWorkspaceId(), name: name.trim() || 'Copy' };
+  registry.list.push(ws);
+  try {
+    localStorage.setItem(itemsKey(ws.id), JSON.stringify(copies));
   } catch {
     /* storage disabled */
   }
