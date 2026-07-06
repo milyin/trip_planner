@@ -1,4 +1,4 @@
-import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/types';
+import type { CurrencyCode, Hotel, LatLng, Leg, NoteEntry, Segment, TransportKind } from '../domain/types';
 import { getRate, RATES_SOURCE, rateSourceUrl } from '../domain/convert';
 import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
@@ -12,9 +12,9 @@ import {
 } from '../state/attachments';
 import { parserName, resolveParser, saveSettings, settings, type ResolvedParser } from '../state/settings';
 import { deleteSegment, emitChange, findItem, upsertItem } from '../state/store';
-import { nextId } from '../state/id';
+import { genNoteId, nextId } from '../state/id';
 import { fillCurrencySelect } from './currency';
-import { byId, getVal, setVal } from './dom';
+import { byId, getVal, mkBtn, setVal } from './dom';
 import { openParserSettings } from './parserSettings';
 
 export interface LegPrefill {
@@ -38,14 +38,28 @@ export interface HotelPrefill {
 let editingId: string | null = null;
 let editKind: 'leg' | 'hotel' = 'leg';
 let newInPlan = false;
-let activeTab: 'form' | 'rec' = 'form';
+let activeTab: 'form' | 'rec' | 'notes' = 'form';
 let previewUrls: string[] = [];
 let hasPreview = false;
-/** Images picked/dropped/pasted in this dialog, not yet saved to IndexedDB.
- * Several can be collected before pressing Recognise (#30). */
-let pendingFiles: File[] = [];
-/** Attachment of the leg being edited (kept unless replaced). */
-let existingAttachment: string | null = null;
+
+/** One entry being edited in the dialog: a persisted note (`attachment`/`text`)
+ * or a file picked this session (`file`, not yet stored in IndexedDB). */
+interface WorkingNote {
+  id: string;
+  source: 'llm' | 'user';
+  kind: 'file' | 'text';
+  attachment?: string;
+  name?: string;
+  mime?: string;
+  text?: string;
+  file?: File;
+}
+/** Every note on the record open in the dialog (LLM files + user files/text). */
+let notes: WorkingNote[] = [];
+/** Stored attachment links present when the dialog opened — any dropped by save
+ * are deleted from IndexedDB. */
+let originalAttachments = new Set<string>();
+
 /** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
 let queuedLegs: ExtractedLeg[] = [];
 let queuedFiles: File[] = [];
@@ -53,21 +67,69 @@ let queuedFiles: File[] = [];
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
 
-/** Show/hide the modal sections for the active tab (Edit form / Recognize). */
+/** The LLM-source file notes — the images sent to the model and shown in the
+ * Recognize tab's gallery. */
+const llmFileNotes = (): WorkingNote[] => notes.filter((n) => n.source === 'llm' && n.kind === 'file');
+
+/** Resolve a file note back to a File (pending file, or re-read from IndexedDB). */
+async function noteFile(n: WorkingNote): Promise<File | null> {
+  if (n.file) return n.file;
+  if (n.attachment) {
+    const rec = await getAttachment(n.attachment);
+    if (rec) return new File([rec.blob], rec.name, { type: rec.type });
+  }
+  return null;
+}
+
+/** Load a record's notes into the working set, plus prefill files as LLM notes. */
+function loadNotes(rec: Segment | null, prefillFiles?: File[]): void {
+  notes = (rec?.notes ?? []).map((n) => ({ ...n }));
+  originalAttachments = new Set(notes.map((n) => n.attachment).filter((a): a is string => !!a));
+  for (const f of prefillFiles ?? []) {
+    notes.push({ id: genNoteId(), source: 'llm', kind: 'file', file: f, name: f.name, mime: f.type });
+  }
+}
+
+/** Store pending files, delete blobs dropped from the set, return notes to save. */
+async function commitNotes(): Promise<NoteEntry[]> {
+  const out: NoteEntry[] = [];
+  const kept = new Set<string>();
+  for (const n of notes) {
+    if (n.kind === 'file') {
+      const link = n.attachment ?? (n.file ? await putAttachment(n.file) : undefined);
+      if (!link) continue;
+      kept.add(link);
+      out.push({ id: n.id, source: n.source, kind: 'file', attachment: link, name: n.name, mime: n.mime });
+    } else {
+      const text = (n.text ?? '').trim();
+      if (text) out.push({ id: n.id, source: n.source, kind: 'text', text });
+    }
+  }
+  for (const link of originalAttachments) if (!kept.has(link)) void deleteAttachment(link);
+  return out;
+}
+
+const isUrl = (s?: string): boolean => !!s && /^https?:\/\//i.test(s.trim());
+
+/** Show/hide the modal sections for the active tab (Edit / Recognize / Notes). */
 function applyTabs(): void {
   const form = activeTab === 'form';
+  const rec = activeTab === 'rec';
+  const notesTab = activeTab === 'notes';
   byId('legBody').style.display = form && editKind === 'leg' ? 'grid' : 'none';
   byId('hotelBody').style.display = form && editKind === 'hotel' ? 'grid' : 'none';
-  byId('legImport').style.display = form ? 'none' : 'block';
+  byId('legImport').style.display = rec ? 'block' : 'none';
+  byId('notesBody').style.display = notesTab ? 'block' : 'none';
   // clearing the inline display lets the stylesheet pick block vs gallery flex
   byId('filePreview').style.display = hasPreview ? '' : 'none';
   byId('dropHint').style.display = hasPreview ? 'none' : 'flex';
   byId('mtabForm').classList.toggle('active', form);
-  byId('mtabRecognize').classList.toggle('active', !form);
-  // footer action follows the tab: Save on the edit form, Recognise otherwise
-  byId('saveBtn').style.display = form ? 'inline-flex' : 'none';
-  byId('recogniseBtn').style.display = form ? 'none' : 'inline-flex';
-  if (!form) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
+  byId('mtabRecognize').classList.toggle('active', rec);
+  byId('mtabNotes').classList.toggle('active', notesTab);
+  // footer action follows the tab: Recognise on the Recognize tab, else Save
+  byId('saveBtn').style.display = rec ? 'none' : 'inline-flex';
+  byId('recogniseBtn').style.display = rec ? 'inline-flex' : 'none';
+  if (rec) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
 function revokePreviews(): void {
@@ -75,59 +137,141 @@ function revokePreviews(): void {
   previewUrls = [];
 }
 
-/** Render the pending images as a removable thumbnail gallery, or — with no
- * pending images — the stored attachment of the record being edited. */
+/** A thumbnail media element (image or embed) for a file preview. */
+function thumbMedia(url: string, type: string, name: string): HTMLElement {
+  if (!type || type.startsWith('image/')) {
+    const img = document.createElement('img');
+    img.src = url;
+    img.alt = name;
+    return img;
+  }
+  const emb = document.createElement('embed');
+  emb.src = url;
+  emb.type = type;
+  return emb;
+}
+
+/** Render the LLM file notes as a removable thumbnail gallery in the Recognize
+ * tab. Files added here become the images sent to the model. */
 function renderPreview(): void {
   const box = byId('filePreview');
   revokePreviews();
-  hasPreview = false;
   box.innerHTML = '';
-  box.classList.toggle('gallery', pendingFiles.length > 0);
-  if (pendingFiles.length) {
-    pendingFiles.forEach((f, i) => {
-      const url = URL.createObjectURL(f);
+  const files = llmFileNotes();
+  hasPreview = files.length > 0;
+  box.classList.toggle('gallery', hasPreview);
+  files.forEach((n) => {
+    const cell = document.createElement('div');
+    cell.className = 'thumb';
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'thumb-rm';
+    rm.title = 'Remove this image';
+    rm.textContent = '✕';
+    rm.onclick = (e) => {
+      e.stopPropagation();
+      removeNote(n.id);
+    };
+    cell.appendChild(rm);
+    box.appendChild(cell);
+    if (n.file) {
+      const url = URL.createObjectURL(n.file);
       previewUrls.push(url);
-      const cell = document.createElement('div');
-      cell.className = 'thumb';
-      cell.innerHTML = f.type.startsWith('image/')
-        ? `<img src="${url}" alt="Pending image ${i + 1}">`
-        : `<embed src="${url}" type="${f.type}">`;
-      const rm = document.createElement('button');
-      rm.type = 'button';
-      rm.className = 'thumb-rm';
-      rm.title = 'Remove this image';
-      rm.textContent = '✕';
-      rm.onclick = (e) => {
-        e.stopPropagation();
-        pendingFiles.splice(i, 1);
-        renderPreview();
-      };
-      cell.appendChild(rm);
-      box.appendChild(cell);
-    });
-    hasPreview = true;
-    applyTabs();
+      cell.insertBefore(thumbMedia(url, n.mime || n.file.type, n.name || 'image'), rm);
+    } else if (n.attachment) {
+      void resolveLink(n.attachment).then((r) => {
+        if (!r || !byId('overlay').classList.contains('open')) return;
+        previewUrls.push(r.url);
+        cell.insertBefore(thumbMedia(r.url, r.type, n.name || 'image'), rm);
+      });
+    }
+  });
+  applyTabs();
+}
+
+/** Render the Notes tab: every entry (LLM + user), each removable. */
+function renderNotes(): void {
+  byId('mtabNotes').textContent = notes.length ? `Notes · ${notes.length}` : 'Notes';
+  const box = byId('notesList');
+  box.innerHTML = '';
+  if (!notes.length) {
+    box.innerHTML = '<div class="empty-note">No files or notes yet. Add a file or a note below; images loaded on the Recognize tab appear here too.</div>';
     return;
   }
-  applyTabs();
-  const att = existingAttachment;
-  if (!att) return;
-  void resolveLink(att).then((r) => {
-    if (!r || !byId('overlay').classList.contains('open') || pendingFiles.length) return;
-    previewUrls.push(r.url);
-    box.innerHTML = r.type.startsWith('image/')
-      ? `<img src="${r.url}" alt="Attached ticket preview">`
-      : `<embed src="${r.url}" type="${r.type}">`;
-    hasPreview = true;
-    applyTabs();
+  notes.forEach((n) => {
+    const row = document.createElement('div');
+    row.className = 'note-row';
+    const badge = document.createElement('span');
+    badge.className = 'note-badge ' + n.source;
+    badge.textContent = n.source === 'llm' ? 'LLM' : 'you';
+    badge.title = n.source === 'llm' ? 'Loaded on the Recognize tab' : 'Added by you';
+    const body = document.createElement('div');
+    body.className = 'note-body';
+    if (n.kind === 'file') {
+      const a = document.createElement('a');
+      a.className = 'note-name';
+      a.textContent = '📎 ' + (n.name || 'file');
+      a.href = '#';
+      a.title = 'Open file';
+      a.onclick = (e) => {
+        e.preventDefault();
+        void openNote(n);
+      };
+      body.appendChild(a);
+    } else if (isUrl(n.text)) {
+      const a = document.createElement('a');
+      a.className = 'note-name';
+      a.textContent = '🔗 ' + n.text;
+      a.href = n.text!;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      body.appendChild(a);
+    } else {
+      const span = document.createElement('span');
+      span.className = 'note-name';
+      span.textContent = n.text || '';
+      body.appendChild(span);
+    }
+    const rm = mkBtn('✕', 'btn icon ghost');
+    rm.title = 'Remove';
+    rm.onclick = () => removeNote(n.id);
+    row.append(badge, body, rm);
+    box.appendChild(row);
   });
 }
 
-/** Append picked/dropped/pasted files to the pending list (no recognition —
- * the user collects images and presses Recognise explicitly). */
-function addPendingFiles(fs: Iterable<File>): void {
-  for (const f of fs) pendingFiles.push(f);
+/** Open a file note in a new tab. */
+async function openNote(n: WorkingNote): Promise<void> {
+  let url: string | null = null;
+  if (n.file) url = URL.createObjectURL(n.file);
+  else if (n.attachment) url = (await resolveLink(n.attachment))?.url ?? null;
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
+function removeNote(id: string): void {
+  notes = notes.filter((n) => n.id !== id);
   renderPreview();
+  renderNotes();
+}
+
+/** Files picked/dropped/pasted on the Recognize tab become LLM file notes. */
+function addRecognizeFiles(fs: Iterable<File>): void {
+  for (const f of fs) notes.push({ id: genNoteId(), source: 'llm', kind: 'file', file: f, name: f.name, mime: f.type });
+  renderPreview();
+  renderNotes();
+}
+
+/** Files added in the Notes tab are user files (not sent to the model). */
+function addUserFiles(fs: Iterable<File>): void {
+  for (const f of fs) notes.push({ id: genNoteId(), source: 'user', kind: 'file', file: f, name: f.name, mime: f.type });
+  renderNotes();
+}
+
+function addUserText(text: string): void {
+  const t = text.trim();
+  if (!t) return;
+  notes.push({ id: genNoteId(), source: 'user', kind: 'text', text: t });
+  renderNotes();
 }
 
 function showBody(kind: 'leg' | 'hotel'): void {
@@ -455,10 +599,10 @@ async function recognise(): Promise<void> {
   const parser = await ensureParser();
   if (!parser) return;
   const note = getVal('fNote');
-  let files = [...pendingFiles];
-  if (!files.length && existingAttachment) {
-    const rec = await getAttachment(existingAttachment);
-    if (rec) files = [new File([rec.blob], rec.name, { type: rec.type })];
+  const files: File[] = [];
+  for (const n of llmFileNotes()) {
+    const f = await noteFile(n);
+    if (f) files.push(f);
   }
   if (!files.length && !note.trim()) {
     alert('Attach a screenshot or write a note first.');
@@ -548,8 +692,7 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   newInPlan = P.inPlan === true;
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const r = (id ? findItem(id) : null) as Leg | null;
-  pendingFiles = P.files ? [...P.files] : [];
-  existingAttachment = r ? r.attachment : null;
+  loadNotes(r, P.files);
   dialogExchange = null;
   if (id) {
     // Show the exchange that produced this leg, if one was stored.
@@ -583,6 +726,7 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   initPlaceSlots('arrCity', 'arrAddr', r ? r.arr.ll : null);
   byId('overlay').classList.add('open');
   renderPreview();
+  renderNotes();
 }
 
 /** Open the hotel dialog (new when `id` is null), optionally pre-filled. */
@@ -593,8 +737,7 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   newInPlan = P.inPlan === true;
   byId('delBtn').style.display = id ? 'inline-flex' : 'none';
   const h = (id ? findItem(id) : null) as Hotel | null;
-  pendingFiles = P.files ? [...P.files] : [];
-  existingAttachment = h ? h.attachment : null;
+  loadNotes(h, P.files);
   dialogExchange = null;
   if (id) {
     // Show the exchange that produced this hotel, if one was stored.
@@ -619,13 +762,15 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
   byId('overlay').classList.add('open');
   renderPreview();
+  renderNotes();
 }
 
 export function closeModal(): void {
   byId('overlay').classList.remove('open');
-  pendingFiles = [];
-  existingAttachment = null;
+  notes = [];
+  originalAttachments = new Set();
   renderPreview();
+  renderNotes();
   const ex = dialogExchange;
   dialogExchange = null;
   if (queuedLegs.length) {
@@ -660,13 +805,8 @@ async function saveLeg(): Promise<void> {
 
 async function doSaveLeg(dc: string, ac: string): Promise<void> {
   const existing = editingId ? (findItem(editingId) as Leg | undefined) : undefined;
-  let attachment = existingAttachment;
-  if (pendingFiles.length) {
-    // Newly picked images replace the stored one; the first is kept as the
-    // record's attachment.
-    if (existingAttachment) void deleteAttachment(existingAttachment);
-    attachment = await putAttachment(pendingFiles[0]);
-  }
+  // Store any pending files and drop blobs removed from the notes list.
+  const savedNotes = await commitNotes();
   const segId = existing?.id ?? nextId();
   // Persist the exchange that filled this leg, next to the image. Awaited so
   // a reload right after Save cannot lose the write.
@@ -691,7 +831,7 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
     cost: Number(getVal('fCost') || 0),
     currency: getVal('fCur') as CurrencyCode,
     ...readConverted('leg'),
-    attachment,
+    notes: savedNotes,
     inPlan: existing ? existing.inPlan : newInPlan,
   };
   upsertItem(seg);
@@ -720,13 +860,7 @@ async function saveHotel(): Promise<void> {
   saveBtn.disabled = true;
   try {
     const existing = editingId ? findItem(editingId) : undefined;
-    let attachment = existingAttachment;
-    if (pendingFiles.length) {
-      // Newly picked images replace the stored one; the first is kept as the
-      // record's attachment.
-      if (existingAttachment) void deleteAttachment(existingAttachment);
-      attachment = await putAttachment(pendingFiles[0]);
-    }
+    const savedNotes = await commitNotes();
     const hotelId = existing?.id ?? nextId();
     if (dialogExchange) await putExchange(hotelId, dialogExchange);
     const h: Hotel = {
@@ -741,7 +875,7 @@ async function saveHotel(): Promise<void> {
       cost: Number(getVal('hCost') || 0),
       currency: getVal('hCur') as CurrencyCode,
       ...readConverted('hotel'),
-      attachment,
+      notes: savedNotes,
       ll: placeLl('hotCity', 'hotAddr'),
       inPlan: existing ? existing.inPlan : newInPlan,
     };
@@ -798,6 +932,29 @@ export function wireModal(): void {
     activeTab = 'rec';
     applyTabs();
   };
+  byId('mtabNotes').onclick = () => {
+    activeTab = 'notes';
+    applyTabs();
+  };
+  // Notes tab: add a user file, or a user text/link note.
+  byId('noteAddFileBtn').onclick = () => byId<HTMLInputElement>('noteFile').click();
+  byId<HTMLInputElement>('noteFile').onchange = (e) => {
+    const input = e.target as HTMLInputElement;
+    const fs = input.files ? [...input.files] : [];
+    input.value = '';
+    if (fs.length) addUserFiles(fs);
+  };
+  const addText = (): void => {
+    addUserText(getVal('noteText'));
+    setVal('noteText', '');
+  };
+  byId('noteAddTextBtn').onclick = addText;
+  byId('noteText').addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') {
+      e.preventDefault();
+      addText();
+    }
+  });
   // Geo chips: click retries the lookup; editing a field marks its slot (and,
   // for city fields, the dependent address slot) unresolved immediately and
   // re-locates once the field loses focus.
@@ -825,7 +982,7 @@ export function wireModal(): void {
     const input = e.target as HTMLInputElement;
     const fs = input.files ? [...input.files] : [];
     input.value = ''; // allow re-selecting the same files
-    if (fs.length) addPendingFiles(fs);
+    if (fs.length) addRecognizeFiles(fs);
   };
   zone.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -836,7 +993,7 @@ export function wireModal(): void {
     e.preventDefault();
     zone.classList.remove('dragover');
     const fs = e.dataTransfer?.files;
-    if (fs?.length) addPendingFiles(fs);
+    if (fs?.length) addRecognizeFiles(fs);
   });
   // Paste (Ctrl/Cmd+V) an image — e.g. a screenshot taken straight to the
   // clipboard. With the edit dialog open (either tab) it becomes the dialog's
@@ -851,10 +1008,9 @@ export function wireModal(): void {
     if (!imgs.length) return;
     if (byId('overlay').classList.contains('open')) {
       e.preventDefault();
-      addPendingFiles(imgs);
-      // make the pasted images visible right away
+      // make the pasted images visible right away on the Recognize tab
       activeTab = 'rec';
-      applyTabs();
+      addRecognizeFiles(imgs);
     } else if (!document.querySelector('.overlay.open') && byId('importBusy').style.display !== 'flex') {
       e.preventDefault();
       void importPastedImage(imgs[0]);

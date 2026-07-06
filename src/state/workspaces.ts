@@ -107,7 +107,8 @@ export function createWorkspace(name: string): WorkspaceInfo {
  * the copy is fully independent of the source (deleting either leaves the
  * other intact). Returns the new workspace. */
 export async function copyWorkspace(sourceId: string, name: string): Promise<WorkspaceInfo> {
-  interface Rec { id: string; attachment?: string | null }
+  interface Note { attachment?: string | null }
+  interface Rec { id: string; notes?: Note[] }
   let items: Rec[] = [];
   try {
     items = JSON.parse(localStorage.getItem(itemsKey(sourceId)) || '[]') as Rec[];
@@ -119,7 +120,8 @@ export async function copyWorkspace(sourceId: string, name: string): Promise<Wor
     const clone = JSON.parse(JSON.stringify(it)) as Rec;
     const oldId = clone.id;
     clone.id = nextId();
-    if (clone.attachment) clone.attachment = await copyAttachment(clone.attachment);
+    // Give the copy its own image blobs so deleting either workspace is safe.
+    for (const n of clone.notes ?? []) if (n.attachment) n.attachment = await copyAttachment(n.attachment);
     await copyExchange(oldId, clone.id);
     copies.push(clone);
   }
@@ -157,9 +159,9 @@ export function deleteWorkspace(id: string): void {
   if (idx < 0) return;
   try {
     const raw = localStorage.getItem(itemsKey(id));
-    const items = raw ? (JSON.parse(raw) as { id: string; attachment?: string | null }[]) : [];
+    const items = raw ? (JSON.parse(raw) as { id: string; notes?: { attachment?: string | null }[] }[]) : [];
     for (const it of items) {
-      void deleteAttachment(it.attachment ?? null);
+      for (const n of it.notes ?? []) void deleteAttachment(n.attachment ?? null);
       void deleteExchange(it.id);
     }
     localStorage.removeItem(itemsKey(id));

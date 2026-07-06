@@ -67,10 +67,11 @@ function relevantGeo(items: Segment[]): Record<string, LatLng> {
 
 /** Build the share URL for the active workspace. */
 export async function buildShareUrl(): Promise<string> {
-  // Deep-copy and strip what the URL must not carry: images stay local.
+  // Deep-copy and strip what the URL must not carry: file notes (image bytes)
+  // stay local; text notes and links travel with the plan.
   const items = (JSON.parse(JSON.stringify(state.items)) as Segment[]).map((it) => ({
     ...it,
-    attachment: null,
+    notes: (it.notes ?? []).filter((n) => n.kind === 'text'),
   })) as Segment[];
   const payload: SharePayload = { v: 1, name: activeWorkspace().name, items, geo: relevantGeo(items) };
   const encoded = toBase64Url(await gzip(JSON.stringify(payload)));
