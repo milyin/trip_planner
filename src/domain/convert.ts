@@ -8,6 +8,9 @@
 import type { Segment } from './types';
 
 const ENDPOINT = 'https://open.er-api.com/v6/latest';
+
+/** Where the rates come from — the free endpoint asks that this be credited. */
+export const RATES_SOURCE = { name: 'exchangerate-api.com', url: 'https://www.exchangerate-api.com' };
 const CACHE_KEY = 'tripPlanner.fxcache.v1';
 /** Refetch a base's table once it's older than this (rates update ~daily). */
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
@@ -115,6 +118,16 @@ export interface ConvertOptions {
   priority?: boolean;
 }
 
+/** The exchange rate from `from` to `to` (1 when they're equal), or `null` if
+ * unavailable. Never rejects. */
+export async function getRate(from: string, to: string, opts?: ConvertOptions): Promise<number | null> {
+  if (!from || !to) return null;
+  if (from.toUpperCase() === to.toUpperCase()) return 1;
+  const rates = await ratesFor(from, !!opts?.priority);
+  const rate = rates?.[to.toUpperCase()];
+  return rate != null && Number.isFinite(rate) ? rate : null;
+}
+
 /** Convert `amount` from currency `from` to `to`, or `null` if unavailable.
  * Never rejects — a failed lookup returns `null` and callers keep the raw cost. */
 export async function convertCost(
@@ -124,10 +137,8 @@ export async function convertCost(
   opts?: ConvertOptions,
 ): Promise<number | null> {
   if (!Number.isFinite(amount)) return null;
-  if (!from || !to || from.toUpperCase() === to.toUpperCase()) return amount;
-  const rates = await ratesFor(from, !!opts?.priority);
-  const rate = rates?.[to.toUpperCase()];
-  return rate != null && Number.isFinite(rate) ? amount * rate : null;
+  const rate = await getRate(from, to, opts);
+  return rate != null ? amount * rate : null;
 }
 
 /** Fill in missing converted costs in the background (foreign-currency records
