@@ -138,9 +138,22 @@ function renderParsers(): void {
     box.innerHTML = '<div class="empty-note">No parsers yet.</div>';
     return;
   }
+  const active = Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1);
   settings.parsers.forEach((p, i) => {
     const row = document.createElement('div');
     row.className = 'parser-row';
+    // Pick the default parser — the one used when pasting an image or opening a
+    // new segment (persisted as settings.activeParser).
+    const def = document.createElement('input');
+    def.type = 'radio';
+    def.name = 'defaultParser';
+    def.className = 'def-radio';
+    def.checked = i === active;
+    def.title = 'Use as the default parser (for pasting images and new segments)';
+    def.onchange = () => {
+      settings.activeParser = i;
+      saveSettings();
+    };
     const accSel = document.createElement('select');
     accSel.title = 'Account';
     settings.accounts.forEach((a) => {
@@ -171,7 +184,7 @@ function renderParsers(): void {
       saveSettings();
       renderParsers();
     };
-    row.append(accSel, model, del);
+    row.append(def, accSel, model, del);
     box.appendChild(row);
   });
 }
