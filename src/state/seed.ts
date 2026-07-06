@@ -11,7 +11,7 @@ function leg(
     id: nextId(), kind: 'leg',
     dep: { city: dc, addr: da, time: dt, ll: geocode(dc, da) },
     arr: { city: ac, addr: aa, time: at, ll: geocode(ac, aa) },
-    transport: tr, company: co, cost, currency: cur, transfers: 0, transfersInfo: '', attachment: null, inPlan,
+    transport: tr, company: co, cost, currency: cur, transfers: 0, transfersInfo: '', notes: [], inPlan,
   };
 }
 
@@ -21,7 +21,7 @@ function hotel(
 ): Hotel {
   return {
     id: nextId(), kind: 'hotel', city, name, addr, checkIn: ci, checkOut: co,
-    cost, currency: cur, attachment: null, ll: geocode(city, addr), inPlan,
+    cost, currency: cur, notes: [], ll: geocode(city, addr), inPlan,
   };
 }
 

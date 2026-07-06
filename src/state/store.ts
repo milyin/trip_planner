@@ -80,7 +80,7 @@ export function reloadActiveWorkspace(): void {
 export function deleteSegment(id: string): void {
   const r = findItem(id);
   if (r) {
-    void deleteAttachment(r.attachment);
+    for (const n of r.notes) if (n.attachment) void deleteAttachment(n.attachment);
     void deleteExchange(r.id);
   }
   deleteItemById(id);

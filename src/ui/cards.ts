@@ -3,7 +3,6 @@ import { esc, fmtTime, fmtTimeParts, money, tripDur } from '../domain/format';
 import { nights } from '../domain/item';
 import { conflictOf } from '../domain/plan';
 import { TRANSPORT_ICON } from '../domain/transport';
-import { resolveLink } from '../state/attachments';
 import { addToPlan, emitChange, removeFromPlan, select, state } from '../state/store';
 import { mkBtn } from './dom';
 import { openHotelModal, openModal } from './modal';
@@ -61,14 +60,6 @@ function cardActions(el: HTMLElement, r: Segment, mode: CardMode): void {
   a.appendChild(ed);
 }
 
-/** Open a leg's stored ticket image in a new tab. */
-function openAttachment(att: string): void {
-  void resolveLink(att).then((r) => {
-    if (r) window.open(r.url, '_blank', 'noopener');
-    else alert('The attached file is no longer in this browser’s storage.');
-  });
-}
-
 /** Wire select / edit / drag interactions shared by every card. */
 function makeDraggable(el: HTMLElement, r: Segment): void {
   el.onclick = () => {
@@ -111,7 +102,7 @@ function legCard(r: Leg, mode: CardMode): HTMLDivElement {
       <div class="leg-tr c2 r1" title="${esc(r.transport + (r.company ? ' · ' + r.company : ''))}"><span class="ti" style="color:${col}">${TRANSPORT_ICON[r.transport] || '•'}</span> <span class="co">${r.company || r.transport}</span></div>
       <div class="leg-city c3 r1" title="${esc(r.arr.city)}">${r.arr.city}</div>
       <div class="leg-sub c1 r2" title="${esc(r.dep.addr)}">${r.dep.addr || '—'}</div>
-      <div class="card-cost c2 r2" title="Fare">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached ticket image">🎫</span>' : ''}</div>
+      <div class="card-cost c2 r2" title="Fare">${money(r)}</div>
       <div class="leg-sub c3 r2" title="${esc(r.arr.addr)}">${r.arr.addr || '—'}</div>
       <div class="leg-sub leg-time c1 r3" title="${esc(fmtTime(r.dep.time))}">${timeHtml(r.dep.time)}</div>
       <div class="leg-sub c2 r3" title="${esc(r.transfersInfo || '')}">${tripDur(r)}${r.transfers > 0 ? ` · ${r.transfers}⇄` : ''}</div>
@@ -127,14 +118,6 @@ function legCard(r: Leg, mode: CardMode): HTMLDivElement {
     `(Click to select · double-click to edit · drag to move)`;
   cardActions(el, r, mode);
   makeDraggable(el, r);
-  const linkEl = el.querySelector<HTMLElement>('.leg-link');
-  if (linkEl && r.attachment) {
-    const att = r.attachment;
-    linkEl.onclick = (e) => {
-      e.stopPropagation();
-      openAttachment(att);
-    };
-  }
   const trEl = el.querySelector<HTMLElement>('.leg-tr');
   if (trEl) {
     trEl.title = 'Show on map';
@@ -156,7 +139,7 @@ function hotelCard(r: Hotel, mode: CardMode): HTMLDivElement {
     <div class="stripe" style="background:${col}"></div>
     <div class="hotel-grid">
       <div class="hotel-name hc1 hr1"><span class="ti" style="color:${col}">🏨</span><span class="nm" title="${esc(r.name)}">${r.name || 'Hotel'}</span></div>
-      <div class="card-cost hc2 hr1" title="Price">${money(r)}${r.attachment ? ' <span class="leg-link" title="Open attached booking image">🎫</span>' : ''}</div>
+      <div class="card-cost hc2 hr1" title="Price">${money(r)}</div>
       <div class="hotel-loc hc1 hr2" title="${esc(r.city + (r.addr ? ' · ' + r.addr : ''))}">${r.city}${r.addr ? ' · ' + r.addr : ''}</div>
       <div class="hc2 hr2"></div>
       <div class="hotel-dates hc1 hr3" title="${esc(fmtTime(r.checkIn) + ' → ' + fmtTime(r.checkOut))}">${timeHtml(r.checkIn)} → ${timeHtml(r.checkOut)}</div>
@@ -170,13 +153,5 @@ function hotelCard(r: Hotel, mode: CardMode): HTMLDivElement {
     `(Click to select · double-click to edit · drag to move)`;
   cardActions(el, r, mode);
   makeDraggable(el, r);
-  const attEl = el.querySelector<HTMLElement>('.leg-link');
-  if (attEl && r.attachment) {
-    const att = r.attachment;
-    attEl.onclick = (e) => {
-      e.stopPropagation();
-      openAttachment(att);
-    };
-  }
   return el;
 }

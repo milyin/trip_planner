@@ -8,6 +8,23 @@ export type TransportKind = 'Plane' | 'Train' | 'Bus' | 'Taxi' | 'Car' | 'Other'
  * accepted (the picker offers the full `Intl.supportedValuesOf('currency')` set). */
 export type CurrencyCode = string;
 
+/** One attachment or note kept on a segment. Files loaded on the Recognize page
+ * are `source: 'llm'`; files, links and text the user adds in the Notes tab are
+ * `source: 'user'`. Any entry can be removed, but only user entries are addable
+ * in the Notes tab. */
+export interface NoteEntry {
+  id: string;
+  source: 'llm' | 'user';
+  kind: 'file' | 'text';
+  /** file: `attachment:<id>` reference into the local IndexedDB store. */
+  attachment?: string;
+  /** file: display name and MIME type. */
+  name?: string;
+  mime?: string;
+  /** text: the note or a URL. */
+  text?: string;
+}
+
 /** One end of a segment: a place (city + address) resolved at a moment in time. */
 export interface Place {
   city: string;
@@ -37,8 +54,8 @@ export interface Leg {
   transfers: number;
   /** Free-form transfer details (intermediate cities, durations, …). */
   transfersInfo: string;
-  /** `attachment:<id>` reference to the locally stored ticket image, if any. */
-  attachment: string | null;
+  /** Files (from the Recognize page or added manually), links and text notes. */
+  notes: NoteEntry[];
   inPlan: boolean;
 }
 
@@ -61,8 +78,8 @@ export interface Hotel {
   costConverted?: number;
   /** True once the user typed a converted cost — auto-conversion won't overwrite it. */
   costConvertedManual?: boolean;
-  /** `attachment:<id>` reference to the locally stored booking image, if any. */
-  attachment: string | null;
+  /** Files (from the Recognize page or added manually), links and text notes. */
+  notes: NoteEntry[];
   ll: LatLng | null;
   inPlan: boolean;
 }
