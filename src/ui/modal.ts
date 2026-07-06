@@ -751,13 +751,14 @@ export function wireModal(): void {
   byId('saveBtn').onclick = saveModal;
   byId('delBtn').onclick = deleteItem;
   byId('fTransport').onchange = bufHint;
-  // Populate the time-zone suggestions once; typing in a tz field opts it out of
-  // auto-fill so a later geocode can't overwrite a manual choice.
+  // Populate the inline time-zone combos once (blank "auto" + every IANA zone);
+  // picking one opts it out of auto-fill so a later geocode can't overwrite it.
   const zones = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
     .supportedValuesOf?.('timeZone') ?? [];
-  byId('tzList').innerHTML = zones.map((z) => `<option value="${z}"></option>`).join('');
+  const tzOptions = '<option value="">auto</option>' + zones.map((z) => `<option value="${z}">${z}</option>`).join('');
   for (const id of ['fDepTz', 'fArrTz', 'hTz']) {
-    byId(id).addEventListener('input', () => { tzAuto[id] = false; });
+    byId(id).innerHTML = tzOptions;
+    byId(id).addEventListener('change', () => { tzAuto[id] = false; });
   }
   // Converted cost: editing the cost or currency re-converts (unless the user
   // typed their own value); the chip forces a fresh conversion.
