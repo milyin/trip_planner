@@ -122,11 +122,14 @@
       <div class="field"><label>Company (optional)</label><input id="fCompany" placeholder="AirFrance"></div>
       <div class="field full"><label>Transfers — count &amp; details</label>
         <div class="tr-row"><input id="fTransfers" class="tr-count" type="number" min="0" step="1" placeholder="0"><input id="fTransfersInfo" placeholder="via Lyon (1h 20m), Dijon (45m)"></div></div>
-      <div class="field full"><label>Cost · currency · converted <span id="fConvCur" class="hint"></span> <button type="button" class="geo-chip" id="fConvChip"></button></label>
+      <div class="field full"><label>Cost · currency</label>
         <div class="cost-row">
           <input id="fCost" type="number" min="0" step="0.01" placeholder="100.00">
           <select id="fCur"></select>
-          <input id="fCostConv" type="number" min="0" step="0.01" placeholder="converted">
+          <div class="conv-cell">
+            <div class="conv-head"><span id="fConvCur" class="hint"></span> <button type="button" class="geo-chip" id="fConvChip"></button></div>
+            <input id="fCostConv" type="number" min="0" step="0.01" placeholder="converted">
+          </div>
         </div></div>
     </div>
     <div class="modal-body" id="hotelBody" style="display:none">
@@ -137,11 +140,14 @@
       <div class="field"><label>Check-in <select class="tz-combo" id="hTz" title="Time zone"></select></label>
         <div class="dt-row"><input id="hInDate" type="date"><input id="hInTime" type="time"></div></div>
       <div class="field"><label>Check-out</label><div class="dt-row"><input id="hOutDate" type="date"><input id="hOutTime" type="time"></div></div>
-      <div class="field full"><label>Price · currency · converted <span id="hConvCur" class="hint"></span> <button type="button" class="geo-chip" id="hConvChip"></button></label>
+      <div class="field full"><label>Price · currency</label>
         <div class="cost-row">
           <input id="hCost" type="number" min="0" step="0.01" placeholder="240.00">
           <select id="hCur"></select>
-          <input id="hCostConv" type="number" min="0" step="0.01" placeholder="converted">
+          <div class="conv-cell">
+            <div class="conv-head"><span id="hConvCur" class="hint"></span> <button type="button" class="geo-chip" id="hConvChip"></button></div>
+            <input id="hCostConv" type="number" min="0" step="0.01" placeholder="converted">
+          </div>
         </div></div>
     </div>
     <div class="modal-foot">

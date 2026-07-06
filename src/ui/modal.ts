@@ -2,7 +2,7 @@ import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/
 import { convertCost } from '../domain/convert';
 import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
-import { tzForLatLng } from '../domain/tz';
+import { tzForLatLng, tzOffset } from '../domain/tz';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
@@ -337,7 +337,7 @@ function renderConvChip(chipId: string, status: ConvStatus): void {
 function refreshConv(kind: 'leg' | 'hotel', opts: { force?: boolean; onlyIfEmpty?: boolean } = {}): void {
   const s = CONV[kind];
   const base = settings.baseCurrency;
-  byId(s.label).textContent = base ? `(${base})` : '';
+  byId(s.label).textContent = base ? `in ${base}` : '';
   const cost = Number(getVal(s.cost)) || 0;
   const cur = getVal(s.cur);
   if (!cur || cur === base) { setVal(s.conv, cost ? String(cost) : ''); renderConvChip(s.chip, 'same'); return; }
@@ -751,11 +751,16 @@ export function wireModal(): void {
   byId('saveBtn').onclick = saveModal;
   byId('delBtn').onclick = deleteItem;
   byId('fTransport').onchange = bufHint;
-  // Populate the inline time-zone combos once (blank "auto" + every IANA zone);
-  // picking one opts it out of auto-fill so a later geocode can't overwrite it.
+  // Populate the inline time-zone combos once (blank "auto" + every IANA zone,
+  // labelled with its GMT offset and ordered by offset); picking one opts it out
+  // of auto-fill so a later geocode can't overwrite it.
   const zones = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
     .supportedValuesOf?.('timeZone') ?? [];
-  const tzOptions = '<option value="">auto</option>' + zones.map((z) => `<option value="${z}">${z}</option>`).join('');
+  const sorted = zones
+    .map((z) => ({ z, ...tzOffset(z) }))
+    .sort((a, b) => a.minutes - b.minutes || a.z.localeCompare(b.z));
+  const tzOptions = '<option value="">auto</option>'
+    + sorted.map(({ z, label }) => `<option value="${z}">${label} · ${z}</option>`).join('');
   for (const id of ['fDepTz', 'fArrTz', 'hTz']) {
     byId(id).innerHTML = tzOptions;
     byId(id).addEventListener('change', () => { tzAuto[id] = false; });
