@@ -115,6 +115,9 @@
 .parser-row select{flex:0 0 auto; max-width:45%}
 .parser-row input{flex:1}
 .parser-row select:focus, .parser-row input:focus{border-color:var(--accent)}
+/* the "default parser" radio must not stretch or take the text-input styling */
+.parser-row input.def-radio{flex:0 0 auto; width:16px; height:16px; min-width:0; margin:0 2px;
+  padding:0; border-radius:50%; accent-color:var(--accent); cursor:pointer}
 .empty-note{color:var(--faint); font-size:12px}
 
 /* Full-screen busy indicator while the LLM reads the ticket. */
