@@ -41,7 +41,6 @@
         <span class="head-actions">
           <button class="btn ghost icon" id="phAddLeg" title="Add leg" data-icon="leg"></button>
           <button class="btn ghost icon" id="phAddHotel" title="Add hotel" data-icon="bed"></button>
-          <button class="btn ghost icon" id="phToggleMap" title="Hide available segments on map" aria-pressed="false" data-icon="eye"></button>
           <button class="btn ghost icon" id="phDelete" title="Delete selected segment" disabled data-icon="trash"></button>
         </span></div>
       <div class="scroll" id="segmentsPoolList"></div>
@@ -57,6 +56,7 @@
     <section class="panel" data-tab="map">
       <div class="panel-head"><span class="title">Map</span>
         <span class="count" id="mapHint">drag to pan · scroll to zoom</span>
+        <button class="btn ghost icon" id="phToggleMap" title="Hide available segments on map" aria-pressed="false" data-icon="eye"></button>
         <button class="btn ghost icon" id="fitBtn" title="Zoom map to all segments" aria-label="Zoom map to all segments" data-icon="fit"></button></div>
       <div class="map-wrap">
         <div id="map"></div>
