@@ -44,6 +44,15 @@ function tzOffsetMs(tz: string, atUtc: number): number {
   return asUtc - atUtc;
 }
 
+/** The current UTC offset of `tz`, as signed minutes and a `GMT+HH:MM` label. */
+export function tzOffset(tz: string): { minutes: number; label: string } {
+  const minutes = isValidTz(tz) ? Math.round(tzOffsetMs(tz, Date.now()) / 60000) : 0;
+  const sign = minutes < 0 ? '-' : '+';
+  const abs = Math.abs(minutes);
+  const label = `GMT${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+  return { minutes, label };
+}
+
 /**
  * Epoch milliseconds for the wall clock `s` interpreted in zone `tz`. Falls back
  * to naive parsing when `tz` is missing or unknown. Two offset passes settle the
