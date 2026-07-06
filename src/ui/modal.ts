@@ -1,5 +1,5 @@
 import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/types';
-import { getRate, RATES_SOURCE } from '../domain/convert';
+import { getRate, RATES_SOURCE, rateSourceUrl } from '../domain/convert';
 import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { tzForLatLng, tzOffset } from '../domain/tz';
@@ -310,10 +310,10 @@ function bufHint(): void {
 // --- converted cost (base currency), with a geo-chip-style auto/manual field --
 // Like geocoding: the cost is auto-converted to the settings' base currency the
 // first time, the user may type their own value, and it's never forced.
-interface ConvSpec { cost: string; cur: string; conv: string; chip: string; label: string; src: string }
+interface ConvSpec { cost: string; cur: string; conv: string; chip: string; label: string; rate: string }
 const CONV: Record<'leg' | 'hotel', ConvSpec> = {
-  leg: { cost: 'fCost', cur: 'fCur', conv: 'fCostConv', chip: 'fConvChip', label: 'fConvCur', src: 'fConvSrc' },
-  hotel: { cost: 'hCost', cur: 'hCur', conv: 'hCostConv', chip: 'hConvChip', label: 'hConvCur', src: 'hConvSrc' },
+  leg: { cost: 'fCost', cur: 'fCur', conv: 'fCostConv', chip: 'fConvChip', label: 'fConvCur', rate: 'fRate' },
+  hotel: { cost: 'hCost', cur: 'hCur', conv: 'hCostConv', chip: 'hConvChip', label: 'hConvCur', rate: 'hRate' },
 };
 
 /** Compact display of an exchange rate, e.g. `0.9091` or `150.48`. */
@@ -337,17 +337,14 @@ function renderConvChip(chipId: string, status: ConvStatus): void {
 }
 
 /** Recompute the converted-cost field for the given form from the live rate,
- * and show that rate (with a link to its source) next to the auto button. */
+ * and show that rate — as a link to the source page for the currency — above
+ * the currency field. */
 function refreshConv(kind: 'leg' | 'hotel', opts: { force?: boolean; onlyIfEmpty?: boolean } = {}): void {
   const s = CONV[kind];
   const base = settings.baseCurrency;
-  // `showRate: false` → plain "in <base>" label and no source link (same
-  // currency, no cost, or a failed lookup).
-  const info = (text: string, showRate: boolean): void => {
-    byId(s.label).textContent = text;
-    byId(s.src).style.display = showRate ? '' : 'none';
-  };
-  info(base ? `in ${base}` : '', false);
+  byId(s.label).textContent = base ? `in ${base}` : '';
+  const rateEl = byId<HTMLAnchorElement>(s.rate);
+  rateEl.style.display = 'none'; // shown only once a real rate is known
   const cost = Number(getVal(s.cost)) || 0;
   const cur = getVal(s.cur);
   if (!cur || cur === base) { setVal(s.conv, cost ? String(cost) : ''); renderConvChip(s.chip, 'same'); return; }
@@ -355,11 +352,15 @@ function refreshConv(kind: 'leg' | 'hotel', opts: { force?: boolean; onlyIfEmpty
   const tok = (convToken[s.conv] = (convToken[s.conv] || 0) + 1);
   renderConvChip(s.chip, 'busy');
   // The rate is fetched (cached) even for a manual value, so the market rate is
-  // always shown next to the auto button — only the field value respects manual.
+  // always shown above the currency — only the field value respects manual.
   void getRate(cur, base, { priority: true }).then((rate) => {
     if (convToken[s.conv] !== tok) return; // fields changed while converting
     if (rate == null) { renderConvChip(s.chip, 'fail'); return; }
-    info(`1 ${cur} = ${fmtRate(rate)} ${base}`, true);
+    const text = `1 ${cur} = ${fmtRate(rate)} ${base}`;
+    rateEl.textContent = text;
+    rateEl.href = rateSourceUrl(cur);
+    rateEl.title = `${text} — rates from ${RATES_SOURCE.name}`;
+    rateEl.style.display = '';
     if (convManual[s.conv] && !opts.force) { renderConvChip(s.chip, 'manual'); return; }
     if (!(opts.onlyIfEmpty && getVal(s.conv).trim() && !opts.force)) {
       setVal(s.conv, String(Math.round(cost * rate * 100) / 100));
@@ -789,12 +790,6 @@ export function wireModal(): void {
   byId('hCostConv').addEventListener('input', () => { convManual.hCostConv = true; renderConvChip('hConvChip', 'manual'); });
   byId('fConvChip').onclick = (e) => { e.preventDefault(); refreshConv('leg', { force: true }); };
   byId('hConvChip').onclick = (e) => { e.preventDefault(); refreshConv('hotel', { force: true }); };
-  // The rate-source links point at the provider (attribution for the free feed).
-  for (const id of ['fConvSrc', 'hConvSrc']) {
-    const a = byId(id);
-    a.setAttribute('href', RATES_SOURCE.url);
-    a.title = `Currency rates from ${RATES_SOURCE.name}`;
-  }
   byId('mtabForm').onclick = () => {
     activeTab = 'form';
     applyTabs();

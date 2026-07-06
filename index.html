@@ -126,9 +126,12 @@
       <div class="field full"><label>Cost · currency</label>
         <div class="cost-row">
           <input id="fCost" type="number" min="0" step="0.01" placeholder="100.00">
-          <select id="fCur"></select>
+          <div class="cur-cell">
+            <div class="conv-head"><a id="fRate" class="conv-rate" target="_blank" rel="noopener" style="display:none"></a></div>
+            <select id="fCur"></select>
+          </div>
           <div class="conv-cell">
-            <div class="conv-head"><span id="fConvCur" class="hint"></span> <a id="fConvSrc" class="conv-src" target="_blank" rel="noopener" style="display:none">source ↗</a> <button type="button" class="geo-chip" id="fConvChip"></button></div>
+            <div class="conv-head"><span id="fConvCur" class="hint"></span> <button type="button" class="geo-chip" id="fConvChip"></button></div>
             <input id="fCostConv" type="number" min="0" step="0.01" placeholder="converted">
           </div>
         </div></div>
@@ -144,9 +147,12 @@
       <div class="field full"><label>Price · currency</label>
         <div class="cost-row">
           <input id="hCost" type="number" min="0" step="0.01" placeholder="240.00">
-          <select id="hCur"></select>
+          <div class="cur-cell">
+            <div class="conv-head"><a id="hRate" class="conv-rate" target="_blank" rel="noopener" style="display:none"></a></div>
+            <select id="hCur"></select>
+          </div>
           <div class="conv-cell">
-            <div class="conv-head"><span id="hConvCur" class="hint"></span> <a id="hConvSrc" class="conv-src" target="_blank" rel="noopener" style="display:none">source ↗</a> <button type="button" class="geo-chip" id="hConvChip"></button></div>
+            <div class="conv-head"><span id="hConvCur" class="hint"></span> <button type="button" class="geo-chip" id="hConvChip"></button></div>
             <input id="hCostConv" type="number" min="0" step="0.01" placeholder="converted">
           </div>
         </div></div>

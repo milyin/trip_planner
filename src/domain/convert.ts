@@ -11,6 +11,10 @@ const ENDPOINT = 'https://open.er-api.com/v6/latest';
 
 /** Where the rates come from — the free endpoint asks that this be credited. */
 export const RATES_SOURCE = { name: 'exchangerate-api.com', url: 'https://www.exchangerate-api.com' };
+
+/** The source page listing the latest rates for `from` (the exact response our
+ * number is read from) — the concrete, currency-specific "source" link. */
+export const rateSourceUrl = (from: string): string => `${ENDPOINT}/${encodeURIComponent(from.toUpperCase())}`;
 const CACHE_KEY = 'tripPlanner.fxcache.v1';
 /** Refetch a base's table once it's older than this (rates update ~daily). */
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000;
