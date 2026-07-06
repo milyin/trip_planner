@@ -1,7 +1,7 @@
 import { onMapTabShown, refreshMap } from '../map/mapView';
 import { byId } from './dom';
 
-export type TabName = 'segments' | 'plan' | 'map';
+export type TabName = 'segmentsPool' | 'plan' | 'map';
 
 let previewMobile = false;
 const mqMobile = window.matchMedia('(max-width:640px)');

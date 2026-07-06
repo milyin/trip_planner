@@ -25,7 +25,7 @@ wireModal();
 wireParserSettings();
 wireTabbar();
 wireGlobal();
-setupDrop('segmentsList', 'segments');
+setupDrop('segmentsPoolList', 'segmentsPool');
 setupDrop('planList', 'plan');
 wirePanelActions();
 wireWorkspaces();
