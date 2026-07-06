@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
 <link rel="icon" type="image/svg+xml" href="/trip_planner/favicon.svg" />
-  <script type="module" crossorigin src="/trip_planner/assets/index-jCQTggfX.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-1drYUsLL.css">
+  <script type="module" crossorigin src="/trip_planner/assets/index-BIJ-uke7.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-G2kRu921.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -21,6 +21,7 @@
         <button type="button" role="menuitem" id="addHotelBtn"><span class="mi" data-icon="bed"></span> Add hotel</button>
         <hr>
         <button type="button" role="menuitem" id="wsNewBtn"><span class="mi">🆕</span> New workspace</button>
+        <button type="button" role="menuitem" id="wsCopyBtn"><span class="mi">📋</span> Copy workspace…</button>
         <button type="button" role="menuitem" id="wsSelectBtn"><span class="mi">🗂</span> Select workspace…</button>
         <button type="button" role="menuitem" id="wsRenameBtn"><span class="mi">✏️</span> Rename workspace</button>
         <button type="button" role="menuitem" id="wsShareBtn"><span class="mi">🔗</span> Share workspace</button>
@@ -34,16 +35,16 @@
   </div>
 
   <div class="layout">
-    <section class="panel" data-tab="segments">
-      <div class="panel-head"><span class="dot grey"></span><span class="title">Segments</span>
-        <span class="count" id="segmentsCount">0</span>
+    <section class="panel" data-tab="segmentsPool">
+      <div class="panel-head"><span class="dot grey"></span><span class="title">Pool</span>
+        <span class="count" id="segmentsPoolCount">0</span>
         <span class="head-actions">
           <button class="btn ghost icon" id="phAddLeg" title="Add leg" data-icon="leg"></button>
           <button class="btn ghost icon" id="phAddHotel" title="Add hotel" data-icon="bed"></button>
           <button class="btn ghost icon" id="phToggleMap" title="Hide available segments on map" aria-pressed="false" data-icon="eye"></button>
           <button class="btn ghost icon" id="phDelete" title="Delete selected segment" disabled data-icon="trash"></button>
         </span></div>
-      <div class="scroll" id="segmentsList"></div>
+      <div class="scroll" id="segmentsPoolList"></div>
     </section>
 
     <section class="panel" data-tab="plan">
@@ -72,7 +73,7 @@
   </div>
 
   <nav class="tabbar" id="tabbar">
-    <button data-tab="segments"><span class="ti">🧭</span>Segments<span class="tbadge" id="tabSegCount">0</span></button>
+    <button data-tab="segmentsPool"><span class="ti">🧭</span>Pool<span class="tbadge" id="tabSegmentsPoolCount">0</span></button>
     <button data-tab="plan"><span class="ti">🧩</span>Plan<span class="tbadge" id="tabPlanCount">0</span></button>
     <button data-tab="map"><span class="ti">🗺</span>Map</button>
   </nav>
