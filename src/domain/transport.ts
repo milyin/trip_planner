@@ -1,4 +1,4 @@
-import type { CurrencyCode, TransportKind } from './types';
+import type { TransportKind } from './types';
 
 /** Transport modes in display order (drives the map legend + modal select). */
 export const TRANSPORT_KINDS: readonly TransportKind[] = ['Plane', 'Train', 'Bus', 'Taxi', 'Car', 'Other'];
@@ -28,14 +28,30 @@ export const LONG_GAP_MIN = 8 * 60;
 /** Ends farther apart than this (km) are "geographically remote" → offer a connecting segment. */
 export const REMOTE_KM = 50;
 
-/** Currency symbol/prefix per code. */
-export const CURRENCY_SYMBOL: Record<CurrencyCode, string> = {
+/** Well-known symbols; anything else falls back to `Intl` then the bare code. */
+export const CURRENCY_SYMBOL: Record<string, string> = {
   EUR: '€', USD: '$', GBP: '£', CHF: 'CHF ',
 };
 
 /** Connection buffer for a mode, defaulting to the `Other` value. */
 export const bufferMin = (t: TransportKind): number => CONNECTION_BUFFER_MIN[t] ?? 30;
 
-/** Symbol for a currency code, tolerating unknown codes (e.g. `"XYZ "`). */
-export const currencySymbol = (c: string): string =>
-  (CURRENCY_SYMBOL as Record<string, string>)[c] ?? c + ' ';
+const symbolCache: Record<string, string> = {};
+
+/** Display symbol for any ISO 4217 code (e.g. `€`, `$`, `¥`, or `"SEK "`). */
+export const currencySymbol = (c: string): string => {
+  if (!c) return '';
+  if (CURRENCY_SYMBOL[c]) return CURRENCY_SYMBOL[c];
+  if (symbolCache[c]) return symbolCache[c];
+  let sym = c + ' ';
+  try {
+    const part = new Intl.NumberFormat(undefined, { style: 'currency', currency: c, currencyDisplay: 'narrowSymbol' })
+      .formatToParts(0)
+      .find((p) => p.type === 'currency');
+    if (part) sym = /^[A-Z]{2,}$/.test(part.value) ? part.value + ' ' : part.value;
+  } catch {
+    /* not a valid code — keep the bare code */
+  }
+  symbolCache[c] = sym;
+  return sym;
+};

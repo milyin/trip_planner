@@ -1,4 +1,5 @@
 import type { CurrencyCode, Hotel, LatLng, Leg, TransportKind } from '../domain/types';
+import { convertCost } from '../domain/convert';
 import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { tzForLatLng } from '../domain/tz';
@@ -12,6 +13,7 @@ import {
 import { parserName, resolveParser, saveSettings, settings, type ResolvedParser } from '../state/settings';
 import { deleteSegment, emitChange, findItem, upsertItem } from '../state/store';
 import { nextId } from '../state/id';
+import { fillCurrencySelect } from './currency';
 import { byId, getVal, setVal } from './dom';
 import { openParserSettings } from './parserSettings';
 
@@ -305,6 +307,74 @@ function bufHint(): void {
   byId('bufHint').textContent = `Needs ≥ ${fmtDur(bufferMin(t) * 60000)} to connect before this leg`;
 }
 
+// --- converted cost (base currency), with a geo-chip-style auto/manual field --
+// Like geocoding: the cost is auto-converted to the settings' base currency the
+// first time, the user may type their own value, and it's never forced.
+interface ConvSpec { cost: string; cur: string; conv: string; chip: string; label: string }
+const CONV: Record<'leg' | 'hotel', ConvSpec> = {
+  leg: { cost: 'fCost', cur: 'fCur', conv: 'fCostConv', chip: 'fConvChip', label: 'fConvCur' },
+  hotel: { cost: 'hCost', cur: 'hCur', conv: 'hCostConv', chip: 'hConvChip', label: 'hConvCur' },
+};
+/** Per converted-cost input: true once the user typed a value themselves. */
+const convManual: Record<string, boolean> = {};
+const convToken: Record<string, number> = {};
+
+type ConvStatus = 'empty' | 'busy' | 'ok' | 'fail' | 'manual' | 'same';
+function renderConvChip(chipId: string, status: ConvStatus): void {
+  const chip = byId<HTMLButtonElement>(chipId);
+  chip.className = 'geo-chip ' + (status === 'manual' || status === 'same' ? '' : status);
+  const labels: Record<ConvStatus, string> = {
+    empty: '·', busy: '⏳ converting…', ok: '✓ auto', fail: '✗ retry', manual: '✎ manual', same: '= base',
+  };
+  chip.textContent = labels[status];
+  chip.style.visibility = status === 'empty' ? 'hidden' : 'visible';
+  chip.title = status === 'fail' ? 'Conversion failed — click to retry'
+    : status === 'manual' ? 'Your own value — click to auto-convert instead'
+    : 'Convert the cost to the base currency';
+}
+
+/** Recompute the converted-cost field for the given form from the live rate. */
+function refreshConv(kind: 'leg' | 'hotel', opts: { force?: boolean; onlyIfEmpty?: boolean } = {}): void {
+  const s = CONV[kind];
+  const base = settings.baseCurrency;
+  byId(s.label).textContent = base ? `(${base})` : '';
+  const cost = Number(getVal(s.cost)) || 0;
+  const cur = getVal(s.cur);
+  if (!cur || cur === base) { setVal(s.conv, cost ? String(cost) : ''); renderConvChip(s.chip, 'same'); return; }
+  if (!cost) { setVal(s.conv, ''); renderConvChip(s.chip, 'empty'); return; }
+  if (convManual[s.conv] && !opts.force) { renderConvChip(s.chip, 'manual'); return; }
+  if (opts.onlyIfEmpty && getVal(s.conv).trim() && !opts.force) { renderConvChip(s.chip, 'ok'); return; }
+  const tok = (convToken[s.conv] = (convToken[s.conv] || 0) + 1);
+  renderConvChip(s.chip, 'busy');
+  void convertCost(cost, cur, base, { priority: true }).then((v) => {
+    if (convToken[s.conv] !== tok) return; // fields changed while converting
+    if (v == null) { renderConvChip(s.chip, 'fail'); return; }
+    setVal(s.conv, String(Math.round(v * 100) / 100));
+    convManual[s.conv] = false;
+    renderConvChip(s.chip, 'ok');
+  });
+}
+
+/** Initialise a form's currency select + converted-cost field on open. */
+function initCurrency(kind: 'leg' | 'hotel', currency: string, converted: number | undefined, manual: boolean): void {
+  const s = CONV[kind];
+  fillCurrencySelect(byId<HTMLSelectElement>(s.cur), currency);
+  setVal(s.conv, converted != null ? String(converted) : '');
+  convManual[s.conv] = manual;
+  refreshConv(kind, { onlyIfEmpty: true });
+}
+
+/** The converted-cost fields to store: none when the record is already in the
+ * base currency, otherwise the field value + whether the user set it. */
+function readConverted(kind: 'leg' | 'hotel'): { costConverted?: number; costConvertedManual?: boolean } {
+  const s = CONV[kind];
+  if (getVal(s.cur) === settings.baseCurrency) return {};
+  const raw = getVal(s.conv).trim();
+  const v = Number(raw);
+  if (!raw || !Number.isFinite(v)) return {};
+  return { costConverted: v, costConvertedManual: convManual[s.conv] ? true : undefined };
+}
+
 function refreshParserCombo(): void {
   const sel = byId<HTMLSelectElement>('fParser');
   sel.innerHTML = '';
@@ -342,6 +412,7 @@ function fillLegFields(leg: ExtractedLeg): void {
   set('fCost', leg.cost);
   set('fCur', leg.currency);
   bufHint();
+  refreshConv('leg'); // recognised cost/currency — convert to the base currency
   // The recognised places are new text — locate them right away.
   for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
@@ -350,7 +421,7 @@ function fillLegFields(leg: ExtractedLeg): void {
  * none is usable yet. Returns `null` when still unconfigured. */
 async function ensureParser(): Promise<ResolvedParser | null> {
   if (!settings.parsers.length) {
-    await openParserSettings();
+    await openParserSettings('llm');
     refreshParserCombo();
     if (!settings.parsers.length) return null;
   }
@@ -358,7 +429,7 @@ async function ensureParser(): Promise<ResolvedParser | null> {
   const parser = resolveParser(entry);
   if (!parser || !parser.apiKey) {
     alert('The selected parser has no account key — fill it in the LLM configuration.');
-    await openParserSettings();
+    await openParserSettings('llm');
     refreshParserCombo();
     return null;
   }
@@ -448,6 +519,7 @@ function fillHotelFields(h: ExtractedHotel): void {
   if (h.checkOut) setDT('hOutDate', 'hOutTime', h.checkOut);
   set('hCost', h.cost);
   set('hCur', h.currency);
+  refreshConv('hotel'); // recognised cost/currency — convert to the base currency
   // The recognised places are new text — locate them right away.
   resolveSlot('hotCity');
   resolveSlot('hotAddr');
@@ -488,7 +560,7 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   setVal('fTransfers', r ? r.transfers : P.transfers ?? 0);
   setVal('fTransfersInfo', r ? r.transfersInfo : P.transfersInfo ?? '');
   setVal('fCost', r ? r.cost : P.cost ?? '');
-  setVal('fCur', r ? r.currency : P.currency ?? 'EUR');
+  initCurrency('leg', r ? r.currency : P.currency ?? settings.baseCurrency, r?.costConverted, !!r?.costConvertedManual);
   setVal('fNote', '');
   refreshParserCombo();
   bufHint();
@@ -526,7 +598,7 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   const hTz = h ? h.tz ?? '' : '';
   setVal('hTz', hTz); tzAuto.hTz = !hTz;
   setVal('hCost', h ? h.cost : P.cost ?? '');
-  setVal('hCur', h ? h.currency : P.currency ?? 'EUR');
+  initCurrency('hotel', h ? h.currency : P.currency ?? settings.baseCurrency, h?.costConverted, !!h?.costConvertedManual);
   setVal('fNote', '');
   refreshParserCombo();
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
@@ -603,6 +675,7 @@ async function doSaveLeg(dc: string, ac: string): Promise<void> {
     transfersInfo: getVal('fTransfersInfo').trim(),
     cost: Number(getVal('fCost') || 0),
     currency: getVal('fCur') as CurrencyCode,
+    ...readConverted('leg'),
     attachment,
     inPlan: existing ? existing.inPlan : newInPlan,
   };
@@ -652,6 +725,7 @@ async function saveHotel(): Promise<void> {
       tz: getVal('hTz').trim() || undefined,
       cost: Number(getVal('hCost') || 0),
       currency: getVal('hCur') as CurrencyCode,
+      ...readConverted('hotel'),
       attachment,
       ll: placeLl('hotCity', 'hotAddr'),
       inPlan: existing ? existing.inPlan : newInPlan,
@@ -685,6 +759,16 @@ export function wireModal(): void {
   for (const id of ['fDepTz', 'fArrTz', 'hTz']) {
     byId(id).addEventListener('input', () => { tzAuto[id] = false; });
   }
+  // Converted cost: editing the cost or currency re-converts (unless the user
+  // typed their own value); the chip forces a fresh conversion.
+  byId('fCost').addEventListener('input', () => refreshConv('leg'));
+  byId('hCost').addEventListener('input', () => refreshConv('hotel'));
+  byId('fCur').addEventListener('change', () => refreshConv('leg'));
+  byId('hCur').addEventListener('change', () => refreshConv('hotel'));
+  byId('fCostConv').addEventListener('input', () => { convManual.fCostConv = true; renderConvChip('fConvChip', 'manual'); });
+  byId('hCostConv').addEventListener('input', () => { convManual.hCostConv = true; renderConvChip('hConvChip', 'manual'); });
+  byId('fConvChip').onclick = (e) => { e.preventDefault(); refreshConv('leg', { force: true }); };
+  byId('hConvChip').onclick = (e) => { e.preventDefault(); refreshConv('hotel', { force: true }); };
   byId('mtabForm').onclick = () => {
     activeTab = 'form';
     applyTabs();
@@ -757,7 +841,7 @@ export function wireModal(): void {
   });
   byId('recogniseBtn').onclick = () => void recognise();
   byId('cfgParsersBtn').onclick = async () => {
-    await openParserSettings();
+    await openParserSettings('llm');
     refreshParserCombo();
   };
   byId('fParser').onchange = () => {

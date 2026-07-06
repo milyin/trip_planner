@@ -1,6 +1,7 @@
 import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
+import { backfillConversions } from './domain/convert';
 import { backfillCoordinates } from './domain/geocode';
 import { initMap, resetInitialFit, setShowPool } from './map/mapView';
 import { settings } from './state/settings';
@@ -58,6 +59,8 @@ void handleShareHash().then(() => {
   // Resolve coordinates that older data or offline saves are missing, so
   // every record eventually shows on the map.
   backfillCoordinates(state.items, emitChange);
+  // Convert any foreign-currency costs to the base currency so plan totals add up.
+  backfillConversions(state.items, settings.baseCurrency, emitChange);
 });
 // Pasting a share link into an already-open app only changes the hash
 // (same-document navigation) — import on hashchange too.
