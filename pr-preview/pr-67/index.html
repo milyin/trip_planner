@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
 <link rel="icon" type="image/svg+xml" href="/trip_planner/pr-preview/pr-67/favicon.svg" />
-  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-67/assets/index-CwyE48RW.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-67/assets/index-BhxO4V8i.css">
+  <script type="module" crossorigin src="/trip_planner/pr-preview/pr-67/assets/index-CsQaJSrL.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/pr-preview/pr-67/assets/index-CbfkdjAv.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -185,9 +185,10 @@
 
 <div class="overlay" id="parserOverlay">
   <div class="modal narrow">
-    <div class="modal-tabs">
+    <div class="modal-tabs settings-tabs">
       <button type="button" class="mtab active" id="stabGeneral">User settings</button>
-      <button type="button" class="mtab" id="stabLlm">LLM</button>
+      <button type="button" class="mtab" id="stabRecognition">Image recognition</button>
+      <button type="button" class="mtab" id="stabAccounts">Accounts</button>
       <div class="x" id="closeParsers">✕</div>
     </div>
     <div class="modal-body single" id="settGeneral">
@@ -195,7 +196,7 @@
       <div class="field full"><label>Base currency <span class="hint">plan totals are shown in this currency</span></label>
         <select id="baseCurSel"></select></div>
     </div>
-    <div class="modal-body single" id="settLlm" style="display:none">
+    <div class="modal-body single" id="settRecognition" style="display:none">
       <div class="leg">Local recognition</div>
       <label class="recognition-toggle">
         <input type="checkbox" id="scribeEnabled">
@@ -206,13 +207,15 @@
         <label id="llmChoiceLabel">Used only when local recognition is insufficient</label>
         <select id="activeLlmParser"></select>
       </div>
-      <div class="leg">Accounts — provider + API key</div>
+      <p class="hint-block" id="llmSettingsHint">Local Scribe.js recognition needs no account. The selected LLM is used only when the local result is insufficient.</p>
+    </div>
+    <div class="modal-body single" id="settAccounts" style="display:none">
+      <div class="leg">Provider accounts — provider + API key</div>
       <div id="accountList" class="parser-list"></div>
       <button class="btn ghost" id="addAccountBtn">＋ Add account</button>
       <div class="leg">Configured parsers — account · model</div>
       <div id="parserList" class="parser-list"></div>
       <button class="btn ghost" id="addParserBtn">＋ Add parser</button>
-      <p class="hint-block" id="llmSettingsHint">Local Scribe.js recognition needs no account. The selected LLM is used only when the local result is insufficient.</p>
       <p class="hint-block">Keys: aistudio.google.com (Gemini) · openrouter.ai/keys (OpenRouter) · console.anthropic.com (Claude).
         OpenRouter also reaches OpenAI/GPT and most other models. Keys are stored only in this browser
         (note: any app hosted on this GitHub Pages origin could read them).</p>
