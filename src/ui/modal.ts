@@ -24,6 +24,10 @@ export interface LegPrefill {
   inPlan?: boolean;
   depCity?: string; depAddr?: string; depTime?: string;
   arrCity?: string; arrAddr?: string; arrTime?: string;
+  /** Clock-only values from partial local OCR; corresponding dates stay blank. */
+  depClock?: string; arrClock?: string;
+  /** Leave missing recognition fields blank instead of keeping form defaults. */
+  partial?: boolean;
   transport?: TransportKind; company?: string; cost?: number; currency?: CurrencyCode;
   transfers?: number; transfersInfo?: string;
   /** Ticket images carried into the dialog (queued multi-leg recognition). */
@@ -34,6 +38,8 @@ export interface HotelPrefill {
   inPlan?: boolean;
   name?: string; city?: string; addr?: string;
   checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode;
+  /** Leave missing recognition fields blank instead of keeping form defaults. */
+  partial?: boolean;
   /** Booking images carried into the dialog (auto-import from paste). */
   files?: File[];
 }
@@ -69,6 +75,8 @@ let queuedFiles: File[] = [];
 /** Exchange shown in this dialog: loaded from storage when editing, replaced
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
+/** A partial local result can be explicitly replaced by the selected LLM. */
+let canRetryWithLlm = false;
 
 /** The LLM-source file notes — the images sent to the model and shown in the
  * Recognize tab's gallery. */
@@ -132,6 +140,7 @@ function applyTabs(): void {
   // footer action follows the tab: Recognise on the Recognize tab, else Save
   byId('saveBtn').style.display = rec ? 'none' : 'inline-flex';
   byId('recogniseBtn').style.display = rec ? 'inline-flex' : 'none';
+  byId('retryLlmBtn').style.display = form && canRetryWithLlm && !!selectedLlmParser() ? 'inline-flex' : 'none';
   if (rec) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
@@ -279,6 +288,7 @@ function addUserText(text: string): void {
 function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
+  canRetryWithLlm = false;
   byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
@@ -559,24 +569,34 @@ function refreshParserCombo(): void {
     ? 'Configure local recognition and optional LLM fallback'
     : 'Configure recognition';
   byId('recognitionHint').textContent = settings.scribeEnabled
-    ? 'Scribe.js reads files locally first. Only if it cannot confidently identify the trip will files be sent to the selected LLM fallback.'
+    ? 'Scribe.js fills reliable fields locally. Incomplete results stay for review; use “Retry with LLM” if needed.'
     : 'Scribe.js is disabled. Files and notes are sent directly to the selected LLM parser.';
   byId('recogniseBtn').title = settings.scribeEnabled
-    ? 'Try local recognition, then the configured LLM fallback'
+    ? 'Recognise locally; use the LLM automatically only if no reliable trip data is found'
     : 'Recognise with the selected LLM parser';
 }
 
 /** Fill the leg form from an extracted leg (only fields the model set). */
-function fillLegFields(leg: ExtractedLeg): void {
+function fillLegFields(leg: ExtractedLeg, partial = false): void {
   const set = (id: string, v: unknown): void => {
     if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
   };
   set('fDepCity', leg.depCity);
   set('fDepAddr', leg.depAddr);
   if (leg.depTime) setDT('fDepDate', 'fDepTime', leg.depTime);
+  else if (leg.depClock) {
+    setVal('fDepDate', '');
+    setVal('fDepTime', leg.depClock);
+  }
+  else if (partial) setDT('fDepDate', 'fDepTime', '');
   set('fArrCity', leg.arrCity);
   set('fArrAddr', leg.arrAddr);
   if (leg.arrTime) setDT('fArrDate', 'fArrTime', leg.arrTime);
+  else if (leg.arrClock) {
+    setVal('fArrDate', '');
+    setVal('fArrTime', leg.arrClock);
+  }
+  else if (partial) setDT('fArrDate', 'fArrTime', '');
   set('fTransport', leg.transport);
   set('fCompany', leg.company);
   set('fTransfers', leg.transfers);
@@ -615,7 +635,7 @@ function explainUnavailableRecognition(localError?: string, hadFiles = true): vo
   );
 }
 
-async function recognise(): Promise<void> {
+async function recognise(forceLlm = false): Promise<void> {
   const note = getVal('fNote');
   const files: File[] = [];
   for (const n of llmFileNotes()) {
@@ -629,11 +649,12 @@ async function recognise(): Promise<void> {
 
   let localError: string | undefined;
   if (editKind === 'hotel') {
-    if (settings.scribeEnabled && files.length) {
+    if (!forceLlm && settings.scribeEnabled && files.length) {
       const local = await tryLocalHotelRecognition(files, note);
       dialogExchange = lastExchange();
       if (local.value) {
-        fillHotelFields(local.value);
+        fillHotelFields(local.value, !!local.partial);
+        canRetryWithLlm = true;
         activeTab = 'form';
         applyTabs();
         return;
@@ -653,12 +674,14 @@ async function recognise(): Promise<void> {
       return;
     }
     fillHotelFields(hotel);
+    canRetryWithLlm = false;
   } else {
-    if (settings.scribeEnabled && files.length) {
+    if (!forceLlm && settings.scribeEnabled && files.length) {
       const local = await tryLocalRecognition(files, note);
       dialogExchange = lastExchange();
       if (local.value) {
-        fillLegFields(local.value[0]);
+        fillLegFields(local.value[0], !!local.partial);
+        canRetryWithLlm = true;
         activeTab = 'form';
         applyTabs();
         return;
@@ -678,6 +701,7 @@ async function recognise(): Promise<void> {
       return;
     }
     fillLegFields(legs[0]);
+    canRetryWithLlm = false;
     queuedLegs = legs.slice(1);
     queuedFiles = queuedLegs.length ? files : [];
   }
@@ -698,11 +722,13 @@ function recogniseFailed(): void {
  * matching dialog with the image attached and the fields filled. */
 export async function importPastedImage(file: File): Promise<void> {
   let localError: string | undefined;
+  let localPartial = false;
   let result = null;
   if (settings.scribeEnabled) {
     const local = await tryLocalAutoRecognition([file], '');
     result = local.value;
     localError = local.error;
+    localPartial = !!local.partial;
   }
   if (!result) {
     const parser = selectedLlmParser();
@@ -724,19 +750,21 @@ export async function importPastedImage(file: File): Promise<void> {
     return;
   }
   if ('hotel' in result) {
-    openHotelModal(null, { ...result.hotel, files: [file] });
+    openHotelModal(null, { ...result.hotel, partial: localPartial, files: [file] });
   } else {
     const [first, ...rest] = result.legs;
-    openModal(null, { ...first, files: [file] });
+    openModal(null, { ...first, partial: localPartial, files: [file] });
     queuedLegs = rest;
     queuedFiles = rest.length ? [file] : [];
   }
   // The exchange belongs to the record(s) just opened; openModal cleared it.
   dialogExchange = lastExchange();
+  canRetryWithLlm = dialogExchange?.provider === 'local';
+  applyTabs();
 }
 
 /** Fill the hotel form from an extracted stay (only fields the model set). */
-function fillHotelFields(h: ExtractedHotel): void {
+function fillHotelFields(h: ExtractedHotel, partial = false): void {
   const set = (id: string, v: unknown): void => {
     if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
   };
@@ -744,7 +772,9 @@ function fillHotelFields(h: ExtractedHotel): void {
   set('hCity', h.city);
   set('hAddr', h.addr);
   if (h.checkIn) setDT('hInDate', 'hInTime', h.checkIn);
+  else if (partial) setDT('hInDate', 'hInTime', '');
   if (h.checkOut) setDT('hOutDate', 'hOutTime', h.checkOut);
+  else if (partial) setDT('hOutDate', 'hOutTime', '');
   set('hCost', h.cost);
   set('hCur', h.currency);
   refreshConv('hotel'); // recognised cost/currency — convert to the base currency
@@ -775,9 +805,19 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   setVal('fDepCity', r ? r.dep.city : P.depCity ?? '');
   setVal('fDepAddr', r ? r.dep.addr : P.depAddr ?? '');
   setDT('fDepDate', 'fDepTime', r ? r.dep.time : P.depTime ?? '2026-05-01T12:00');
+  if (!r && P.depClock) {
+    setVal('fDepDate', '');
+    setVal('fDepTime', P.depClock);
+  }
+  else if (!r && P.partial && !P.depTime) setDT('fDepDate', 'fDepTime', '');
   setVal('fArrCity', r ? r.arr.city : P.arrCity ?? '');
   setVal('fArrAddr', r ? r.arr.addr : P.arrAddr ?? '');
   setDT('fArrDate', 'fArrTime', r ? r.arr.time : P.arrTime ?? '2026-05-01T14:00');
+  if (!r && P.arrClock) {
+    setVal('fArrDate', '');
+    setVal('fArrTime', P.arrClock);
+  }
+  else if (!r && P.partial && !P.arrTime) setDT('fArrDate', 'fArrTime', '');
   const depTz = r ? r.dep.tz ?? '' : '';
   const arrTz = r ? r.arr.tz ?? '' : '';
   setVal('fDepTz', depTz); tzAuto.fDepTz = !depTz;
@@ -793,6 +833,9 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   bufHint();
   initPlaceSlots('depCity', 'depAddr', r ? r.dep.ll : null);
   initPlaceSlots('arrCity', 'arrAddr', r ? r.arr.ll : null);
+  if (!r) {
+    for (const key of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(key);
+  }
   byId('overlay').classList.add('open');
   renderPreview();
   renderNotes();
@@ -822,6 +865,8 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hAddr', h ? h.addr : P.addr ?? '');
   setDT('hInDate', 'hInTime', h ? h.checkIn : P.checkIn ?? '2026-05-01T15:00');
   setDT('hOutDate', 'hOutTime', h ? h.checkOut : P.checkOut ?? '2026-05-03T11:00');
+  if (!h && P.partial && !P.checkIn) setDT('hInDate', 'hInTime', '');
+  if (!h && P.partial && !P.checkOut) setDT('hOutDate', 'hOutTime', '');
   const hTz = h ? h.tz ?? '' : '';
   setVal('hTz', hTz); tzAuto.hTz = !hTz;
   setVal('hCost', h ? h.cost : P.cost ?? '');
@@ -829,6 +874,10 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('fNote', '');
   refreshParserCombo();
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
+  if (!h) {
+    resolveSlot('hotCity');
+    resolveSlot('hotAddr');
+  }
   byId('overlay').classList.add('open');
   renderPreview();
   renderNotes();
@@ -1086,6 +1135,7 @@ export function wireModal(): void {
     }
   });
   byId('recogniseBtn').onclick = () => void recognise();
+  byId('retryLlmBtn').onclick = () => void recognise(true);
   byId('cfgParsersBtn').onclick = async () => {
     await openParserSettings('recognition');
     refreshParserCombo();

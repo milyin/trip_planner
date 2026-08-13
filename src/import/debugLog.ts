@@ -23,6 +23,9 @@ export interface LlmExchange {
   status?: string;
   rawResponse?: string;
   legs?: unknown;
+  /** Local extraction produced useful fields but could not fill every core field. */
+  partial?: boolean;
+  warning?: string;
   error?: string;
 }
 
@@ -52,6 +55,7 @@ export function formatExchange(x: LlmExchange | null): string {
     `When: ${new Date(x.startedAt).toLocaleString()}${x.durationMs != null ? ` · took ${(x.durationMs / 1000).toFixed(1)} s` : ''}`,
     `Status: ${x.status ?? '—'}`,
   ];
+  if (x.warning) lines.push('', '--- Warning ---', x.warning);
   if (x.error) lines.push('', '--- Error ---', x.error);
   if (x.request !== undefined) lines.push('', '--- Request (file payload elided) ---', JSON.stringify(x.request, null, 2));
   if (x.rawResponse) lines.push('', '--- Raw response ---', x.rawResponse);

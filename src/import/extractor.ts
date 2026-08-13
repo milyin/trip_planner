@@ -11,10 +11,14 @@ export interface ExtractedLeg {
   depAddr?: string;
   /** `datetime-local` string (`YYYY-MM-DDTHH:MM`), local to the departure place. */
   depTime?: string;
+  /** Locally parsed clock when the screenshot does not contain a usable date. */
+  depClock?: string;
   arrCity?: string;
   arrAddr?: string;
   /** `datetime-local` string (`YYYY-MM-DDTHH:MM`), local to the arrival place. */
   arrTime?: string;
+  /** Locally parsed clock when the screenshot does not contain a usable date. */
+  arrClock?: string;
   transport?: TransportKind;
   company?: string;
   /** Number of transfers/connections (0 = direct). */

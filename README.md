@@ -92,18 +92,20 @@ By default, screenshots and PDFs are first read locally in your browser with
 Scribe.js OCR. The app then uses a built-in parser to identify the dates, times,
 places and prices. Your file does not leave the device during this attempt.
 
-If local recognition cannot confidently identify the required trip fields, the
-app can fall back to an AI model you configure below. Without a configured
-fallback, it explains that local recognition was insufficient and leaves you to
-review or enter the fields manually.
+If local recognition finds useful but incomplete trip information, the app
+fills those fields, leaves genuinely missing values blank, and lets you review
+the result. Places are checked with the app's normal OpenStreetMap lookup. You
+can explicitly retry that result with a configured AI model. The app falls back
+automatically only when the local parser finds no reliable trip structure.
 
 ## Setting up recognition
 
 Open **⚙ Settings → Image recognition** from the ☰ menu. The first option
 enables or disables local Scribe.js recognition. Below it, choose one configured LLM parser or
-**No LLM parsing**. With Scribe.js enabled, the selected LLM is a fallback; with
-Scribe.js disabled, files go directly to it. Local recognition needs no account
-or API key.
+**No LLM parsing**. With Scribe.js enabled, the selected LLM handles definite
+local failures and explicit retries; useful partial results are not sent
+automatically. With Scribe.js disabled, files go directly to the selected LLM.
+Local recognition needs no account or API key.
 
 To use an LLM, open **⚙ Settings → Accounts**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then

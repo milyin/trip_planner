@@ -110,10 +110,10 @@ function renderRecognitionChoice(): void {
   const fallback = settings.scribeEnabled;
   byId('llmChoiceTitle').textContent = fallback ? 'LLM fallback' : 'LLM parser';
   byId('llmChoiceLabel').textContent = fallback
-    ? 'Used only when Scribe.js cannot confidently read the file'
+    ? 'Used when Scribe.js finds no usable trip data, or when you explicitly retry'
     : 'Used to recognize images, PDFs and notes';
   byId('llmSettingsHint').textContent = fallback
-    ? 'Scribe.js runs locally first. The selected LLM receives files only when the local result is insufficient.'
+    ? 'Scribe.js runs locally first. Useful partial results stay local for review; the selected LLM is automatic only when no reliable trip data is found.'
     : 'Scribe.js is disabled. Files are sent directly to the selected LLM; choose “No LLM parsing” to disable recognition.';
 
   const select = byId<HTMLSelectElement>('activeLlmParser');

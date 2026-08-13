@@ -1,10 +1,12 @@
 import type { ResolvedParser } from '../state/settings';
 import { byId } from '../ui/dom';
+import { lastExchange } from './debugLog';
 import { AuthError, getExtractor, type AutoExtract, type ExtractedHotel, type ExtractedLeg } from './extractor';
 import { extractLocalAuto, extractLocalHotel, extractLocalLegs } from './local';
 
 export interface LocalAttempt<T> {
   value: T | null;
+  partial?: boolean;
   error?: string;
 }
 
@@ -16,7 +18,8 @@ async function localAttempt<T>(files: File[], work: () => Promise<T>): Promise<L
   byId('importBusyText').textContent = `Reading ${what} locally with Scribe.js…`;
   busy.style.display = 'flex';
   try {
-    return { value: await work() };
+    const value = await work();
+    return { value, partial: lastExchange()?.partial };
   } catch (error) {
     return { value: null, error: error instanceof Error ? error.message : String(error) };
   } finally {

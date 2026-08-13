@@ -175,6 +175,7 @@
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
       <button class="btn ghost" id="cancelBtn">Cancel</button>
+      <button class="btn ghost" id="retryLlmBtn" style="display:none">Retry with LLM</button>
       <button class="btn primary" id="recogniseBtn" style="display:none" title="Recognise attached files or notes">Recognise</button>
       <button class="btn primary" id="saveBtn">Save leg</button>
     </div>
@@ -202,10 +203,10 @@
       </label>
       <div class="leg" id="llmChoiceTitle">LLM fallback</div>
       <div class="field full">
-        <label id="llmChoiceLabel">Used only when local recognition is insufficient</label>
+        <label id="llmChoiceLabel">Used for definite local failures or explicit retry</label>
         <select id="activeLlmParser"></select>
       </div>
-      <p class="hint-block" id="llmSettingsHint">Local Scribe.js recognition needs no account. The selected LLM is used only when the local result is insufficient.</p>
+      <p class="hint-block" id="llmSettingsHint">Useful partial local results remain available for review and can be retried explicitly with the selected LLM.</p>
     </div>
     <div class="modal-body single" id="settAccounts" style="display:none">
       <div class="leg">Provider accounts — provider + API key</div>
