@@ -154,8 +154,7 @@ function thumbMedia(url: string, type: string, name: string): HTMLElement {
   return emb;
 }
 
-/** Render recognition file notes as a removable thumbnail gallery. Files are
- * processed locally first and reach the fallback model only when needed. */
+/** Render recognition file notes as a removable thumbnail gallery. */
 function renderPreview(): void {
   const box = byId('filePreview');
   revokePreviews();
@@ -540,20 +539,31 @@ function readConverted(kind: 'leg' | 'hotel'): { costConverted?: number; costCon
 function refreshParserCombo(): void {
   const sel = byId<HTMLSelectElement>('fParser');
   sel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = settings.scribeEnabled ? 'No LLM fallback' : 'No LLM parsing';
+  sel.appendChild(none);
   settings.parsers.forEach((p, i) => {
     const o = document.createElement('option');
     o.value = String(i);
-    o.textContent = `Fallback: ${parserName(p)}`;
+    o.textContent = settings.scribeEnabled ? `Fallback: ${parserName(p)}` : parserName(p);
     sel.appendChild(o);
   });
-  if (!settings.parsers.length) {
-    const o = document.createElement('option');
-    o.value = '';
-    o.textContent = 'Local only — no LLM fallback';
-    sel.appendChild(o);
-    return;
-  }
-  sel.value = String(Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1));
+  const active = settings.activeParser;
+  sel.value = active != null && settings.parsers[active] ? String(active) : '';
+
+  sel.title = settings.scribeEnabled
+    ? 'Optional LLM fallback used when local recognition is insufficient'
+    : 'LLM parser used for recognition';
+  byId('cfgParsersBtn').title = settings.scribeEnabled
+    ? 'Configure local recognition and optional LLM fallback'
+    : 'Configure recognition';
+  byId('recognitionHint').textContent = settings.scribeEnabled
+    ? 'Scribe.js reads files locally first. Only if it cannot confidently identify the trip will files be sent to the selected LLM fallback.'
+    : 'Scribe.js is disabled. Files and notes are sent directly to the selected LLM parser.';
+  byId('recogniseBtn').title = settings.scribeEnabled
+    ? 'Try local recognition, then the configured LLM fallback'
+    : 'Recognise with the selected LLM parser';
 }
 
 /** Fill the leg form from an extracted leg (only fields the model set). */
@@ -579,18 +589,27 @@ function fillLegFields(leg: ExtractedLeg): void {
   for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
 
-/** Resolve the optional remote fallback selected in the recognition tab. */
-function fallbackParser(): ResolvedParser | null {
-  if (!settings.parsers.length) return null;
-  const entry = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
+/** Resolve the optional remote parser selected in the recognition tab. */
+function selectedLlmParser(): ResolvedParser | null {
+  if (settings.activeParser == null) return null;
+  const entry = settings.parsers[settings.activeParser];
+  if (!entry) return null;
   const parser = resolveParser(entry);
   return parser?.apiKey ? parser : null;
 }
 
-function explainMissingFallback(localError?: string): void {
+function explainUnavailableRecognition(localError?: string, hadFiles = true): void {
   const detail = localError ? `\n\nLocal result: ${localError}` : '';
+  if (!settings.scribeEnabled) {
+    alert(
+      settings.activeParser == null
+        ? 'Recognition is disabled. Enable Scribe.js or select an LLM parser in ⚙ settings.'
+        : 'Scribe.js is disabled and the selected LLM parser is unavailable. Check its account and API key in ⚙ settings.',
+    );
+    return;
+  }
   alert(
-    'Local recognition could not confidently fill the trip fields. You can enter them manually, '
+    `${hadFiles ? 'Local recognition could not confidently fill the trip fields.' : 'Scribe.js only reads attached images and PDFs.'} You can enter the fields manually, `
       + 'or configure an LLM fallback with the ⚙ button and try again. Your file is sent to the configured '
       + `provider only when local recognition is insufficient.${detail}`,
   );
@@ -610,7 +629,7 @@ async function recognise(): Promise<void> {
 
   let localError: string | undefined;
   if (editKind === 'hotel') {
-    if (files.length) {
+    if (settings.scribeEnabled && files.length) {
       const local = await tryLocalHotelRecognition(files, note);
       dialogExchange = lastExchange();
       if (local.value) {
@@ -621,9 +640,9 @@ async function recognise(): Promise<void> {
       }
       localError = local.error;
     }
-    const parser = fallbackParser();
+    const parser = selectedLlmParser();
     if (!parser) {
-      explainMissingFallback(localError);
+      explainUnavailableRecognition(localError, files.length > 0);
       recogniseFailed();
       return;
     }
@@ -635,7 +654,7 @@ async function recognise(): Promise<void> {
     }
     fillHotelFields(hotel);
   } else {
-    if (files.length) {
+    if (settings.scribeEnabled && files.length) {
       const local = await tryLocalRecognition(files, note);
       dialogExchange = lastExchange();
       if (local.value) {
@@ -646,9 +665,9 @@ async function recognise(): Promise<void> {
       }
       localError = local.error;
     }
-    const parser = fallbackParser();
+    const parser = selectedLlmParser();
     if (!parser) {
-      explainMissingFallback(localError);
+      explainUnavailableRecognition(localError, files.length > 0);
       recogniseFailed();
       return;
     }
@@ -678,14 +697,19 @@ function recogniseFailed(): void {
 /** Image pasted with no dialog open: auto-detect leg vs hotel, then open the
  * matching dialog with the image attached and the fields filled. */
 export async function importPastedImage(file: File): Promise<void> {
-  const local = await tryLocalAutoRecognition([file], '');
-  let result = local.value;
+  let localError: string | undefined;
+  let result = null;
+  if (settings.scribeEnabled) {
+    const local = await tryLocalAutoRecognition([file], '');
+    result = local.value;
+    localError = local.error;
+  }
   if (!result) {
-    const parser = fallbackParser();
+    const parser = selectedLlmParser();
     if (!parser) {
       openModal(null, { files: [file] });
       dialogExchange = lastExchange();
-      explainMissingFallback(local.error);
+      explainUnavailableRecognition(localError);
       recogniseFailed();
       return;
     }
@@ -1067,11 +1091,9 @@ export function wireModal(): void {
     refreshParserCombo();
   };
   byId('fParser').onchange = () => {
-    const v = Number(getVal('fParser'));
-    if (!Number.isNaN(v)) {
-      settings.activeParser = v;
-      saveSettings();
-    }
+    const value = getVal('fParser');
+    settings.activeParser = value === '' ? null : Number(value);
+    saveSettings();
   };
   byId('overlay').onclick = (e) => {
     if ((e.target as HTMLElement).id === 'overlay') closeModal();

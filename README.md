@@ -88,22 +88,27 @@ The app reads the cities, times, dates, price, carrier, and so on, and drops the
 into the form. You always review and edit before saving — nothing is added
 without your say-so.
 
-Screenshots and PDFs are first read locally in your browser with Scribe.js OCR.
-The app then uses a built-in parser to identify the dates, times, places and
-prices. Your file does not leave the device during this attempt.
+By default, screenshots and PDFs are first read locally in your browser with
+Scribe.js OCR. The app then uses a built-in parser to identify the dates, times,
+places and prices. Your file does not leave the device during this attempt.
 
 If local recognition cannot confidently identify the required trip fields, the
 app can fall back to an AI model you configure below. Without a configured
 fallback, it explains that local recognition was insufficient and leaves you to
 review or enter the fields manually.
 
-## Setting up optional recognition fallback
+## Setting up recognition
 
-Local recognition needs no account or API key. To enable a fallback, open **⚙
-LLM configuration** from the ☰ menu. You add an **account** (a provider
-plus your API key) and a **parser** (which model on that account to use). Your
-keys are stored only in this browser and are never sent anywhere except to the
-provider you chose.
+Open **⚙ Settings → LLM** from the ☰ menu. The first option enables or disables
+local Scribe.js recognition. Below it, choose one configured LLM parser or
+**No LLM parsing**. With Scribe.js enabled, the selected LLM is a fallback; with
+Scribe.js disabled, files go directly to it. Local recognition needs no account
+or API key.
+
+To use an LLM, add an **account** (a provider plus your API key) and a **parser**
+(which model on that account to use), then select that parser above the lists.
+Your keys are stored only in this browser and are never sent anywhere except to
+the provider you chose.
 
 Supported providers:
 
@@ -115,9 +120,9 @@ Supported providers:
   console.anthropic.com.
 - **Gemini (Google)** — get a key at aistudio.google.com.
 
-You can keep several accounts and parsers and switch the fallback in the add
-dialog. Files are sent to that provider only after local recognition has failed.
-If you never set one up, local recognition and manual entry remain available.
+You can keep several accounts and parsers while selecting only one for
+recognition. If both Scribe.js and LLM parsing are disabled, the app explains
+that recognition is unavailable and manual entry remains available.
 
 ## Your data stays with you
 

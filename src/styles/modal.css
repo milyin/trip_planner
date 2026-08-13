@@ -108,6 +108,11 @@
 .leg-import > .hint-block{padding:0 20px 10px}
 
 /* LLM configuration dialog: inline-editable account and parser rows. */
+.recognition-toggle{display:flex; align-items:center; gap:10px; padding:10px 12px;
+  border:1px solid var(--border); border-radius:10px; background:var(--panel-2); cursor:pointer}
+.recognition-toggle input{width:18px; height:18px; margin:0; accent-color:var(--accent)}
+.recognition-toggle span{display:flex; flex-direction:column; gap:2px; color:var(--text); font-size:13px}
+.recognition-toggle small{color:var(--faint); font-size:11px; font-weight:400}
 .parser-list{display:flex; flex-direction:column; gap:6px}
 .parser-row{display:flex; align-items:center; gap:8px; background:var(--panel-2);
   border:1px solid var(--border); border-radius:10px; padding:4px 6px}
@@ -116,9 +121,6 @@
 .parser-row select{flex:0 0 auto; max-width:45%}
 .parser-row input{flex:1}
 .parser-row select:focus, .parser-row input:focus{border-color:var(--accent)}
-/* the "default parser" radio must not stretch or take the text-input styling */
-.parser-row input.def-radio{flex:0 0 auto; width:16px; height:16px; min-width:0; margin:0 2px;
-  padding:0; border-radius:50%; accent-color:var(--accent); cursor:pointer}
 .empty-note{color:var(--faint); font-size:12px}
 
 /* Notes tab: list of files (LLM + user) and text/link notes, each removable. */

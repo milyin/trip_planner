@@ -93,11 +93,10 @@
       </div>
       <div class="import-controls">
         <input id="fNote" placeholder="Optional recognition note — e.g. “the 20:09 direct train”">
-        <select id="fParser" title="LLM fallback used only when local recognition is insufficient"></select>
-        <button class="btn icon ghost" id="cfgParsersBtn" title="Configure optional LLM fallback">⚙</button>
+        <select id="fParser" title="Recognition method"></select>
+        <button class="btn icon ghost" id="cfgParsersBtn" title="Configure recognition">⚙</button>
       </div>
-      <p class="hint-block">Scribe.js reads files locally first. Only if it cannot confidently identify the trip
-        will the files be sent to the selected LLM fallback.</p>
+      <p class="hint-block" id="recognitionHint">Configure local or LLM recognition in settings.</p>
       <details class="llm-details" id="llmDetails">
         <summary>Recognition details</summary>
         <pre id="llmDump"></pre>
@@ -176,7 +175,7 @@
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
       <button class="btn ghost" id="cancelBtn">Cancel</button>
-      <button class="btn primary" id="recogniseBtn" style="display:none" title="Try local recognition, then the configured LLM fallback">Recognise</button>
+      <button class="btn primary" id="recogniseBtn" style="display:none" title="Recognise attached files or notes">Recognise</button>
       <button class="btn primary" id="saveBtn">Save leg</button>
     </div>
   </div>
@@ -195,14 +194,24 @@
         <select id="baseCurSel"></select></div>
     </div>
     <div class="modal-body single" id="settLlm" style="display:none">
+      <div class="leg">Local recognition</div>
+      <label class="recognition-toggle">
+        <input type="checkbox" id="scribeEnabled">
+        <span><strong>Enable Scribe.js</strong><small>Read images and PDFs locally in this browser</small></span>
+      </label>
+      <div class="leg" id="llmChoiceTitle">LLM fallback</div>
+      <div class="field full">
+        <label id="llmChoiceLabel">Used only when local recognition is insufficient</label>
+        <select id="activeLlmParser"></select>
+      </div>
       <div class="leg">Accounts — provider + API key</div>
       <div id="accountList" class="parser-list"></div>
       <button class="btn ghost" id="addAccountBtn">＋ Add account</button>
-      <div class="leg">Fallback parsers — default · account · model</div>
+      <div class="leg">Configured parsers — account · model</div>
       <div id="parserList" class="parser-list"></div>
       <button class="btn ghost" id="addParserBtn">＋ Add parser</button>
-      <p class="hint-block">Local Scribe.js recognition needs no account. These parsers are used only when the local result is insufficient.
-        Keys: aistudio.google.com (Gemini) · openrouter.ai/keys (OpenRouter) · console.anthropic.com (Claude).
+      <p class="hint-block" id="llmSettingsHint">Local Scribe.js recognition needs no account. The selected LLM is used only when the local result is insufficient.</p>
+      <p class="hint-block">Keys: aistudio.google.com (Gemini) · openrouter.ai/keys (OpenRouter) · console.anthropic.com (Claude).
         OpenRouter also reaches OpenAI/GPT and most other models. Keys are stored only in this browser
         (note: any app hosted on this GitHub Pages origin could read them).</p>
     </div>
