@@ -8,17 +8,16 @@ import { formatExchange, lastExchange, type LlmExchange } from '../import/debugL
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
 import {
   runAutoRecognition, runHotelRecognition, runRecognition,
-  tryLocalAutoRecognition, tryLocalHotelRecognition, tryLocalRecognition,
+  tryLocalAutoRecognition, tryLocalRecognition,
 } from '../import/recognise';
 import {
   deleteAttachment, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
 } from '../state/attachments';
-import { parserName, resolveParser, saveSettings, settings, type ResolvedParser } from '../state/settings';
+import { parserName, resolveParser, settings, type ResolvedParser } from '../state/settings';
 import { deleteSegment, emitChange, findItem, upsertItem } from '../state/store';
 import { genNoteId, nextId } from '../state/id';
 import { fillCurrencySelect } from './currency';
 import { byId, getVal, mkBtn, setVal } from './dom';
-import { openParserSettings } from './parserSettings';
 
 export interface LegPrefill {
   inPlan?: boolean;
@@ -143,7 +142,7 @@ function applyTabs(): void {
   // footer action follows the tab: Recognise on the Recognize tab, else Save
   byId('saveBtn').style.display = rec ? 'none' : 'inline-flex';
   byId('recogniseBtn').style.display = rec ? 'inline-flex' : 'none';
-  byId('retryLlmBtn').style.display = form && canRetryWithLlm && !!selectedLlmParser() ? 'inline-flex' : 'none';
+  byId('retryLlmBtn').style.display = form && canRetryWithLlm && !!selectedRecognitionLlmParser() ? 'inline-flex' : 'none';
   if (rec) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
@@ -623,34 +622,74 @@ function readConverted(kind: 'leg' | 'hotel'): { costConverted?: number; costCon
   return { costConverted: v, costConvertedManual: convManual[s.conv] ? true : undefined };
 }
 
+type RecognitionChoice = 'local' | 'default' | `parser:${number}`;
+
+function resolvedParserAt(index: number | null): ResolvedParser | null {
+  if (index == null) return null;
+  const entry = settings.parsers[index];
+  if (!entry) return null;
+  const parser = resolveParser(entry);
+  return parser?.apiKey ? parser : null;
+}
+
+const defaultLlmParser = (): ResolvedParser | null => resolvedParserAt(settings.activeParser);
+
+function parserForChoice(choice: string): ResolvedParser | null {
+  if (choice === 'default') return defaultLlmParser();
+  const match = choice.match(/^parser:(\d+)$/);
+  return match ? resolvedParserAt(Number(match[1])) : null;
+}
+
+function selectedRecognitionLlmParser(): ResolvedParser | null {
+  return parserForChoice(getVal('fParser'));
+}
+
+function refreshRecognitionHint(): void {
+  const choice = getVal('fParser') as RecognitionChoice;
+  if (editKind === 'hotel') {
+    byId('recognitionHint').textContent = choice === 'default'
+      ? 'Hotel recognition uses the configured Default Fallback. Local Scribe.js parsing is disabled for hotels.'
+      : 'Hotel recognition uses the selected LLM parser. Local Scribe.js parsing is disabled for hotels.';
+    byId('recogniseBtn').title = 'Recognise the hotel with the selected LLM parser';
+    return;
+  }
+  if (choice === 'local') {
+    byId('recognitionHint').textContent = 'Scribe.js fills reliable fields locally. After this attempt, the selector switches to Default Fallback for an optional retry.';
+    byId('recogniseBtn').title = 'Recognise locally with Scribe.js';
+  } else if (choice === 'default') {
+    byId('recognitionHint').textContent = 'Recognise directly with the Default Fallback configured in Settings → Image recognition.';
+    byId('recogniseBtn').title = 'Recognise with the Default Fallback';
+  } else {
+    byId('recognitionHint').textContent = 'Recognise directly with this LLM parser for this attempt only.';
+    byId('recogniseBtn').title = 'Recognise with the selected LLM parser';
+  }
+}
+
 function refreshParserCombo(): void {
   const sel = byId<HTMLSelectElement>('fParser');
   sel.innerHTML = '';
-  const none = document.createElement('option');
-  none.value = '';
-  none.textContent = settings.scribeEnabled ? 'No LLM fallback' : 'No LLM parsing';
-  sel.appendChild(none);
+  if (editKind === 'leg' && settings.scribeEnabled) {
+    const local = document.createElement('option');
+    local.value = 'local';
+    local.textContent = 'Local Scribe.js';
+    sel.appendChild(local);
+  }
+  const fallback = document.createElement('option');
+  fallback.value = 'default';
+  const active = settings.activeParser;
+  fallback.textContent = active != null && settings.parsers[active]
+    ? `Default Fallback — ${parserName(settings.parsers[active])}`
+    : 'Default Fallback — not configured';
+  sel.appendChild(fallback);
   settings.parsers.forEach((p, i) => {
     const o = document.createElement('option');
-    o.value = String(i);
-    o.textContent = settings.scribeEnabled ? `Fallback: ${parserName(p)}` : parserName(p);
+    o.value = `parser:${i}`;
+    o.textContent = parserName(p);
     sel.appendChild(o);
   });
-  const active = settings.activeParser;
-  sel.value = active != null && settings.parsers[active] ? String(active) : '';
-
-  sel.title = settings.scribeEnabled
-    ? 'Optional LLM fallback used when local recognition is insufficient'
-    : 'LLM parser used for recognition';
-  byId('cfgParsersBtn').title = settings.scribeEnabled
-    ? 'Configure local recognition and optional LLM fallback'
-    : 'Configure recognition';
-  byId('recognitionHint').textContent = settings.scribeEnabled
-    ? 'Scribe.js fills reliable fields locally. Incomplete results stay for review; use “Retry with LLM” if needed.'
-    : 'Scribe.js is disabled. Files and notes are sent directly to the selected LLM parser.';
-  byId('recogniseBtn').title = settings.scribeEnabled
-    ? 'Recognise locally; use the LLM automatically only if no reliable trip data is found'
-    : 'Recognise with the selected LLM parser';
+  sel.value = editKind === 'leg' && settings.scribeEnabled ? 'local' : 'default';
+  sel.title = 'Parser used for this recognition attempt';
+  refreshRecognitionHint();
 }
 
 /** Fill the leg form from an extracted leg (only fields the model set). */
@@ -688,28 +727,23 @@ function fillLegFields(leg: ExtractedLeg, partial = false): void {
   for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
 
-/** Resolve the optional remote parser selected in the recognition tab. */
-function selectedLlmParser(): ResolvedParser | null {
-  if (settings.activeParser == null) return null;
-  const entry = settings.parsers[settings.activeParser];
-  if (!entry) return null;
-  const parser = resolveParser(entry);
-  return parser?.apiKey ? parser : null;
-}
-
 function explainUnavailableRecognition(localError?: string, hadFiles = true): void {
   const detail = localError ? `\n\nLocal result: ${localError}` : '';
+  if (editKind === 'hotel') {
+    alert('Hotel recognition requires an LLM parser. Configure a Default Fallback or choose a parser in Settings → Parsers.');
+    return;
+  }
   if (!settings.scribeEnabled) {
     alert(
       settings.activeParser == null
-        ? 'Recognition is disabled. Enable Scribe.js or select an LLM parser in ⚙ settings.'
-        : 'Scribe.js is disabled and the selected LLM parser is unavailable. Check its account and API key in ⚙ settings.',
+        ? 'Recognition is unavailable. Configure a Default Fallback or choose a parser in Settings → Parsers.'
+        : 'The selected LLM parser is unavailable. Check its account and API key in Settings → Parsers.',
     );
     return;
   }
   alert(
     `${hadFiles ? 'Local recognition could not confidently fill the trip fields.' : 'Scribe.js only reads attached images and PDFs.'} You can enter the fields manually, `
-      + 'or configure an LLM fallback with the ⚙ button and try again. Your file is sent to the configured '
+      + 'or configure a Default Fallback in Settings and try again. Your file is sent to the configured '
       + `provider only when local recognition is insufficient.${detail}`,
   );
 }
@@ -726,21 +760,11 @@ async function recognise(forceLlm = false): Promise<void> {
     return;
   }
 
+  const selectedChoice = getVal('fParser') as RecognitionChoice;
+  const useLocal = !forceLlm && editKind === 'leg' && selectedChoice === 'local';
   let localError: string | undefined;
   if (editKind === 'hotel') {
-    if (!forceLlm && settings.scribeEnabled && files.length) {
-      const local = await tryLocalHotelRecognition(files, note);
-      dialogExchange = lastExchange();
-      if (local.value) {
-        fillHotelFields(local.value, !!local.partial);
-        canRetryWithLlm = true;
-        activeTab = 'form';
-        applyTabs();
-        return;
-      }
-      localError = local.error;
-    }
-    const parser = selectedLlmParser();
+    const parser = parserForChoice(forceLlm ? 'default' : selectedChoice);
     if (!parser) {
       explainUnavailableRecognition(localError, files.length > 0);
       recogniseFailed();
@@ -755,9 +779,11 @@ async function recognise(forceLlm = false): Promise<void> {
     fillHotelFields(hotel);
     canRetryWithLlm = false;
   } else {
-    if (!forceLlm && settings.scribeEnabled && files.length) {
+    if (useLocal && files.length) {
       const local = await tryLocalRecognition(files, note);
       dialogExchange = lastExchange();
+      byId<HTMLSelectElement>('fParser').value = 'default';
+      refreshRecognitionHint();
       if (local.value) {
         fillLegFields(local.value[0], !!local.partial);
         canRetryWithLlm = true;
@@ -768,7 +794,7 @@ async function recognise(forceLlm = false): Promise<void> {
       }
       localError = local.error;
     }
-    const parser = selectedLlmParser();
+    const parser = useLocal || forceLlm ? defaultLlmParser() : parserForChoice(selectedChoice);
     if (!parser) {
       explainUnavailableRecognition(localError, files.length > 0);
       recogniseFailed();
@@ -812,7 +838,7 @@ export async function importPastedImage(file: File): Promise<void> {
     localPartial = !!local.partial;
   }
   if (!result) {
-    const parser = selectedLlmParser();
+    const parser = defaultLlmParser();
     if (!parser) {
       openModal(null, { files: [file] });
       dialogExchange = lastExchange();
@@ -1228,15 +1254,7 @@ export function wireModal(): void {
   });
   byId('recogniseBtn').onclick = () => void recognise();
   byId('retryLlmBtn').onclick = () => void recognise(true);
-  byId('cfgParsersBtn').onclick = async () => {
-    await openParserSettings('recognition');
-    refreshParserCombo();
-  };
-  byId('fParser').onchange = () => {
-    const value = getVal('fParser');
-    settings.activeParser = value === '' ? null : Number(value);
-    saveSettings();
-  };
+  byId('fParser').onchange = refreshRecognitionHint;
   byId('overlay').onclick = (e) => {
     if ((e.target as HTMLElement).id === 'overlay') closeModal();
   };

@@ -108,7 +108,7 @@ function renderLists(): void {
 function renderRecognitionChoice(): void {
   byId<HTMLInputElement>('scribeEnabled').checked = settings.scribeEnabled;
   const fallback = settings.scribeEnabled;
-  byId('llmChoiceTitle').textContent = fallback ? 'LLM fallback' : 'LLM parser';
+  byId('llmChoiceTitle').textContent = fallback ? 'Default Fallback' : 'Default LLM parser';
   byId('llmChoiceLabel').textContent = fallback
     ? 'Used when Scribe.js finds no usable trip data, or when you explicitly retry'
     : 'Used to recognize images, PDFs and notes';

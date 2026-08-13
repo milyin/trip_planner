@@ -107,7 +107,7 @@ local failures and explicit retries; useful partial results are not sent
 automatically. With Scribe.js disabled, files go directly to the selected LLM.
 Local recognition needs no account or API key.
 
-To use an LLM, open **⚙ Settings → Accounts**, add an **account** (a provider
+To use an LLM, open **⚙ Settings → Parsers**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then
 select that parser under **Image recognition**.
 Your keys are stored only in this browser and are never sent anywhere except to
@@ -123,9 +123,14 @@ Supported providers:
   console.anthropic.com.
 - **Gemini (Google)** — get a key at aistudio.google.com.
 
-You can keep several accounts and parsers while selecting only one for
-recognition. If both Scribe.js and LLM parsing are disabled, the app explains
-that recognition is unavailable and manual entry remains available.
+You can keep several accounts and parsers while selecting one as the default.
+If both Scribe.js and LLM parsing are disabled, the app explains that
+recognition is unavailable and manual entry remains available.
+
+The Recognize tab can use Local Scribe.js, the configured **Default Fallback**,
+or any parser for that attempt without changing the default. After a local
+attempt it switches to Default Fallback so an LLM retry is one click away.
+Hotel recognition is LLM-only; local Scribe.js parsing is available for legs.
 
 ## Your data stays with you
 

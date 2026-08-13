@@ -94,7 +94,6 @@
       <div class="import-controls">
         <input id="fNote" placeholder="Optional recognition note — e.g. “the 20:09 direct train”">
         <select id="fParser" title="Recognition method"></select>
-        <button class="btn icon ghost" id="cfgParsersBtn" title="Configure recognition">⚙</button>
       </div>
       <p class="hint-block" id="recognitionHint">Configure local or LLM recognition in settings.</p>
       <details class="llm-details" id="llmDetails">
@@ -188,7 +187,7 @@
     <div class="modal-tabs settings-tabs">
       <button type="button" class="mtab active" id="stabGeneral">User settings</button>
       <button type="button" class="mtab" id="stabRecognition">Image recognition</button>
-      <button type="button" class="mtab" id="stabAccounts">Accounts</button>
+      <button type="button" class="mtab" id="stabAccounts">Parsers</button>
       <div class="x" id="closeParsers">✕</div>
     </div>
     <div class="modal-body single" id="settGeneral">
@@ -200,9 +199,9 @@
       <div class="leg">Local recognition</div>
       <label class="recognition-toggle">
         <input type="checkbox" id="scribeEnabled">
-        <span><strong>Enable Scribe.js</strong><small>Read images and PDFs locally in this browser</small></span>
+        <span><strong>Enable Scribe.js</strong><small>Read leg images and PDFs locally in this browser</small></span>
       </label>
-      <div class="leg" id="llmChoiceTitle">LLM fallback</div>
+      <div class="leg" id="llmChoiceTitle">Default Fallback</div>
       <div class="field full">
         <label id="llmChoiceLabel">Used for definite local failures or explicit retry</label>
         <select id="activeLlmParser"></select>
