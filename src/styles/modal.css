@@ -11,6 +11,8 @@
 .modal-tabs .x{margin-left:auto; cursor:pointer; color:var(--muted); font-size:18px; line-height:1; padding:8px 0 8px 12px}
 .mtab{background:none; border:none; border-bottom:2px solid transparent; color:var(--muted);
   padding:9px 12px; margin-bottom:-1px; cursor:pointer; font:inherit; font-size:13px}
+.settings-tabs{padding-left:10px; padding-right:14px}
+.settings-tabs .mtab{padding-left:8px; padding-right:8px; font-size:12px}
 .mtab:hover{color:var(--text)}
 .mtab.active{color:var(--text); border-bottom-color:var(--accent)}
 

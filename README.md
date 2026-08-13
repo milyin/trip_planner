@@ -99,14 +99,15 @@ review or enter the fields manually.
 
 ## Setting up recognition
 
-Open **⚙ Settings → LLM** from the ☰ menu. The first option enables or disables
-local Scribe.js recognition. Below it, choose one configured LLM parser or
+Open **⚙ Settings → Image recognition** from the ☰ menu. The first option
+enables or disables local Scribe.js recognition. Below it, choose one configured LLM parser or
 **No LLM parsing**. With Scribe.js enabled, the selected LLM is a fallback; with
 Scribe.js disabled, files go directly to it. Local recognition needs no account
 or API key.
 
-To use an LLM, add an **account** (a provider plus your API key) and a **parser**
-(which model on that account to use), then select that parser above the lists.
+To use an LLM, open **⚙ Settings → Accounts**, add an **account** (a provider
+plus your API key) and a **parser** (which model on that account to use), then
+select that parser under **Image recognition**.
 Your keys are stored only in this browser and are never sent anywhere except to
 the provider you chose.
 

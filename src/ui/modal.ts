@@ -1087,7 +1087,7 @@ export function wireModal(): void {
   });
   byId('recogniseBtn').onclick = () => void recognise();
   byId('cfgParsersBtn').onclick = async () => {
-    await openParserSettings('llm');
+    await openParserSettings('recognition');
     refreshParserCombo();
   };
   byId('fParser').onchange = () => {

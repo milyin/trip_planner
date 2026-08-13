@@ -9,22 +9,26 @@ import { byId, mkBtn } from './dom';
 const PROVIDERS: LlmProvider[] = ['gemini', 'openrouter', 'anthropic'];
 
 let resolveClose: (() => void) | null = null;
+type SettingsTab = 'general' | 'recognition' | 'accounts';
 
-/** Show the General or LLM tab of the Settings dialog. */
-function showSettingsTab(tab: 'general' | 'llm'): void {
+/** Show one section of the Settings dialog. */
+function showSettingsTab(tab: SettingsTab): void {
   byId('settGeneral').style.display = tab === 'general' ? '' : 'none';
-  byId('settLlm').style.display = tab === 'llm' ? '' : 'none';
+  byId('settRecognition').style.display = tab === 'recognition' ? '' : 'none';
+  byId('settAccounts').style.display = tab === 'accounts' ? '' : 'none';
   byId('stabGeneral').classList.toggle('active', tab === 'general');
-  byId('stabLlm').classList.toggle('active', tab === 'llm');
+  byId('stabRecognition').classList.toggle('active', tab === 'recognition');
+  byId('stabAccounts').classList.toggle('active', tab === 'accounts');
 }
 
-/** Wire the Settings dialog: tabs, base-currency picker, and LLM lists. */
+/** Wire the Settings dialog: preferences, recognition routing, and accounts. */
 export function wireParserSettings(): void {
   byId('settingsBtn').onclick = () => void openParserSettings();
   byId('closeParsers').onclick = close;
   byId('parserDoneBtn').onclick = close;
   byId('stabGeneral').onclick = () => showSettingsTab('general');
-  byId('stabLlm').onclick = () => showSettingsTab('llm');
+  byId('stabRecognition').onclick = () => showSettingsTab('recognition');
+  byId('stabAccounts').onclick = () => showSettingsTab('accounts');
   byId<HTMLInputElement>('scribeEnabled').onchange = (event) => {
     settings.scribeEnabled = (event.target as HTMLInputElement).checked;
     saveSettings();
@@ -64,8 +68,8 @@ export function wireParserSettings(): void {
 }
 
 /** Open the Settings dialog on the given tab (default General); resolves when
- * the user closes it. The recognize flow opens it straight on the LLM tab. */
-export function openParserSettings(tab: 'general' | 'llm' = 'general'): Promise<void> {
+ * the user closes it. The recognize flow opens Image recognition directly. */
+export function openParserSettings(tab: SettingsTab = 'general'): Promise<void> {
   fillCurrencySelect(byId<HTMLSelectElement>('baseCurSel'), settings.baseCurrency);
   renderLists();
   showSettingsTab(tab);
