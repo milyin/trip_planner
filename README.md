@@ -88,12 +88,19 @@ The app reads the cities, times, dates, price, carrier, and so on, and drops the
 into the form. You always review and edit before saving — nothing is added
 without your say-so.
 
-Reading screenshots is powered by an AI model, which you configure once (below).
-Everything else in the app works with no model at all.
+Screenshots and PDFs are first read locally in your browser with Scribe.js OCR.
+The app then uses a built-in parser to identify the dates, times, places and
+prices. Your file does not leave the device during this attempt.
 
-## Setting up screenshot recognition
+If local recognition cannot confidently identify the required trip fields, the
+app can fall back to an AI model you configure below. Without a configured
+fallback, it explains that local recognition was insufficient and leaves you to
+review or enter the fields manually.
 
-Open **⚙ LLM configuration** from the ☰ menu. You add an **account** (a provider
+## Setting up optional recognition fallback
+
+Local recognition needs no account or API key. To enable a fallback, open **⚙
+LLM configuration** from the ☰ menu. You add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use). Your
 keys are stored only in this browser and are never sent anywhere except to the
 provider you chose.
@@ -108,15 +115,18 @@ Supported providers:
   console.anthropic.com.
 - **Gemini (Google)** — get a key at aistudio.google.com.
 
-You can keep several accounts and parsers and switch between them in the add
-dialog. If you never set one up, the app still does everything else — you just
-enter trip details yourself.
+You can keep several accounts and parsers and switch the fallback in the add
+dialog. Files are sent to that provider only after local recognition has failed.
+If you never set one up, local recognition and manual entry remain available.
 
 ## Your data stays with you
 
 Trip Planner has no server. Your trips, your screenshots, and your API keys all
 live in your browser's local storage and never leave your device except when a
-screenshot is sent to the recognition provider you configured.
+screenshot is sent to the recognition provider you configured, and only when
+local recognition cannot confidently extract the trip fields. The pinned
+Scribe.js browser engine and its OCR language data are downloaded and cached on
+first use, but OCR itself runs in your browser.
 
 - **Workspaces** let you keep separate trips side by side. Create, rename, and
   switch between them from the ☰ menu.

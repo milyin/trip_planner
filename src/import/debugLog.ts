@@ -1,5 +1,5 @@
-/** In-memory record of the most recent LLM exchange, shown in the segment
- * dialog's "LLM exchange" tab for debugging extraction problems. */
+/** In-memory record of the most recent local or remote recognition attempt,
+ * shown in the segment dialog for debugging extraction problems. */
 
 interface FileMeta {
   name: string;
@@ -40,11 +40,11 @@ export const lastExchange = (): LlmExchange | null => last;
 /** Render the exchange as plain text for the debug tab. */
 export function formatExchange(x: LlmExchange | null): string {
   if (!x) {
-    return 'No LLM exchange in this session yet.\nAttach a screenshot (or write a note) and press Recognise.';
+    return 'No recognition attempt in this session yet.\nAttach a screenshot (or write a note) and press Recognise.';
   }
   const files = x.files ?? (x.file ? [x.file] : []);
   const lines = [
-    `Parser: ${x.provider} ${x.model}`,
+    `Recognizer: ${x.provider} ${x.model}`,
     files.length
       ? `Files: ${files.map((f) => `${f.name || 'image'} (${f.type || 'unknown type'}, ${(f.size / 1024).toFixed(1)} KB)`).join(', ')}`
       : 'Files: (none — note only)',

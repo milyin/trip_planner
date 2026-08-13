@@ -1,6 +1,28 @@
 import type { ResolvedParser } from '../state/settings';
 import { byId } from '../ui/dom';
 import { AuthError, getExtractor, type AutoExtract, type ExtractedHotel, type ExtractedLeg } from './extractor';
+import { extractLocalAuto, extractLocalHotel, extractLocalLegs } from './local';
+
+export interface LocalAttempt<T> {
+  value: T | null;
+  error?: string;
+}
+
+/** Try browser-local OCR without surfacing an error: callers may transparently
+ * fall back to the user's configured remote parser. */
+async function localAttempt<T>(files: File[], work: () => Promise<T>): Promise<LocalAttempt<T>> {
+  const busy = byId('importBusy');
+  const what = files.length > 1 ? `${files.length} files` : files[0]?.name || 'file';
+  byId('importBusyText').textContent = `Reading ${what} locally with Scribe.js…`;
+  busy.style.display = 'flex';
+  try {
+    return { value: await work() };
+  } catch (error) {
+    return { value: null, error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    busy.style.display = 'none';
+  }
+}
 
 /** Busy indicator + user-facing error handling around one extraction call. */
 async function guarded<T>(files: File[], parser: ResolvedParser, work: () => Promise<T>): Promise<T | null> {
@@ -25,6 +47,15 @@ async function guarded<T>(files: File[], parser: ResolvedParser, work: () => Pro
     busy.style.display = 'none';
   }
 }
+
+export const tryLocalRecognition = (files: File[], note: string): Promise<LocalAttempt<ExtractedLeg[]>> =>
+  localAttempt(files, () => extractLocalLegs({ files, note }));
+
+export const tryLocalHotelRecognition = (files: File[], note: string): Promise<LocalAttempt<ExtractedHotel>> =>
+  localAttempt(files, () => extractLocalHotel({ files, note }));
+
+export const tryLocalAutoRecognition = (files: File[], note: string): Promise<LocalAttempt<AutoExtract>> =>
+  localAttempt(files, () => extractLocalAuto({ files, note }));
 
 /** Recognise transport legs; `null` on failure (exchange dump has details). */
 export const runRecognition = (

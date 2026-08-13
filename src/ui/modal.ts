@@ -6,7 +6,10 @@ import { tzForLatLng, tzOffset } from '../domain/tz';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
-import { runAutoRecognition, runHotelRecognition, runRecognition } from '../import/recognise';
+import {
+  runAutoRecognition, runHotelRecognition, runRecognition,
+  tryLocalAutoRecognition, tryLocalHotelRecognition, tryLocalRecognition,
+} from '../import/recognise';
 import {
   deleteAttachment, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
 } from '../state/attachments';
@@ -151,8 +154,8 @@ function thumbMedia(url: string, type: string, name: string): HTMLElement {
   return emb;
 }
 
-/** Render the LLM file notes as a removable thumbnail gallery in the Recognize
- * tab. Files added here become the images sent to the model. */
+/** Render recognition file notes as a removable thumbnail gallery. Files are
+ * processed locally first and reach the fallback model only when needed. */
 function renderPreview(): void {
   const box = byId('filePreview');
   revokePreviews();
@@ -189,7 +192,7 @@ function renderPreview(): void {
   applyTabs();
 }
 
-/** Render the Notes tab: every entry (LLM + user), each removable. */
+/** Render the Notes tab: every recognition + user entry, each removable. */
 function renderNotes(): void {
   byId('mtabNotes').textContent = notes.length ? `Notes · ${notes.length}` : 'Notes';
   const box = byId('notesList');
@@ -203,7 +206,7 @@ function renderNotes(): void {
     row.className = 'note-row';
     const badge = document.createElement('span');
     badge.className = 'note-badge ' + n.source;
-    badge.textContent = n.source === 'llm' ? 'LLM' : 'you';
+    badge.textContent = n.source === 'llm' ? 'recognition' : 'you';
     badge.title = n.source === 'llm' ? 'Loaded on the Recognize tab' : 'Added by you';
     const body = document.createElement('div');
     body.className = 'note-body';
@@ -540,13 +543,13 @@ function refreshParserCombo(): void {
   settings.parsers.forEach((p, i) => {
     const o = document.createElement('option');
     o.value = String(i);
-    o.textContent = parserName(p);
+    o.textContent = `Fallback: ${parserName(p)}`;
     sel.appendChild(o);
   });
   if (!settings.parsers.length) {
     const o = document.createElement('option');
     o.value = '';
-    o.textContent = 'no parsers — add in ⚙';
+    o.textContent = 'Local only — no LLM fallback';
     sel.appendChild(o);
     return;
   }
@@ -576,28 +579,24 @@ function fillLegFields(leg: ExtractedLeg): void {
   for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
 
-/** Resolve the active parser, walking the user to the LLM configuration when
- * none is usable yet. Returns `null` when still unconfigured. */
-async function ensureParser(): Promise<ResolvedParser | null> {
-  if (!settings.parsers.length) {
-    await openParserSettings('llm');
-    refreshParserCombo();
-    if (!settings.parsers.length) return null;
-  }
+/** Resolve the optional remote fallback selected in the recognition tab. */
+function fallbackParser(): ResolvedParser | null {
+  if (!settings.parsers.length) return null;
   const entry = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
   const parser = resolveParser(entry);
-  if (!parser || !parser.apiKey) {
-    alert('The selected parser has no account key — fill it in the LLM configuration.');
-    await openParserSettings('llm');
-    refreshParserCombo();
-    return null;
-  }
-  return parser;
+  return parser?.apiKey ? parser : null;
+}
+
+function explainMissingFallback(localError?: string): void {
+  const detail = localError ? `\n\nLocal result: ${localError}` : '';
+  alert(
+    'Local recognition could not confidently fill the trip fields. You can enter them manually, '
+      + 'or configure an LLM fallback with the ⚙ button and try again. Your file is sent to the configured '
+      + `provider only when local recognition is insufficient.${detail}`,
+  );
 }
 
 async function recognise(): Promise<void> {
-  const parser = await ensureParser();
-  if (!parser) return;
   const note = getVal('fNote');
   const files: File[] = [];
   for (const n of llmFileNotes()) {
@@ -608,7 +607,26 @@ async function recognise(): Promise<void> {
     alert('Attach a screenshot or write a note first.');
     return;
   }
+
+  let localError: string | undefined;
   if (editKind === 'hotel') {
+    if (files.length) {
+      const local = await tryLocalHotelRecognition(files, note);
+      dialogExchange = lastExchange();
+      if (local.value) {
+        fillHotelFields(local.value);
+        activeTab = 'form';
+        applyTabs();
+        return;
+      }
+      localError = local.error;
+    }
+    const parser = fallbackParser();
+    if (!parser) {
+      explainMissingFallback(localError);
+      recogniseFailed();
+      return;
+    }
     const hotel = await runHotelRecognition(files, note, parser);
     dialogExchange = lastExchange();
     if (!hotel) {
@@ -617,6 +635,23 @@ async function recognise(): Promise<void> {
     }
     fillHotelFields(hotel);
   } else {
+    if (files.length) {
+      const local = await tryLocalRecognition(files, note);
+      dialogExchange = lastExchange();
+      if (local.value) {
+        fillLegFields(local.value[0]);
+        activeTab = 'form';
+        applyTabs();
+        return;
+      }
+      localError = local.error;
+    }
+    const parser = fallbackParser();
+    if (!parser) {
+      explainMissingFallback(localError);
+      recogniseFailed();
+      return;
+    }
     const legs = await runRecognition(files, note, parser);
     dialogExchange = lastExchange();
     if (!legs) {
@@ -643,9 +678,19 @@ function recogniseFailed(): void {
 /** Image pasted with no dialog open: auto-detect leg vs hotel, then open the
  * matching dialog with the image attached and the fields filled. */
 export async function importPastedImage(file: File): Promise<void> {
-  const parser = await ensureParser();
-  if (!parser) return;
-  const result = await runAutoRecognition([file], '', parser);
+  const local = await tryLocalAutoRecognition([file], '');
+  let result = local.value;
+  if (!result) {
+    const parser = fallbackParser();
+    if (!parser) {
+      openModal(null, { files: [file] });
+      dialogExchange = lastExchange();
+      explainMissingFallback(local.error);
+      recogniseFailed();
+      return;
+    }
+    result = await runAutoRecognition([file], '', parser);
+  }
   if (!result) {
     // Open a blank leg dialog with the image so the exchange is inspectable
     // and the user can adjust the note and retry.

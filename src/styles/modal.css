@@ -105,6 +105,7 @@
 .import-controls input{flex:1}
 .import-controls input:focus, .import-controls select:focus{border-color:var(--accent)}
 .import-controls select{max-width:200px}
+.leg-import > .hint-block{padding:0 20px 10px}
 
 /* LLM configuration dialog: inline-editable account and parser rows. */
 .parser-list{display:flex; flex-direction:column; gap:6px}
