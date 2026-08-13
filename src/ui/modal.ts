@@ -678,13 +678,14 @@ function refreshParserCombo(): void {
   fallback.value = 'default';
   const active = settings.activeParser;
   fallback.textContent = active != null && settings.parsers[active]
-    ? `Default Fallback — ${parserName(settings.parsers[active])}`
-    : 'Default Fallback — not configured';
+    ? `◉ Default Fallback — ${parserName(settings.parsers[active])}`
+    : '◉ Default Fallback — not configured';
   sel.appendChild(fallback);
   settings.parsers.forEach((p, i) => {
+    if (i === active) return;
     const o = document.createElement('option');
     o.value = `parser:${i}`;
-    o.textContent = parserName(p);
+    o.textContent = `○ ${parserName(p)}`;
     sel.appendChild(o);
   });
   sel.value = editKind === 'leg' && settings.scribeEnabled ? 'local' : 'default';
