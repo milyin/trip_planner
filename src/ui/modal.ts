@@ -2,7 +2,7 @@ import type { CurrencyCode, Hotel, LatLng, Leg, NoteEntry, Segment, TransportKin
 import { getRate, RATES_SOURCE, rateSourceUrl } from '../domain/convert';
 import { geocodeAddress, geocodePlace } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
-import { tzForLatLng, tzOffset } from '../domain/tz';
+import { isValidTz, toMs, tzForLatLng, tzOffset, zonedMs } from '../domain/tz';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
@@ -77,6 +77,9 @@ let queuedFiles: File[] = [];
 let dialogExchange: LlmExchange | null = null;
 /** A partial local result can be explicitly replaced by the selected LLM. */
 let canRetryWithLlm = false;
+/** Once validation is requested (by recognition or Save), keep it live while
+ * the user corrects fields. New manually opened forms stay quiet initially. */
+let legValidationActive = false;
 
 /** The LLM-source file notes — the images sent to the model and shown in the
  * Recognize tab's gallery. */
@@ -289,6 +292,8 @@ function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
   canRetryWithLlm = false;
+  legValidationActive = false;
+  clearLegValidation();
   byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
@@ -354,6 +359,78 @@ const setDT = (dateId: string, timeId: string, s: string): void => {
   setVal(timeId, time);
 };
 const getDT = (dateId: string, timeId: string): string => joinDT(getVal(dateId), getVal(timeId));
+
+const LEG_REQUIRED_FIELDS = ['fDepCity', 'fDepDate', 'fDepTime', 'fArrCity', 'fArrDate', 'fArrTime'] as const;
+
+function clearLegValidation(): void {
+  for (const id of LEG_REQUIRED_FIELDS) {
+    const field = byId<HTMLInputElement>(id);
+    field.classList.remove('field-invalid');
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('data-validation-message');
+    field.title = '';
+  }
+  const summary = document.getElementById('legValidation');
+  if (summary) summary.style.display = 'none';
+}
+
+function invalidateLegField(id: typeof LEG_REQUIRED_FIELDS[number], message: string): void {
+  const field = byId<HTMLInputElement>(id);
+  field.classList.add('field-invalid');
+  field.setAttribute('aria-invalid', 'true');
+  field.dataset.validationMessage = message;
+  field.title = message;
+}
+
+/** Validate the core fields needed for a usable leg. Date ordering is resolved
+ * with the selected place time zones when available. */
+function validateLegFields(focusFirst = false): boolean {
+  clearLegValidation();
+  const missing: Array<[typeof LEG_REQUIRED_FIELDS[number], string]> = [
+    ['fDepCity', 'Enter a departure city.'],
+    ['fDepDate', 'Enter a departure date.'],
+    ['fDepTime', 'Enter a departure time.'],
+    ['fArrCity', 'Enter an arrival city.'],
+    ['fArrDate', 'Enter an arrival date.'],
+    ['fArrTime', 'Enter an arrival time.'],
+  ];
+  for (const [id, message] of missing) {
+    const field = byId<HTMLInputElement>(id);
+    if (!field.value.trim() || !field.checkValidity()) invalidateLegField(id, message);
+  }
+
+  const dep = getDT('fDepDate', 'fDepTime');
+  const arr = getDT('fArrDate', 'fArrTime');
+  if (dep && arr && !LEG_REQUIRED_FIELDS.some((id) => byId(id).classList.contains('field-invalid'))) {
+    const depTz = getVal('fDepTz').trim();
+    const arrTz = getVal('fArrTz').trim();
+    const compareInZones = isValidTz(depTz) && isValidTz(arrTz);
+    const depMs = compareInZones ? zonedMs(dep, depTz) : toMs(dep);
+    const arrMs = compareInZones ? zonedMs(arr, arrTz) : toMs(arr);
+    if (!Number.isFinite(depMs)) {
+      invalidateLegField('fDepDate', 'Enter a valid departure date and time.');
+      invalidateLegField('fDepTime', 'Enter a valid departure date and time.');
+    }
+    if (!Number.isFinite(arrMs)) {
+      invalidateLegField('fArrDate', 'Enter a valid arrival date and time.');
+      invalidateLegField('fArrTime', 'Enter a valid arrival date and time.');
+    } else if (Number.isFinite(depMs) && arrMs <= depMs) {
+      invalidateLegField('fArrDate', 'Arrival must be later than departure.');
+      invalidateLegField('fArrTime', 'Arrival must be later than departure.');
+    }
+  }
+
+  const invalid = LEG_REQUIRED_FIELDS.map((id) => byId<HTMLInputElement>(id))
+    .filter((field) => field.classList.contains('field-invalid'));
+  byId('legValidation').style.display = invalid.length ? '' : 'none';
+  if (focusFirst && invalid[0]) invalid[0].focus();
+  return invalid.length === 0;
+}
+
+function showParsedLegValidation(): void {
+  legValidationActive = true;
+  validateLegFields();
+}
 
 // --- automatic time zone from the city --------------------------------------
 // Each place's slots feed a time-zone input, auto-filled from the resolved
@@ -582,6 +659,7 @@ function fillLegFields(leg: ExtractedLeg, partial = false): void {
     if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
   };
   set('fDepCity', leg.depCity);
+  if (partial && !leg.depCity) setVal('fDepCity', '');
   set('fDepAddr', leg.depAddr);
   if (leg.depTime) setDT('fDepDate', 'fDepTime', leg.depTime);
   else if (leg.depClock) {
@@ -590,6 +668,7 @@ function fillLegFields(leg: ExtractedLeg, partial = false): void {
   }
   else if (partial) setDT('fDepDate', 'fDepTime', '');
   set('fArrCity', leg.arrCity);
+  if (partial && !leg.arrCity) setVal('fArrCity', '');
   set('fArrAddr', leg.arrAddr);
   if (leg.arrTime) setDT('fArrDate', 'fArrTime', leg.arrTime);
   else if (leg.arrClock) {
@@ -683,6 +762,7 @@ async function recognise(forceLlm = false): Promise<void> {
         fillLegFields(local.value[0], !!local.partial);
         canRetryWithLlm = true;
         activeTab = 'form';
+        showParsedLegValidation();
         applyTabs();
         return;
       }
@@ -700,8 +780,9 @@ async function recognise(forceLlm = false): Promise<void> {
       recogniseFailed();
       return;
     }
-    fillLegFields(legs[0]);
+    fillLegFields(legs[0], true);
     canRetryWithLlm = false;
+    showParsedLegValidation();
     queuedLegs = legs.slice(1);
     queuedFiles = queuedLegs.length ? files : [];
   }
@@ -754,6 +835,7 @@ export async function importPastedImage(file: File): Promise<void> {
   } else {
     const [first, ...rest] = result.legs;
     openModal(null, { ...first, partial: localPartial, files: [file] });
+    showParsedLegValidation();
     queuedLegs = rest;
     queuedFiles = rest.length ? [file] : [];
   }
@@ -904,12 +986,14 @@ export function closeModal(): void {
 }
 
 async function saveLeg(): Promise<void> {
-  const dc = getVal('fDepCity');
-  const ac = getVal('fArrCity');
-  if (!dc || !ac) {
-    alert('Departure and arrival city are required.');
+  legValidationActive = true;
+  activeTab = 'form';
+  applyTabs();
+  if (!validateLegFields(true)) {
     return;
   }
+  const dc = getVal('fDepCity').trim();
+  const ac = getVal('fArrCity').trim();
   // Storing the image is async — block a double-click on Save meanwhile.
   const saveBtn = byId<HTMLButtonElement>('saveBtn');
   if (saveBtn.disabled) return;
@@ -1031,6 +1115,14 @@ export function wireModal(): void {
   for (const id of ['fDepTz', 'fArrTz', 'hTz']) {
     byId(id).innerHTML = tzOptions;
     byId(id).addEventListener('change', () => { tzAuto[id] = false; });
+  }
+  for (const id of LEG_REQUIRED_FIELDS) {
+    byId(id).addEventListener('input', () => {
+      if (legValidationActive) validateLegFields();
+    });
+    byId(id).addEventListener('change', () => {
+      if (legValidationActive) validateLegFields();
+    });
   }
   // Converted cost: editing the cost or currency re-converts (unless the user
   // typed their own value); the chip forces a fresh conversion.
