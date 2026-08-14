@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Trip Planner</title>
 <link rel="icon" type="image/svg+xml" href="/trip_planner/favicon.svg" />
-  <script type="module" crossorigin src="/trip_planner/assets/index-BUo-5DxB.js"></script>
-  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-Dz7HuT3z.css">
+  <script type="module" crossorigin src="/trip_planner/assets/index-DCm3_Brj.js"></script>
+  <link rel="stylesheet" crossorigin href="/trip_planner/assets/index-DiSNBl2g.css">
 </head>
 <body data-theme="dark">
 <div class="app">
@@ -94,16 +94,17 @@
         <input type="file" id="legFile" accept="application/pdf,image/*" multiple style="display:none">
       </div>
       <div class="import-controls">
-        <input id="fNote" placeholder="Optional note for the model — e.g. “the 20:09 direct train”">
-        <select id="fParser" title="Image parser"></select>
-        <button class="btn icon ghost" id="cfgParsersBtn" title="Configure LLM accounts &amp; parsers">⚙</button>
+        <input id="fNote" placeholder="Additional note — e.g. “cost €45; date 24 July”">
+        <select id="fParser" title="Recognition method"></select>
       </div>
+      <p class="hint-block" id="recognitionHint">Configure local or LLM recognition in settings.</p>
       <details class="llm-details" id="llmDetails">
-        <summary>LLM exchange</summary>
+        <summary>Recognition details</summary>
         <pre id="llmDump"></pre>
       </details>
     </div>
     <div class="modal-body" id="legBody">
+      <p class="form-validation" id="legValidation" role="alert" style="display:none">Complete or correct the highlighted fields before saving.</p>
       <div class="fcol">
         <div class="leg">Departure</div>
         <div class="field"><label>City <button type="button" class="geo-chip" id="depCityGeo"></button></label><input id="fDepCity" placeholder="Marseille"></div>
@@ -140,6 +141,7 @@
         </div></div>
     </div>
     <div class="modal-body" id="hotelBody" style="display:none">
+      <p class="form-validation" id="hotelValidation" role="alert" style="display:none">Complete or correct the highlighted fields before saving.</p>
       <div class="leg">Stay</div>
       <div class="field full"><label>Hotel name</label><input id="hName" placeholder="Hôtel Le Marais"></div>
       <div class="field"><label>City <button type="button" class="geo-chip" id="hotCityGeo"></button></label><input id="hCity" placeholder="Paris"></div>
@@ -169,24 +171,26 @@
         <input id="noteText" placeholder="Add a note or a link (https://…)">
         <button type="button" class="btn ghost" id="noteAddTextBtn">Add</button>
       </div>
-      <p class="hint-block">Images loaded on the Recognize tab appear here too, tagged “LLM”.
+      <p class="hint-block">Images loaded on the Recognize tab appear here too, tagged “recognition”.
         Everything is stored only in this browser.</p>
     </div>
     <div class="modal-foot">
       <button class="btn danger" id="delBtn" style="display:none">Delete</button>
       <div class="spacer"></div>
       <button class="btn ghost" id="cancelBtn">Cancel</button>
-      <button class="btn primary" id="recogniseBtn" style="display:none" title="Extract the fields from the image and note">Recognise</button>
+      <button class="btn primary" id="recogniseBtn" style="display:none" title="Recognise attached files or notes">Recognise</button>
       <button class="btn primary" id="saveBtn">Save leg</button>
     </div>
   </div>
 </div>
 
 <div class="overlay" id="parserOverlay">
-  <div class="modal narrow">
-    <div class="modal-tabs">
+  <div class="modal narrow settings-modal">
+    <div class="modal-tabs settings-tabs">
       <button type="button" class="mtab active" id="stabGeneral">User settings</button>
-      <button type="button" class="mtab" id="stabLlm">LLM</button>
+      <button type="button" class="mtab" id="stabRecognition">Image recognition</button>
+      <button type="button" class="mtab" id="stabLocalParser">Local parser</button>
+      <button type="button" class="mtab" id="stabAccounts">LLM Parsers</button>
       <div class="x" id="closeParsers">✕</div>
     </div>
     <div class="modal-body single" id="settGeneral">
@@ -194,11 +198,34 @@
       <div class="field full"><label>Base currency <span class="hint">plan totals are shown in this currency</span></label>
         <select id="baseCurSel"></select></div>
     </div>
-    <div class="modal-body single" id="settLlm" style="display:none">
-      <div class="leg">Accounts — provider + API key</div>
+    <div class="modal-body single" id="settRecognition" style="display:none">
+      <div class="leg">Local recognition</div>
+      <label class="recognition-toggle">
+        <input type="checkbox" id="scribeEnabled">
+        <span><strong>Enable Scribe.js</strong><small>Read leg images and PDFs locally in this browser</small></span>
+      </label>
+      <div class="leg" id="llmChoiceTitle">Default Fallback</div>
+      <div class="field full">
+        <label id="llmChoiceLabel">Used for definite local failures or explicit retry</label>
+        <select id="activeLlmParser"></select>
+      </div>
+      <p class="hint-block" id="llmSettingsHint">Useful partial local results remain available for review and can be retried explicitly with the selected LLM.</p>
+    </div>
+    <div class="modal-body single" id="settLocalParser" style="display:none">
+      <div class="leg">OCR languages</div>
+      <p class="hint-block">Choose the languages that may appear in locally recognized images and PDFs.</p>
+      <div class="language-add">
+        <select id="localLanguageSelect" aria-label="Language to add"></select>
+        <button class="btn ghost" id="addLocalLanguageBtn">＋ Add language</button>
+      </div>
+      <div id="localLanguageList" class="parser-list"></div>
+      <p class="hint-block">Language models are downloaded on first use and cached by the browser. More languages require more download and recognition time.</p>
+    </div>
+    <div class="modal-body single" id="settAccounts" style="display:none">
+      <div class="leg">Provider accounts — provider + API key</div>
       <div id="accountList" class="parser-list"></div>
       <button class="btn ghost" id="addAccountBtn">＋ Add account</button>
-      <div class="leg">Parsers — default · account · model</div>
+      <div class="leg">Configured parsers — account · model</div>
       <div id="parserList" class="parser-list"></div>
       <button class="btn ghost" id="addParserBtn">＋ Add parser</button>
       <p class="hint-block">Keys: aistudio.google.com (Gemini) · openrouter.ai/keys (OpenRouter) · console.anthropic.com (Claude).
