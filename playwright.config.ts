@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './test',
-  testMatch: 'local-ocr.spec.ts',
+  testMatch: '*.spec.ts',
   timeout: 180_000,
   expect: { timeout: 10_000 },
   fullyParallel: false,

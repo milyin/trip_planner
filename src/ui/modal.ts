@@ -73,6 +73,8 @@ let originalAttachments = new Set<string>();
 /** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
 let queuedLegs: ExtractedLeg[] = [];
 let queuedFiles: File[] = [];
+/** Whether queued recognized legs must keep omitted fields blank and validate immediately. */
+let queuedLegsPartial = false;
 /** Exchange shown in this dialog: loaded from storage when editing, replaced
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
@@ -914,6 +916,7 @@ async function recognise(): Promise<void> {
     showParsedLegValidation();
     queuedLegs = legs.slice(1);
     queuedFiles = queuedLegs.length ? files : [];
+    queuedLegsPartial = queuedLegs.length > 0;
   }
   // success: jump to the edit form with the extracted values
   activeTab = 'form';
@@ -932,14 +935,14 @@ function recogniseFailed(): void {
  * matching dialog with the image attached and the fields filled. */
 export async function importPastedImage(file: File): Promise<void> {
   let localError: string | undefined;
-  let localPartial = false;
+  let resultPartial = false;
   let result = null;
   const attemptedLocal = settings.scribeEnabled;
   if (attemptedLocal) {
     const local = await tryLocalAutoRecognition([file], '');
     result = local.value;
     localError = local.error;
-    localPartial = !!local.partial;
+    resultPartial = !!local.partial;
   }
   if (!result) {
     const parser = defaultLlmParser();
@@ -951,6 +954,9 @@ export async function importPastedImage(file: File): Promise<void> {
       return;
     }
     result = await runAutoRecognition([file], '', parser);
+    // Remote schemas intentionally allow omitted fields. Never replace those
+    // omissions with the new-form placeholder dates.
+    if (result) resultPartial = true;
   }
   if (!result) {
     // Open a blank leg dialog with the image so the exchange is inspectable
@@ -964,9 +970,10 @@ export async function importPastedImage(file: File): Promise<void> {
     openHotelModal(null, { ...result.hotel, partial: true, files: [file] });
   } else {
     const [first, ...rest] = result.legs;
-    openModal(null, { ...first, partial: localPartial, files: [file] });
+    openModal(null, { ...first, partial: resultPartial, files: [file] });
     queuedLegs = rest;
     queuedFiles = rest.length ? [file] : [];
+    queuedLegsPartial = rest.length > 0 && resultPartial;
   }
   // The exchange belongs to the record(s) just opened; openModal cleared it.
   dialogExchange = lastExchange();
@@ -1116,11 +1123,14 @@ export function closeModal(): void {
     const [leg, ...rest] = queuedLegs;
     queuedLegs = [];
     const f = queuedFiles;
+    const partial = queuedLegsPartial;
     if (!rest.length) queuedFiles = [];
-    openModal(null, { ...leg, files: f.length ? f : undefined });
+    if (!rest.length) queuedLegsPartial = false;
+    openModal(null, { ...leg, partial, files: f.length ? f : undefined });
     queuedLegs = rest;
     // Every leg of the itinerary came from the same recognition.
     dialogExchange = ex;
+    if (partial) showParsedLegValidation();
   }
 }
 
