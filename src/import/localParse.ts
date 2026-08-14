@@ -39,6 +39,31 @@ const clean = (s: string): string => s.replace(/[|]+/g, ' ').replace(/\s+/g, ' '
 const folded = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const pad = (n: number): string => String(n).padStart(2, '0');
 
+const CURRENCIES: Record<string, string> = {
+  '€': 'EUR', eur: 'EUR', euro: 'EUR', euros: 'EUR',
+  '$': 'USD', usd: 'USD', dollar: 'USD', dollars: 'USD', 'us dollar': 'USD', 'us dollars': 'USD',
+  '£': 'GBP', gbp: 'GBP', pound: 'GBP', pounds: 'GBP', sterling: 'GBP', 'british pound': 'GBP', 'british pounds': 'GBP',
+  '¥': 'JPY', jpy: 'JPY', yen: 'JPY',
+  chf: 'CHF', franc: 'CHF', francs: 'CHF', 'swiss franc': 'CHF', 'swiss francs': 'CHF',
+  cad: 'CAD', 'canadian dollar': 'CAD', 'canadian dollars': 'CAD',
+  aud: 'AUD', 'australian dollar': 'AUD', 'australian dollars': 'AUD',
+  '₽': 'RUB', rub: 'RUB', ruble: 'RUB', rubles: 'RUB', rouble: 'RUB', roubles: 'RUB',
+  'russian ruble': 'RUB', 'russian rubles': 'RUB', 'руб': 'RUB', 'рубль': 'RUB', 'рубля': 'RUB', 'рублей': 'RUB',
+  cny: 'CNY', rmb: 'CNY', yuan: 'CNY', renminbi: 'CNY',
+  inr: 'INR', rupee: 'INR', rupees: 'INR',
+  krw: 'KRW', won: 'KRW',
+  try: 'TRY', lira: 'TRY',
+  pln: 'PLN', zloty: 'PLN',
+  sek: 'SEK', krona: 'SEK',
+  nok: 'NOK', dkk: 'DKK', krone: 'NOK', kroner: 'NOK',
+  czk: 'CZK', koruna: 'CZK', koruny: 'CZK',
+};
+
+const CURRENCY_SOURCE = Object.keys(CURRENCIES)
+  .sort((a, b) => b.length - a.length)
+  .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  .join('|');
+
 function futureYear(month: number, day: number, now: Date): number {
   const year = now.getFullYear();
   const candidate = new Date(year, month, day, 23, 59);
@@ -129,7 +154,8 @@ function locationCandidate(line: string): string | null {
     .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, '')
     .replace(/\b\d{1,2}[/.\-]\d{1,2}(?:[/.\-](?:20)?\d{2})?\b/g, '')
     .replace(/\b\d{1,2}\s+(?:jan(?:uary|vier)?|feb(?:ruary)?|fev(?:rier)?|mar(?:ch|s)?|apr(?:il)?|avr(?:il)?|may|mai|jun(?:e|in)?|jul(?:y|let)?|aug(?:ust)?|aout|sep(?:t(?:ember|embre)?)?|oct(?:ober|obre)?|nov(?:ember|embre)?|dec(?:ember|embre)?)\.?\s*(?:20\d{2})?\b/gi, '')
-    .replace(/(?:€|£|\$|¥)\s*\d[\d\s.,]*|\b\d[\d\s.,]*\s*(?:EUR|USD|GBP|JPY|CHF|CAD|AUD)\b/gi, '')
+    .replace(new RegExp(`(?:${CURRENCY_SOURCE})\\s*\\d[\\d\\s.,]*`, 'giu'), '')
+    .replace(new RegExp(`\\d[\\d\\s.,]*\\s*(?:${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'), '')
     .replace(/^[\s·•—–-]+|[\s·•—–-]+$/g, '');
   if (!value || value.length < 2 || value.length > 70 || GENERIC_LINE.test(value)) return null;
   if (/\b(check.?in|check.?out|price|total|fare|duration|travell?ers?|class|seat|night|room)\b/i.test(value)) return null;
@@ -194,12 +220,15 @@ function applyLocation(leg: ExtractedLeg, side: 'dep' | 'arr', raw: string): voi
 
 function priceIn(text: string): { cost: number; currency: string } | null {
   const candidates: { cost: number; currency: string; priority: number }[] = [];
-  const currencyFor = (token: string): string => ({ '€': 'EUR', '£': 'GBP', '$': 'USD', '¥': 'JPY' })[token] ?? token.toUpperCase();
+  const currencyFor = (token: string): string => {
+    const normalized = token.toLowerCase().replace(/\s+/g, ' ').trim();
+    return CURRENCIES[normalized] ?? CURRENCIES[folded(normalized)] ?? token.toUpperCase();
+  };
   text.split('\n').forEach((line) => {
     const priority = /\b(total|price|fare|amount|cost)\b/i.test(line) ? 1 : 0;
     const patterns = [
-      /(?:^|\s)(EUR|USD|GBP|JPY|CHF|CAD|AUD|€|£|\$|¥)\s*([\d][\d\s]*(?:[.,]\d{1,2})?)/gi,
-      /(?:^|\s)([\d][\d\s]*(?:[.,]\d{1,2})?)\s*(EUR|USD|GBP|JPY|CHF|CAD|AUD|€|£|\$|¥)(?=\s|$)/gi,
+      new RegExp(`(?:^|[^\\p{L}\\d])(${CURRENCY_SOURCE})\\s*([\\d][\\d\\s]*(?:[.,]\\d{1,2})?)`, 'giu'),
+      new RegExp(`(?:^|[^\\p{L}\\d])([\\d][\\d\\s]*(?:[.,]\\d{1,2})?)\\s*(${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'),
     ];
     for (const [index, pattern] of patterns.entries()) {
       for (const m of line.matchAll(pattern)) {

@@ -74,8 +74,6 @@ let queuedFiles: File[] = [];
 /** Exchange shown in this dialog: loaded from storage when editing, replaced
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
-/** A partial local result can be explicitly replaced by the selected LLM. */
-let canRetryWithLlm = false;
 /** Once validation is requested (by recognition or Save), keep it live while
  * the user corrects fields. New manually opened forms stay quiet initially. */
 let legValidationActive = false;
@@ -142,7 +140,6 @@ function applyTabs(): void {
   // footer action follows the tab: Recognise on the Recognize tab, else Save
   byId('saveBtn').style.display = rec ? 'none' : 'inline-flex';
   byId('recogniseBtn').style.display = rec ? 'inline-flex' : 'none';
-  byId('retryLlmBtn').style.display = form && canRetryWithLlm && !!selectedRecognitionLlmParser() ? 'inline-flex' : 'none';
   if (rec) byId('llmDump').textContent = formatExchange(dialogExchange ?? lastExchange());
 }
 
@@ -303,7 +300,6 @@ function addUserText(text: string): void {
 function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
-  canRetryWithLlm = false;
   legValidationActive = false;
   clearLegValidation();
   byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
@@ -436,9 +432,20 @@ function validateLegFields(focusFirst = false): boolean {
   const invalid = LEG_REQUIRED_FIELDS.map((id) => byId<HTMLInputElement>(id))
     .filter((field) => field.classList.contains('field-invalid'));
   const summary = byId('legValidation');
-  summary.textContent = dialogExchange?.provider === 'local' && dialogExchange.partial
-    ? 'Complete or correct the highlighted fields before saving. You can fill them manually, or add missing details to Additional note on Recognize and run Local Scribe.js again.'
-    : 'Complete or correct the highlighted fields before saving.';
+  summary.replaceChildren(document.createTextNode('Complete or correct the highlighted fields before saving.'));
+  if (dialogExchange?.provider === 'local' && dialogExchange.partial) {
+    summary.append(' You can fill them manually, or add missing details in Additional note on ');
+    const recognizeLink = document.createElement('a');
+    recognizeLink.href = '#';
+    recognizeLink.textContent = 'Recognize';
+    recognizeLink.onclick = (e) => {
+      e.preventDefault();
+      activeTab = 'rec';
+      applyTabs();
+      byId<HTMLInputElement>('fNote').focus();
+    };
+    summary.append(recognizeLink, ' and run local recognition again.');
+  }
   summary.style.display = invalid.length ? '' : 'none';
   if (focusFirst && invalid[0]) invalid[0].focus();
   return invalid.length === 0;
@@ -658,10 +665,6 @@ function parserForChoice(choice: string): ResolvedParser | null {
   return match ? resolvedParserAt(Number(match[1])) : null;
 }
 
-function selectedRecognitionLlmParser(): ResolvedParser | null {
-  return parserForChoice(getVal('fParser'));
-}
-
 function refreshRecognitionHint(): void {
   const choice = getVal('fParser') as RecognitionChoice;
   if (editKind === 'hotel') {
@@ -768,7 +771,7 @@ function explainUnavailableRecognition(localError?: string, hadFiles = true): vo
   );
 }
 
-async function recognise(forceLlm = false): Promise<void> {
+async function recognise(): Promise<void> {
   const note = getVal('fNote');
   const files: File[] = [];
   for (const n of llmFileNotes()) {
@@ -781,10 +784,10 @@ async function recognise(forceLlm = false): Promise<void> {
   }
 
   const selectedChoice = getVal('fParser') as RecognitionChoice;
-  const useLocal = !forceLlm && editKind === 'leg' && selectedChoice === 'local';
+  const useLocal = editKind === 'leg' && selectedChoice === 'local';
   let localError: string | undefined;
   if (editKind === 'hotel') {
-    const parser = parserForChoice(forceLlm ? 'default' : selectedChoice);
+    const parser = parserForChoice(selectedChoice);
     if (!parser) {
       explainUnavailableRecognition(localError, files.length > 0);
       recogniseFailed();
@@ -797,7 +800,6 @@ async function recognise(forceLlm = false): Promise<void> {
       return;
     }
     fillHotelFields(hotel);
-    canRetryWithLlm = false;
   } else {
     if (useLocal && files.length) {
       const local = await tryLocalRecognition(files, note);
@@ -806,7 +808,6 @@ async function recognise(forceLlm = false): Promise<void> {
       refreshRecognitionHint();
       if (local.value) {
         fillLegFields(local.value[0], !!local.partial);
-        canRetryWithLlm = true;
         activeTab = 'form';
         showParsedLegValidation();
         applyTabs();
@@ -814,7 +815,7 @@ async function recognise(forceLlm = false): Promise<void> {
       }
       localError = local.error;
     }
-    const parser = useLocal || forceLlm ? defaultLlmParser() : parserForChoice(selectedChoice);
+    const parser = useLocal ? defaultLlmParser() : parserForChoice(selectedChoice);
     if (!parser) {
       explainUnavailableRecognition(localError, files.length > 0);
       recogniseFailed();
@@ -827,7 +828,6 @@ async function recognise(forceLlm = false): Promise<void> {
       return;
     }
     fillLegFields(legs[0], true);
-    canRetryWithLlm = false;
     showParsedLegValidation();
     queuedLegs = legs.slice(1);
     queuedFiles = queuedLegs.length ? files : [];
@@ -881,13 +881,12 @@ export async function importPastedImage(file: File): Promise<void> {
   } else {
     const [first, ...rest] = result.legs;
     openModal(null, { ...first, partial: localPartial, files: [file] });
-    showParsedLegValidation();
     queuedLegs = rest;
     queuedFiles = rest.length ? [file] : [];
   }
   // The exchange belongs to the record(s) just opened; openModal cleared it.
   dialogExchange = lastExchange();
-  canRetryWithLlm = dialogExchange?.provider === 'local';
+  if (!('hotel' in result)) showParsedLegValidation();
   applyTabs();
 }
 
@@ -1273,7 +1272,6 @@ export function wireModal(): void {
     }
   });
   byId('recogniseBtn').onclick = () => void recognise();
-  byId('retryLlmBtn').onclick = () => void recognise(true);
   byId('fParser').onchange = refreshRecognitionHint;
   byId('overlay').onclick = (e) => {
     if ((e.target as HTMLElement).id === 'overlay') closeModal();
