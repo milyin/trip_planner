@@ -38,7 +38,7 @@ async function guarded<T>(files: File[], parser: ResolvedParser, work: () => Pro
     return await work();
   } catch (e) {
     if (e instanceof AuthError) {
-      alert(`${name} rejected the API key — check it in ⚙ Settings → Parsers.`);
+      alert(`${name} rejected the API key — check it in ⚙ Settings → LLM Parsers.`);
     } else {
       alert(
         `Recognition failed: ${e instanceof Error ? e.message : e}\n` +

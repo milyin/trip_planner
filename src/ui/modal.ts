@@ -826,14 +826,14 @@ function fillLegFields(leg: ExtractedLeg, partial = false): void {
 function explainUnavailableRecognition(localError?: string, hadFiles = true): void {
   const detail = localError ? `\n\nLocal result: ${localError}` : '';
   if (editKind === 'hotel') {
-    alert('Hotel recognition requires an LLM parser. Configure a Default Fallback or choose a parser in Settings → Parsers.');
+    alert('Hotel recognition requires an LLM parser. Configure a Default Fallback or choose a parser in Settings → LLM Parsers.');
     return;
   }
   if (!settings.scribeEnabled) {
     alert(
       settings.activeParser == null
-        ? 'Recognition is unavailable. Configure a Default Fallback or choose a parser in Settings → Parsers.'
-        : 'The selected LLM parser is unavailable. Check its account and API key in Settings → Parsers.',
+        ? 'Recognition is unavailable. Configure a Default Fallback or choose a parser in Settings → LLM Parsers.'
+        : 'The selected LLM parser is unavailable. Check its account and API key in Settings → LLM Parsers.',
     );
     return;
   }
@@ -890,7 +890,7 @@ async function recognise(): Promise<void> {
     const parser = useLocal ? defaultLlmParser() : parserForChoice(selectedChoice);
     if (!parser) {
       if (useLocal) explainUnavailableRecognition(localError, files.length > 0);
-      else alert('The selected LLM parser is unavailable. Check its account and API key in Settings → Parsers.');
+      else alert('The selected LLM parser is unavailable. Check its account and API key in Settings → LLM Parsers.');
       recogniseFailed();
       return;
     }

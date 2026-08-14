@@ -183,11 +183,12 @@
 </div>
 
 <div class="overlay" id="parserOverlay">
-  <div class="modal narrow">
+  <div class="modal narrow settings-modal">
     <div class="modal-tabs settings-tabs">
       <button type="button" class="mtab active" id="stabGeneral">User settings</button>
       <button type="button" class="mtab" id="stabRecognition">Image recognition</button>
-      <button type="button" class="mtab" id="stabAccounts">Parsers</button>
+      <button type="button" class="mtab" id="stabLocalParser">Local parser</button>
+      <button type="button" class="mtab" id="stabAccounts">LLM Parsers</button>
       <div class="x" id="closeParsers">✕</div>
     </div>
     <div class="modal-body single" id="settGeneral">
@@ -207,6 +208,16 @@
         <select id="activeLlmParser"></select>
       </div>
       <p class="hint-block" id="llmSettingsHint">Useful partial local results remain available for review and can be retried explicitly with the selected LLM.</p>
+    </div>
+    <div class="modal-body single" id="settLocalParser" style="display:none">
+      <div class="leg">OCR languages</div>
+      <p class="hint-block">Choose the languages that may appear in locally recognized images and PDFs.</p>
+      <div class="language-add">
+        <select id="localLanguageSelect" aria-label="Language to add"></select>
+        <button class="btn ghost" id="addLocalLanguageBtn">＋ Add language</button>
+      </div>
+      <div id="localLanguageList" class="parser-list"></div>
+      <p class="hint-block">Language models are downloaded on first use and cached by the browser. More languages require more download and recognition time.</p>
     </div>
     <div class="modal-body single" id="settAccounts" style="display:none">
       <div class="leg">Provider accounts — provider + API key</div>

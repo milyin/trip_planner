@@ -41,6 +41,7 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 
 const CURRENCIES: Record<string, string> = {
   '€': 'EUR', eur: 'EUR', euro: 'EUR', euros: 'EUR',
+  'евро': 'EUR',
   '$': 'USD', usd: 'USD', dollar: 'USD', dollars: 'USD', 'us dollar': 'USD', 'us dollars': 'USD',
   '£': 'GBP', gbp: 'GBP', pound: 'GBP', pounds: 'GBP', sterling: 'GBP', 'british pound': 'GBP', 'british pounds': 'GBP',
   '¥': 'JPY', jpy: 'JPY', yen: 'JPY',
@@ -202,11 +203,13 @@ function locationCandidate(line: string): string | null {
     .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, '')
     .replace(/\b\d{1,2}[/.\-]\d{1,2}(?:[/.\-](?:20)?\d{2})?\b/g, '')
     .replace(/\b\d{1,2}\s+(?:jan(?:uary|vier)?|feb(?:ruary)?|fev(?:rier)?|mar(?:ch|s)?|apr(?:il)?|avr(?:il)?|may|mai|jun(?:e|in)?|jul(?:y|let)?|aug(?:ust)?|aout|sep(?:t(?:ember|embre)?)?|oct(?:ober|obre)?|nov(?:ember|embre)?|dec(?:ember|embre)?)\.?\s*(?:20\d{2})?\b/gi, '')
+    .replace(/\b(?:total|price|fare|amount|cost)\b.*$/i, '')
+    .replace(/(?:стоимость|цена|итого|тариф).*$/iu, '')
     .replace(/^[\s·•—–-]+|[\s·•—–-]+$/g, ''));
   if (!value || value.length < 2 || value.length > 70 || GENERIC_LINE.test(value)) return null;
   if (/\b(check.?in|check.?out|price|total|fare|duration|travell?ers?|class|seat|night|room)\b/i.test(value)) return null;
   if (/^\d+$/.test(value) || /^(?:mon|tue|wed|thu|fri|sat|sun)/i.test(value)) return null;
-  if (!/[A-Za-zÀ-ž]/.test(value)) return null;
+  if (!/\p{L}/u.test(value)) return null;
   return value;
 }
 
@@ -271,7 +274,8 @@ function priceIn(text: string): { cost: number; currency: string } | null {
     return CURRENCIES[normalized] ?? CURRENCIES[folded(normalized)] ?? token.toUpperCase();
   };
   text.split('\n').forEach((line) => {
-    const priority = /\b(total|price|fare|amount|cost)\b/i.test(line) ? 1 : 0;
+    const priority = /\b(total|price|fare|amount|cost)\b/i.test(line)
+      || /(?:стоимость|цена|итого|тариф)/iu.test(line) ? 1 : 0;
     const patterns = pricePatterns();
     for (const [index, pattern] of patterns.entries()) {
       for (const m of line.matchAll(pattern)) {
@@ -287,12 +291,12 @@ function priceIn(text: string): { cost: number; currency: string } | null {
 }
 
 function transportIn(text: string): ExtractedLeg['transport'] {
-  if (/\b(flight|airline|boarding|gate)\b/i.test(text)) return 'Plane';
-  if (/\b(train|rail|gare|station|tgv|ter|sncf|eurostar)\b/i.test(text)) return 'Train';
-  if (/\b(bus|coach|flixbus)\b/i.test(text)) return 'Bus';
-  if (/\b(airport|terminal)\b/i.test(text)) return 'Plane';
-  if (/\b(taxi|cab)\b/i.test(text)) return 'Taxi';
-  if (/\b(car|rental|drive)\b/i.test(text)) return 'Car';
+  if (/\b(flight|airline|boarding|gate)\b/i.test(text) || /(?:самол[её]т|авиарейс|посадка)/iu.test(text)) return 'Plane';
+  if (/\b(train|rail|gare|station|tgv|ter|sncf|eurostar)\b/i.test(text) || /(?:поезд|ж\/д|железнодорож)/iu.test(text)) return 'Train';
+  if (/\b(bus|coach|flixbus)\b/i.test(text) || /(?:автобус)/iu.test(text)) return 'Bus';
+  if (/\b(airport|terminal)\b/i.test(text) || /(?:аэропорт|терминал)/iu.test(text)) return 'Plane';
+  if (/\b(taxi|cab)\b/i.test(text) || /(?:такси)/iu.test(text)) return 'Taxi';
+  if (/\b(car|rental|drive)\b/i.test(text) || /(?:автомобил|аренда авто)/iu.test(text)) return 'Car';
   return 'Other';
 }
 

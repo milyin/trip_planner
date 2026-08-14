@@ -107,7 +107,13 @@ local failures and explicit retries; useful partial results are not sent
 automatically. With Scribe.js disabled, files go directly to the selected LLM.
 Local recognition needs no account or API key.
 
-To use an LLM, open **⚙ Settings → Parsers**, add an **account** (a provider
+Choose the Tesseract models used for local OCR under **⚙ Settings → Local
+parser**. English is enabled for existing installations; add Russian or any
+other languages that may appear in booking images. Each model is downloaded
+and cached on first use, and selecting more languages increases recognition
+time.
+
+To use an LLM, open **⚙ Settings → LLM Parsers**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then
 select that parser under **Image recognition**.
 Your keys are stored only in this browser and are never sent anywhere except to

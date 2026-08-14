@@ -1,5 +1,6 @@
 import { beginExchange, type LlmExchange } from './debugLog';
 import type { AutoExtract, ExtractInput, ExtractedHotel, ExtractedLeg } from './extractor';
+import { settings } from '../state/settings';
 import {
   localHotelMissingFields, localLegMissingFields, parseLocalAuto, parseLocalHotel, parseLocalLeg,
 } from './localParse';
@@ -18,9 +19,10 @@ interface LocalScribeDocument {
 async function recognizeText({ files, note }: ExtractInput): Promise<{ text: string; exchange: LlmExchange }> {
   if (!files.length) throw new LocalRecognitionError('Local recognition needs an image or PDF.');
   const startedAt = Date.now();
+  const langs = [...settings.scribeLanguages];
   const ex = beginExchange({
     provider: 'local',
-    model: 'Scribe.js OCR',
+    model: `Scribe.js OCR (${langs.join(' + ')})`,
     files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
     note,
     startedAt,
@@ -48,7 +50,7 @@ async function recognizeText({ files, note }: ExtractInput): Promise<{ text: str
       await doc.importFiles(files);
       // The default quality mode runs both OCR engines. LSTM-only speed mode
       // is accurate for clean booking screenshots and uses much less memory.
-      await doc.recognize({ langs: ['eng'], mode: 'speed', ocrPages: 'autoDeep' });
+      await doc.recognize({ langs, mode: 'speed', ocrPages: 'autoDeep' });
       text = (await doc.exportData('text')).trim();
     } finally {
       await doc.close();
@@ -73,7 +75,7 @@ async function finish<T>(
 ): Promise<T> {
   const { text, exchange } = await recognizeText(input);
   const parsed = parse(text);
-  exchange.model = 'Scribe.js OCR + built-in trip parser';
+  exchange.model += ' + built-in trip parser';
   if (!parsed) {
     exchange.status = 'OCR succeeded; no reliable trip structure was found';
     exchange.error = 'The local parser could not confidently identify enough trip information.';

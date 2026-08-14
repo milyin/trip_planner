@@ -1,5 +1,8 @@
 import { backfillConversions } from '../domain/convert';
 import {
+  isOcrLanguageCode, OCR_LANGUAGES, ocrLanguageName,
+} from '../import/ocrLanguages';
+import {
   accountName, DEFAULT_MODELS, genAccountId, parserName, saveSettings, settings, type LlmProvider,
 } from '../state/settings';
 import { emitChange, state } from '../state/store';
@@ -9,25 +12,28 @@ import { byId, mkBtn } from './dom';
 const PROVIDERS: LlmProvider[] = ['gemini', 'openrouter', 'anthropic'];
 
 let resolveClose: (() => void) | null = null;
-type SettingsTab = 'general' | 'recognition' | 'accounts';
+type SettingsTab = 'general' | 'recognition' | 'local' | 'accounts';
 
 /** Show one section of the Settings dialog. */
 function showSettingsTab(tab: SettingsTab): void {
   byId('settGeneral').style.display = tab === 'general' ? '' : 'none';
   byId('settRecognition').style.display = tab === 'recognition' ? '' : 'none';
+  byId('settLocalParser').style.display = tab === 'local' ? '' : 'none';
   byId('settAccounts').style.display = tab === 'accounts' ? '' : 'none';
   byId('stabGeneral').classList.toggle('active', tab === 'general');
   byId('stabRecognition').classList.toggle('active', tab === 'recognition');
+  byId('stabLocalParser').classList.toggle('active', tab === 'local');
   byId('stabAccounts').classList.toggle('active', tab === 'accounts');
 }
 
-/** Wire the Settings dialog: preferences, recognition routing, and accounts. */
+/** Wire the Settings dialog: preferences, recognition routing, local OCR, and LLMs. */
 export function wireParserSettings(): void {
   byId('settingsBtn').onclick = () => void openParserSettings();
   byId('closeParsers').onclick = close;
   byId('parserDoneBtn').onclick = close;
   byId('stabGeneral').onclick = () => showSettingsTab('general');
   byId('stabRecognition').onclick = () => showSettingsTab('recognition');
+  byId('stabLocalParser').onclick = () => showSettingsTab('local');
   byId('stabAccounts').onclick = () => showSettingsTab('accounts');
   byId<HTMLInputElement>('scribeEnabled').onchange = (event) => {
     settings.scribeEnabled = (event.target as HTMLInputElement).checked;
@@ -64,6 +70,13 @@ export function wireParserSettings(): void {
     saveSettings();
     renderLists();
   };
+  byId('addLocalLanguageBtn').onclick = () => {
+    const code = byId<HTMLSelectElement>('localLanguageSelect').value;
+    if (!isOcrLanguageCode(code) || settings.scribeLanguages.includes(code)) return;
+    settings.scribeLanguages.push(code);
+    saveSettings();
+    renderLocalLanguages();
+  };
 }
 
 /** Open the Settings dialog on the given tab (default General); resolves when
@@ -99,7 +112,45 @@ function providerSelect(value: LlmProvider): HTMLSelectElement {
 function renderLists(): void {
   renderAccounts();
   renderParsers();
+  renderLocalLanguages();
   renderRecognitionChoice();
+}
+
+function renderLocalLanguages(): void {
+  const selected = new Set(settings.scribeLanguages);
+  const choice = byId<HTMLSelectElement>('localLanguageSelect');
+  choice.innerHTML = '';
+  for (const [code, name] of OCR_LANGUAGES) {
+    if (selected.has(code)) continue;
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = `${name} (${code})`;
+    choice.appendChild(option);
+  }
+  const add = byId<HTMLButtonElement>('addLocalLanguageBtn');
+  add.disabled = choice.options.length === 0;
+
+  const list = byId('localLanguageList');
+  list.innerHTML = '';
+  settings.scribeLanguages.forEach((code, index) => {
+    const row = document.createElement('div');
+    row.className = 'parser-row';
+    const name = document.createElement('span');
+    name.className = 'language-name';
+    name.textContent = `${ocrLanguageName(code)} (${code})`;
+    const del = mkBtn('✕', 'btn icon ghost');
+    const onlyLanguage = settings.scribeLanguages.length === 1;
+    del.disabled = onlyLanguage;
+    del.title = onlyLanguage ? 'Local recognition needs at least one language' : 'Remove language';
+    del.onclick = () => {
+      if (settings.scribeLanguages.length === 1) return;
+      settings.scribeLanguages.splice(index, 1);
+      saveSettings();
+      renderLocalLanguages();
+    };
+    row.append(name, del);
+    list.appendChild(row);
+  });
 }
 
 /** Render the two routing choices in plain language: local OCR on/off and one

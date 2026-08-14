@@ -2,6 +2,10 @@
  * app name because `<user>.github.io` is one origin shared by every GitHub
  * Pages project of the account. */
 
+import {
+  DEFAULT_OCR_LANGUAGES, isOcrLanguageCode, type OcrLanguageCode,
+} from '../import/ocrLanguages';
+
 export type LlmProvider = 'gemini' | 'openrouter' | 'anthropic';
 
 /** A provider credential; several parsers can share one account. */
@@ -29,6 +33,8 @@ export interface Settings {
   parsers: ImageParser[];
   /** Whether browser-local Scribe.js OCR is attempted. */
   scribeEnabled: boolean;
+  /** Tesseract language models loaded by browser-local Scribe.js OCR. */
+  scribeLanguages: OcrLanguageCode[];
   /** The selected LLM parser, or `null` for no LLM parsing. */
   activeParser: number | null;
   theme: 'dark' | 'light';
@@ -80,6 +86,10 @@ function load(): Settings {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<Settings> & LegacySettings;
     const theme: Settings['theme'] = raw.theme === 'light' ? 'light' : 'dark';
     const scribeEnabled = raw.scribeEnabled !== false;
+    const loadedLanguages = Array.isArray(raw.scribeLanguages)
+      ? [...new Set(raw.scribeLanguages.filter(isOcrLanguageCode))]
+      : [];
+    const scribeLanguages = loadedLanguages.length ? loadedLanguages : [...DEFAULT_OCR_LANGUAGES];
     const baseCurrency = typeof raw.baseCurrency === 'string' && raw.baseCurrency ? raw.baseCurrency : DEFAULT_BASE_CURRENCY;
     const accounts: LlmAccount[] = [];
     const parsers: ImageParser[] = [];
@@ -107,6 +117,7 @@ function load(): Settings {
         accounts: raw.accounts,
         parsers: loadedParsers,
         scribeEnabled,
+        scribeLanguages,
         // Existing installs already selected a parser; preserve that choice.
         activeParser: loadActiveParser(loadedParsers.length),
         theme,
@@ -122,6 +133,7 @@ function load(): Settings {
         accounts,
         parsers,
         scribeEnabled,
+        scribeLanguages,
         activeParser: loadActiveParser(parsers.length),
         theme,
         baseCurrency,
@@ -142,10 +154,10 @@ function load(): Settings {
     }
     const legacyActive = accounts.findIndex((a) => a.provider === raw.provider);
     const activeParser = parsers.length ? Math.max(0, legacyActive) : null;
-    return { accounts, parsers, scribeEnabled, activeParser, theme, baseCurrency };
+    return { accounts, parsers, scribeEnabled, scribeLanguages, activeParser, theme, baseCurrency };
   } catch {
     return {
-      accounts: [], parsers: [], scribeEnabled: true, activeParser: null,
+      accounts: [], parsers: [], scribeEnabled: true, scribeLanguages: [...DEFAULT_OCR_LANGUAGES], activeParser: null,
       theme: 'dark', baseCurrency: DEFAULT_BASE_CURRENCY,
     };
   }
