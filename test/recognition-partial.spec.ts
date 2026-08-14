@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+test('fresh settings default to English, French and Russian OCR', async ({ page }) => {
+  await page.goto('/trip_planner/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  const freshLanguages = await page.evaluate(async () => {
+    const modulePath = '/trip_planner/src/state/settings.ts';
+    const { settings } = await import(/* @vite-ignore */ modulePath) as typeof import('../src/state/settings');
+    return settings.scribeLanguages;
+  });
+  expect(freshLanguages).toEqual(['eng', 'fra', 'rus']);
+
+  await page.evaluate(() => {
+    localStorage.setItem('tripPlanner.settings.v1', JSON.stringify({
+      accounts: [], parsers: [], activeParser: null,
+      scribeEnabled: true, scribeLanguages: ['fra'],
+      theme: 'dark', baseCurrency: 'EUR',
+    }));
+  });
+  await page.reload();
+  const existingLanguages = await page.evaluate(async () => {
+    const modulePath = '/trip_planner/src/state/settings.ts';
+    const { settings } = await import(/* @vite-ignore */ modulePath) as typeof import('../src/state/settings');
+    return settings.scribeLanguages;
+  });
+  expect(existingLanguages).toEqual(['fra']);
+});
+
 test('remote recognition keeps omitted fields blank on pasted and queued legs', async ({ context, page }) => {
   await context.route('https://nominatim.openstreetmap.org/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
