@@ -804,9 +804,9 @@ async function recognise(): Promise<void> {
     if (useLocal && files.length) {
       const local = await tryLocalRecognition(files, note);
       dialogExchange = lastExchange();
-      byId<HTMLSelectElement>('fParser').value = 'default';
-      refreshRecognitionHint();
       if (local.value) {
+        byId<HTMLSelectElement>('fParser').value = 'default';
+        refreshRecognitionHint();
         fillLegFields(local.value[0], !!local.partial);
         activeTab = 'form';
         showParsedLegValidation();
