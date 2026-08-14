@@ -227,21 +227,39 @@ function transportIn(text: string): ExtractedLeg['transport'] {
  * only text without enough independent trip signals is rejected. */
 export function parseLocalLeg(text: string, note = '', now = new Date()): ExtractedLeg | null {
   const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
-  const dates = datesIn(lines, now);
+  const noteLines = note.split(/\r?\n/).map(clean).filter(Boolean);
+  const combinedLines = [...lines, ...noteLines];
+  const noteDates = datesIn(noteLines, now).map((date) => ({ ...date, line: date.line + lines.length }));
+  // An explicit date in Additional note clarifies or corrects the OCR date.
+  const dates = noteDates.length ? noteDates : datesIn(lines, now);
   let times = timesIn(lines);
   const requestedTime = note.match(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\b/);
+  let selectedByNote = false;
   if (requestedTime) {
     const preferred = times.findIndex((t) => t.hour === Number(requestedTime[1]) && t.minute === Number(requestedTime[2]));
-    if (preferred >= 0) times = times.slice(preferred);
+    if (preferred >= 0) {
+      times = times.slice(preferred, preferred + 2);
+      selectedByNote = true;
+    }
   }
   // More than one pair usually means alternatives or connecting legs. Without
   // an explicit requested departure, let the LLM fallback interpret layout
   // instead of silently choosing the wrong itinerary.
-  if (!requestedTime && times.length > 2) return null;
+  if (!selectedByNote && times.length > 2) return null;
+  // Additional note can also supply clocks that OCR missed. Do not duplicate a
+  // clock already found in the image (the common "the 20:09 train" selector).
+  if (times.length < 2 && noteLines.length) {
+    const noteTimes = timesIn(noteLines).map((time) => ({ ...time, line: time.line + lines.length }));
+    for (const time of noteTimes) {
+      if (!times.some((found) => found.hour === time.hour && found.minute === time.minute)) times.push(time);
+      if (times.length === 2) break;
+    }
+  }
   const [departure, arrival] = times;
   const hasTimePair = !!departure && !!arrival;
+  const noteTransport = transportIn(note);
   const leg: ExtractedLeg = {
-    transport: transportIn(text),
+    transport: noteTransport !== 'Other' ? noteTransport : transportIn(text),
   };
   if (hasTimePair) {
     const depDate = closestDate(departure, dates, dates[0]);
@@ -261,22 +279,24 @@ export function parseLocalLeg(text: string, note = '', now = new Date()): Extrac
     }
   }
 
-  const route = routeFrom(lines) ?? (hasTimePair ? routeFollowingTimes(lines, departure, arrival) : null);
-  const depLoc = route?.[0] ?? (departure ? nearbyLocation(lines, departure.line) : null);
-  const arrLoc = route?.[1] ?? (arrival ? nearbyLocation(lines, arrival.line, depLoc ?? undefined) : null);
+  const route = routeFrom(noteLines) ?? routeFrom(lines)
+    ?? (hasTimePair ? routeFollowingTimes(combinedLines, departure, arrival) : null);
+  const depLoc = route?.[0] ?? (departure ? nearbyLocation(combinedLines, departure.line) : null);
+  const arrLoc = route?.[1] ?? (arrival ? nearbyLocation(combinedLines, arrival.line, depLoc ?? undefined) : null);
   if (depLoc && arrLoc) {
     applyLocation(leg, 'dep', depLoc);
     applyLocation(leg, 'arr', arrLoc);
   }
 
-  const price = priceIn(text);
+  const price = priceIn(note) ?? priceIn(text);
   if (price) {
     leg.cost = price.cost;
     leg.currency = price.currency;
   }
-  if (/\b(direct|non.?stop)\b/i.test(text)) leg.transfers = 0;
+  const combinedText = `${text}\n${note}`;
+  if (/\b(direct|non.?stop)\b/i.test(combinedText)) leg.transfers = 0;
   else {
-    const stops = text.match(/\b(\d+)\s+(?:stop|change|transfer|connection)s?\b/i);
+    const stops = combinedText.match(/\b(\d+)\s+(?:stop|change|transfer|connection)s?\b/i);
     if (stops) leg.transfers = Number(stops[1]);
   }
   // Keep useful route-shaped output while rejecting isolated weak matches.

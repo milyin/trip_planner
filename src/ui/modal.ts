@@ -165,6 +165,19 @@ function thumbMedia(url: string, type: string, name: string): HTMLElement {
   return emb;
 }
 
+/** Make a preview openable without bubbling to the surrounding file picker. */
+function thumbLink(url: string, type: string, name: string): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.className = 'thumb-link';
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.title = 'Open in a new tab';
+  link.onclick = (e) => e.stopPropagation();
+  link.appendChild(thumbMedia(url, type, name));
+  return link;
+}
+
 /** Render recognition file notes as a removable thumbnail gallery. */
 function renderPreview(): void {
   const box = byId('filePreview');
@@ -190,12 +203,12 @@ function renderPreview(): void {
     if (n.file) {
       const url = URL.createObjectURL(n.file);
       previewUrls.push(url);
-      cell.insertBefore(thumbMedia(url, n.mime || n.file.type, n.name || 'image'), rm);
+      cell.insertBefore(thumbLink(url, n.mime || n.file.type, n.name || 'image'), rm);
     } else if (n.attachment) {
       void resolveLink(n.attachment).then((r) => {
         if (!r || !byId('overlay').classList.contains('open')) return;
         previewUrls.push(r.url);
-        cell.insertBefore(thumbMedia(r.url, r.type, n.name || 'image'), rm);
+        cell.insertBefore(thumbLink(r.url, r.type, n.name || 'image'), rm);
       });
     }
   });
@@ -422,7 +435,11 @@ function validateLegFields(focusFirst = false): boolean {
 
   const invalid = LEG_REQUIRED_FIELDS.map((id) => byId<HTMLInputElement>(id))
     .filter((field) => field.classList.contains('field-invalid'));
-  byId('legValidation').style.display = invalid.length ? '' : 'none';
+  const summary = byId('legValidation');
+  summary.textContent = dialogExchange?.provider === 'local' && dialogExchange.partial
+    ? 'Complete or correct the highlighted fields before saving. You can fill them manually, or add missing details to Additional note on Recognize and run Local Scribe.js again.'
+    : 'Complete or correct the highlighted fields before saving.';
+  summary.style.display = invalid.length ? '' : 'none';
   if (focusFirst && invalid[0]) invalid[0].focus();
   return invalid.length === 0;
 }
@@ -655,7 +672,7 @@ function refreshRecognitionHint(): void {
     return;
   }
   if (choice === 'local') {
-    byId('recognitionHint').textContent = 'Scribe.js fills reliable fields locally. After this attempt, the selector switches to Default Fallback for an optional retry.';
+    byId('recognitionHint').textContent = 'Scribe.js parses the image and Additional note together. After this attempt, the selector switches to the default LLM for an optional retry.';
     byId('recogniseBtn').title = 'Recognise locally with Scribe.js';
   } else if (choice === 'default') {
     byId('recognitionHint').textContent = 'Recognise directly with the Default Fallback configured in Settings → Image recognition.';

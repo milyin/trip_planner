@@ -83,7 +83,8 @@ async function finish<T>(
   exchange.partial = missing.length > 0;
   exchange.status = exchange.partial ? 'Local recognition partially succeeded' : 'Local recognition succeeded';
   if (exchange.partial) {
-    exchange.warning = `Missing or unparsed fields: ${missing.join(', ')}. They were left blank.`;
+    exchange.warning = `Missing or unparsed fields: ${missing.join(', ')}. They were left blank. `
+      + 'Add missing details to the Additional note field and run Local Scribe.js again, or fill them in manually.';
   }
   exchange.legs = parsed;
   return parsed;
