@@ -1,7 +1,7 @@
 import { beginExchange, type LlmExchange } from './debugLog';
 import type { AutoExtract, ExtractInput, ExtractedHotel, ExtractedLeg } from './extractor';
 import {
-  localHotelComplete, localLegMissingFields, parseLocalAuto, parseLocalHotel, parseLocalLeg,
+  localHotelMissingFields, localLegMissingFields, parseLocalAuto, parseLocalHotel, parseLocalLeg,
 } from './localParse';
 
 export class LocalRecognitionError extends Error {}
@@ -43,9 +43,9 @@ async function recognizeText({ files, note }: ExtractInput): Promise<{ text: str
     // which also initializes its PDF-writing fonts. OCR text extraction does
     // not need those assets and lower memory use matters in the browser.
     const doc = new docModule.ScribeDoc();
-    await doc.importFiles(files);
     let text: string;
     try {
+      await doc.importFiles(files);
       // The default quality mode runs both OCR engines. LSTM-only speed mode
       // is accurate for clean booking screenshots and uses much less memory.
       await doc.recognize({ langs: ['eng'], mode: 'speed', ocrPages: 'autoDeep' });
@@ -96,12 +96,10 @@ export const extractLocalLegs = async (input: ExtractInput): Promise<ExtractedLe
 };
 
 export const extractLocalHotel = (input: ExtractInput): Promise<ExtractedHotel> =>
-  finish(input, (text) => parseLocalHotel(text), (hotel) => (
-    localHotelComplete(hotel) ? [] : ['hotel name or dates']
-  ));
+  finish(input, (text) => parseLocalHotel(text), localHotelMissingFields);
 
 export const extractLocalAuto = (input: ExtractInput): Promise<AutoExtract> =>
   finish(input, (text) => parseLocalAuto(text, input.note), (value) => {
-    if ('hotel' in value) return localHotelComplete(value.hotel) ? [] : ['hotel name or dates'];
+    if ('hotel' in value) return localHotelMissingFields(value.hotel);
     return value.legs.flatMap(localLegMissingFields);
   });

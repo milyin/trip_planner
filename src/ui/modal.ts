@@ -37,6 +37,8 @@ export interface HotelPrefill {
   inPlan?: boolean;
   name?: string; city?: string; addr?: string;
   checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode;
+  /** Date-only values from local OCR; corresponding times stay blank. */
+  checkInDate?: string; checkOutDate?: string;
   /** Leave missing recognition fields blank instead of keeping form defaults. */
   partial?: boolean;
   /** Booking images carried into the dialog (auto-import from paste). */
@@ -301,7 +303,9 @@ function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
   legValidationActive = false;
+  hotelValidationActive = false;
   clearLegValidation();
+  clearHotelValidation();
   byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
@@ -414,18 +418,22 @@ function validateLegFields(focusFirst = false): boolean {
     const depTz = getVal('fDepTz').trim();
     const arrTz = getVal('fArrTz').trim();
     const compareInZones = isValidTz(depTz) && isValidTz(arrTz);
-    const depMs = compareInZones ? zonedMs(dep, depTz) : toMs(dep);
-    const arrMs = compareInZones ? zonedMs(arr, arrTz) : toMs(arr);
-    if (!Number.isFinite(depMs)) {
+    const depLocalMs = toMs(dep);
+    const arrLocalMs = toMs(arr);
+    if (!Number.isFinite(depLocalMs)) {
       invalidateLegField('fDepDate', 'Enter a valid departure date and time.');
       invalidateLegField('fDepTime', 'Enter a valid departure date and time.');
     }
-    if (!Number.isFinite(arrMs)) {
+    if (!Number.isFinite(arrLocalMs)) {
       invalidateLegField('fArrDate', 'Enter a valid arrival date and time.');
       invalidateLegField('fArrTime', 'Enter a valid arrival date and time.');
-    } else if (Number.isFinite(depMs) && arrMs <= depMs) {
-      invalidateLegField('fArrDate', 'Arrival must be later than departure.');
-      invalidateLegField('fArrTime', 'Arrival must be later than departure.');
+    } else if (compareInZones && Number.isFinite(depLocalMs)) {
+      const depMs = zonedMs(dep, depTz);
+      const arrMs = zonedMs(arr, arrTz);
+      if (Number.isFinite(depMs) && Number.isFinite(arrMs) && arrMs <= depMs) {
+        invalidateLegField('fArrDate', 'Arrival must be later than departure.');
+        invalidateLegField('fArrTime', 'Arrival must be later than departure.');
+      }
     }
   }
 
@@ -454,6 +462,71 @@ function validateLegFields(focusFirst = false): boolean {
 function showParsedLegValidation(): void {
   legValidationActive = true;
   validateLegFields();
+}
+
+const HOTEL_REQUIRED_FIELDS = ['hName', 'hCity', 'hInDate', 'hInTime', 'hOutDate', 'hOutTime'] as const;
+let hotelValidationActive = false;
+
+function clearHotelValidation(): void {
+  for (const id of HOTEL_REQUIRED_FIELDS) {
+    const field = byId<HTMLInputElement>(id);
+    field.classList.remove('field-invalid');
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('data-validation-message');
+    field.title = '';
+  }
+  byId('hotelValidation').style.display = 'none';
+}
+
+function invalidateHotelField(id: typeof HOTEL_REQUIRED_FIELDS[number], message: string): void {
+  const field = byId<HTMLInputElement>(id);
+  field.classList.add('field-invalid');
+  field.setAttribute('aria-invalid', 'true');
+  field.dataset.validationMessage = message;
+  field.title = message;
+}
+
+function validateHotelFields(focusFirst = false): boolean {
+  clearHotelValidation();
+  const required: Array<[typeof HOTEL_REQUIRED_FIELDS[number], string]> = [
+    ['hName', 'Enter a hotel name.'],
+    ['hCity', 'Enter a city.'],
+    ['hInDate', 'Enter a check-in date.'],
+    ['hInTime', 'Enter a check-in time.'],
+    ['hOutDate', 'Enter a check-out date.'],
+    ['hOutTime', 'Enter a check-out time.'],
+  ];
+  for (const [id, message] of required) {
+    const field = byId<HTMLInputElement>(id);
+    if (!field.value.trim() || !field.checkValidity()) invalidateHotelField(id, message);
+  }
+  const checkIn = getDT('hInDate', 'hInTime');
+  const checkOut = getDT('hOutDate', 'hOutTime');
+  if (checkIn && checkOut && !HOTEL_REQUIRED_FIELDS.some((id) => byId(id).classList.contains('field-invalid'))) {
+    const inMs = toMs(checkIn);
+    const outMs = toMs(checkOut);
+    if (!Number.isFinite(inMs)) {
+      invalidateHotelField('hInDate', 'Enter a valid check-in date and time.');
+      invalidateHotelField('hInTime', 'Enter a valid check-in date and time.');
+    }
+    if (!Number.isFinite(outMs)) {
+      invalidateHotelField('hOutDate', 'Enter a valid check-out date and time.');
+      invalidateHotelField('hOutTime', 'Enter a valid check-out date and time.');
+    } else if (Number.isFinite(inMs) && outMs <= inMs) {
+      invalidateHotelField('hOutDate', 'Check-out must be later than check-in.');
+      invalidateHotelField('hOutTime', 'Check-out must be later than check-in.');
+    }
+  }
+  const invalid = HOTEL_REQUIRED_FIELDS.map((id) => byId<HTMLInputElement>(id))
+    .filter((field) => field.classList.contains('field-invalid'));
+  byId('hotelValidation').style.display = invalid.length ? '' : 'none';
+  if (focusFirst && invalid[0]) invalid[0].focus();
+  return invalid.length === 0;
+}
+
+function showParsedHotelValidation(): void {
+  hotelValidationActive = true;
+  validateHotelFields();
 }
 
 // --- automatic time zone from the city --------------------------------------
@@ -799,7 +872,8 @@ async function recognise(): Promise<void> {
       recogniseFailed();
       return;
     }
-    fillHotelFields(hotel);
+    fillHotelFields(hotel, true);
+    showParsedHotelValidation();
   } else {
     if (useLocal && files.length) {
       const local = await tryLocalRecognition(files, note);
@@ -815,7 +889,8 @@ async function recognise(): Promise<void> {
     }
     const parser = useLocal ? defaultLlmParser() : parserForChoice(selectedChoice);
     if (!parser) {
-      explainUnavailableRecognition(localError, files.length > 0);
+      if (useLocal) explainUnavailableRecognition(localError, files.length > 0);
+      else alert('The selected LLM parser is unavailable. Check its account and API key in Settings → Parsers.');
       recogniseFailed();
       return;
     }
@@ -849,7 +924,8 @@ export async function importPastedImage(file: File): Promise<void> {
   let localError: string | undefined;
   let localPartial = false;
   let result = null;
-  if (settings.scribeEnabled) {
+  const attemptedLocal = settings.scribeEnabled;
+  if (attemptedLocal) {
     const local = await tryLocalAutoRecognition([file], '');
     result = local.value;
     localError = local.error;
@@ -859,7 +935,7 @@ export async function importPastedImage(file: File): Promise<void> {
     const parser = defaultLlmParser();
     if (!parser) {
       openModal(null, { files: [file] });
-      dialogExchange = lastExchange();
+      dialogExchange = attemptedLocal ? lastExchange() : null;
       explainUnavailableRecognition(localError);
       recogniseFailed();
       return;
@@ -875,7 +951,7 @@ export async function importPastedImage(file: File): Promise<void> {
     return;
   }
   if ('hotel' in result) {
-    openHotelModal(null, { ...result.hotel, partial: localPartial, files: [file] });
+    openHotelModal(null, { ...result.hotel, partial: true, files: [file] });
   } else {
     const [first, ...rest] = result.legs;
     openModal(null, { ...first, partial: localPartial, files: [file] });
@@ -884,7 +960,8 @@ export async function importPastedImage(file: File): Promise<void> {
   }
   // The exchange belongs to the record(s) just opened; openModal cleared it.
   dialogExchange = lastExchange();
-  if (!('hotel' in result)) showParsedLegValidation();
+  if ('hotel' in result) showParsedHotelValidation();
+  else showParsedLegValidation();
   applyTabs();
 }
 
@@ -897,8 +974,16 @@ function fillHotelFields(h: ExtractedHotel, partial = false): void {
   set('hCity', h.city);
   set('hAddr', h.addr);
   if (h.checkIn) setDT('hInDate', 'hInTime', h.checkIn);
+  else if (h.checkInDate) {
+    setVal('hInDate', h.checkInDate);
+    setVal('hInTime', '');
+  }
   else if (partial) setDT('hInDate', 'hInTime', '');
   if (h.checkOut) setDT('hOutDate', 'hOutTime', h.checkOut);
+  else if (h.checkOutDate) {
+    setVal('hOutDate', h.checkOutDate);
+    setVal('hOutTime', '');
+  }
   else if (partial) setDT('hOutDate', 'hOutTime', '');
   set('hCost', h.cost);
   set('hCur', h.currency);
@@ -958,9 +1043,6 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   bufHint();
   initPlaceSlots('depCity', 'depAddr', r ? r.dep.ll : null);
   initPlaceSlots('arrCity', 'arrAddr', r ? r.arr.ll : null);
-  if (!r) {
-    for (const key of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(key);
-  }
   byId('overlay').classList.add('open');
   renderPreview();
   renderNotes();
@@ -990,8 +1072,16 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hAddr', h ? h.addr : P.addr ?? '');
   setDT('hInDate', 'hInTime', h ? h.checkIn : P.checkIn ?? '2026-05-01T15:00');
   setDT('hOutDate', 'hOutTime', h ? h.checkOut : P.checkOut ?? '2026-05-03T11:00');
-  if (!h && P.partial && !P.checkIn) setDT('hInDate', 'hInTime', '');
-  if (!h && P.partial && !P.checkOut) setDT('hOutDate', 'hOutTime', '');
+  if (!h && P.checkInDate && !P.checkIn) {
+    setVal('hInDate', P.checkInDate);
+    setVal('hInTime', '');
+  }
+  if (!h && P.checkOutDate && !P.checkOut) {
+    setVal('hOutDate', P.checkOutDate);
+    setVal('hOutTime', '');
+  }
+  if (!h && P.partial && !P.checkIn && !P.checkInDate) setDT('hInDate', 'hInTime', '');
+  if (!h && P.partial && !P.checkOut && !P.checkOutDate) setDT('hOutDate', 'hOutTime', '');
   const hTz = h ? h.tz ?? '' : '';
   setVal('hTz', hTz); tzAuto.hTz = !hTz;
   setVal('hCost', h ? h.cost : P.cost ?? '');
@@ -999,10 +1089,6 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('fNote', '');
   refreshParserCombo();
   initPlaceSlots('hotCity', 'hotAddr', h ? h.ll : null);
-  if (!h) {
-    resolveSlot('hotCity');
-    resolveSlot('hotAddr');
-  }
   byId('overlay').classList.add('open');
   renderPreview();
   renderNotes();
@@ -1093,12 +1179,12 @@ function saveModal(): void {
 }
 
 async function saveHotel(): Promise<void> {
-  const name = getVal('hName');
-  const city = getVal('hCity');
-  if (!name || !city) {
-    alert('Hotel name and city are required.');
-    return;
-  }
+  hotelValidationActive = true;
+  activeTab = 'form';
+  applyTabs();
+  if (!validateHotelFields(true)) return;
+  const name = getVal('hName').trim();
+  const city = getVal('hCity').trim();
   // Storing the image is async — block a double-click on Save meanwhile.
   const saveBtn = byId<HTMLButtonElement>('saveBtn');
   if (saveBtn.disabled) return;
@@ -1165,6 +1251,14 @@ export function wireModal(): void {
     });
     byId(id).addEventListener('change', () => {
       if (legValidationActive) validateLegFields();
+    });
+  }
+  for (const id of HOTEL_REQUIRED_FIELDS) {
+    byId(id).addEventListener('input', () => {
+      if (hotelValidationActive) validateHotelFields();
+    });
+    byId(id).addEventListener('change', () => {
+      if (hotelValidationActive) validateHotelFields();
     });
   }
   // Converted cost: editing the cost or currency re-converts (unless the user

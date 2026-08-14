@@ -64,6 +64,52 @@ const CURRENCY_SOURCE = Object.keys(CURRENCIES)
   .map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
   .join('|');
 
+const AMOUNT_SOURCE = String.raw`\d(?:[\d\s.,]*\d)?`;
+
+function pricePatterns(): RegExp[] {
+  return [
+    new RegExp(`(?:^|[^\\p{L}\\d])(${CURRENCY_SOURCE})\\s*(${AMOUNT_SOURCE})(?![\\d.,])`, 'giu'),
+    new RegExp(`(?:^|[^\\p{L}\\d])(${AMOUNT_SOURCE})\\s*(${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'),
+  ];
+}
+
+const maskMatch = (match: string): string => ' '.repeat(match.length);
+
+/** Preserve character offsets while hiding complete numeric dates from the
+ * clock parser. A two-part dot token stays visible because `18.30` is a common
+ * clock; dot-separated dates need an explicit year to be unambiguous. */
+function maskNumericDates(line: string): string {
+  return line
+    .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, maskMatch)
+    .replace(/(?<!\d)\d{1,2}[/-]\d{1,2}(?:[/-](?:20)?\d{2})?(?!\d)/g, maskMatch)
+    .replace(/(?<!\d)\d{1,2}\.\d{1,2}\.(?:20)?\d{2}(?!\d)/g, maskMatch);
+}
+
+function maskPrices(line: string): string {
+  let masked = line;
+  for (const pattern of pricePatterns()) masked = masked.replace(pattern, maskMatch);
+  return masked;
+}
+
+/** Normalize decimal and thousands separators. When both occur, the last one
+ * is decimal; a lone three-digit group is treated as a thousands separator. */
+function parseAmount(raw: string): number | null {
+  const compact = raw.replace(/\s/g, '');
+  const separators = [...compact.matchAll(/[.,]/g)].map((m) => m.index ?? 0);
+  let normalized = compact;
+  if (separators.length) {
+    const decimal = separators[separators.length - 1];
+    const fractionLength = compact.length - decimal - 1;
+    const hasBoth = compact.includes('.') && compact.includes(',');
+    const isGroupedThousands = !hasBoth && fractionLength === 3;
+    normalized = isGroupedThousands
+      ? compact.replace(/[.,]/g, '')
+      : compact.slice(0, decimal).replace(/[.,]/g, '') + '.' + compact.slice(decimal + 1);
+  }
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 function futureYear(month: number, day: number, now: Date): number {
   const year = now.getFullYear();
   const candidate = new Date(year, month, day, 23, 59);
@@ -92,10 +138,14 @@ function datesIn(lines: string[], now: Date): ParsedDate[] {
     for (const m of line.matchAll(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/g)) {
       add(lineN, Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     }
-    for (const m of line.matchAll(/\b(\d{1,2})[/.\-](\d{1,2})(?:[/.\-](20\d{2}|\d{2}))?\b/g)) {
-      if (m[0].includes(':') || /^20\d{2}-/.test(m[0])) continue;
+    const withoutIso = line.replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, maskMatch);
+    for (const m of withoutIso.matchAll(/(?<!\d)(\d{1,2})[/-](\d{1,2})(?:[/-](20\d{2}|\d{2}))?(?!\d)/g)) {
       const rawYear = m[3] ? Number(m[3]) : undefined;
       add(lineN, rawYear == null ? undefined : rawYear < 100 ? 2000 + rawYear : rawYear, Number(m[2]) - 1, Number(m[1]));
+    }
+    for (const m of withoutIso.matchAll(/(?<!\d)(\d{1,2})\.(\d{1,2})\.(20\d{2}|\d{2})(?!\d)/g)) {
+      const rawYear = Number(m[3]);
+      add(lineN, rawYear < 100 ? 2000 + rawYear : rawYear, Number(m[2]) - 1, Number(m[1]));
     }
     const f = folded(line);
     for (const m of f.matchAll(/(?:^|[^\p{L}\d])(\d{1,2})\s+([\p{L}]+)\.?\s*(20\d{2})?(?=$|[^\p{L}\d])/gu)) {
@@ -114,9 +164,7 @@ function timesIn(lines: string[]): DatedTime[] {
   const out: DatedTime[] = [];
   lines.forEach((line, lineN) => {
     if (/\b(duration|travel time|journey time)\b/i.test(line)) return;
-    const withoutDates = line
-      .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, '')
-      .replace(/\b\d{1,2}[/.\-]\d{1,2}(?:[/.\-](?:20)?\d{2})?\b/g, '');
+    const withoutDates = maskNumericDates(maskPrices(line));
     for (const m of withoutDates.matchAll(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\s*(am|pm)?\b/gi)) {
       let hour = Number(m[1]);
       const suffix = m[3]?.toLowerCase();
@@ -149,14 +197,12 @@ function datetime(date: Date, time: DatedTime): string {
 const GENERIC_LINE = /^(from|to|departure|arrival|depart|arrivee?|outbound|inbound|details?|summary|booking|passengers?|adults?|change|direct|non.?stop)$/i;
 
 function locationCandidate(line: string): string | null {
-  const value = clean(line)
+  const value = clean(maskPrices(line)
     .replace(/\b(?:[01]?\d|2[0-3])[:.]([0-5]\d)\s*(?:am|pm)?\b/gi, '')
     .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, '')
     .replace(/\b\d{1,2}[/.\-]\d{1,2}(?:[/.\-](?:20)?\d{2})?\b/g, '')
     .replace(/\b\d{1,2}\s+(?:jan(?:uary|vier)?|feb(?:ruary)?|fev(?:rier)?|mar(?:ch|s)?|apr(?:il)?|avr(?:il)?|may|mai|jun(?:e|in)?|jul(?:y|let)?|aug(?:ust)?|aout|sep(?:t(?:ember|embre)?)?|oct(?:ober|obre)?|nov(?:ember|embre)?|dec(?:ember|embre)?)\.?\s*(?:20\d{2})?\b/gi, '')
-    .replace(new RegExp(`(?:${CURRENCY_SOURCE})\\s*\\d[\\d\\s.,]*`, 'giu'), '')
-    .replace(new RegExp(`\\d[\\d\\s.,]*\\s*(?:${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'), '')
-    .replace(/^[\s·•—–-]+|[\s·•—–-]+$/g, '');
+    .replace(/^[\s·•—–-]+|[\s·•—–-]+$/g, ''));
   if (!value || value.length < 2 || value.length > 70 || GENERIC_LINE.test(value)) return null;
   if (/\b(check.?in|check.?out|price|total|fare|duration|travell?ers?|class|seat|night|room)\b/i.test(value)) return null;
   if (/^\d+$/.test(value) || /^(?:mon|tue|wed|thu|fri|sat|sun)/i.test(value)) return null;
@@ -226,16 +272,13 @@ function priceIn(text: string): { cost: number; currency: string } | null {
   };
   text.split('\n').forEach((line) => {
     const priority = /\b(total|price|fare|amount|cost)\b/i.test(line) ? 1 : 0;
-    const patterns = [
-      new RegExp(`(?:^|[^\\p{L}\\d])(${CURRENCY_SOURCE})\\s*([\\d][\\d\\s]*(?:[.,]\\d{1,2})?)`, 'giu'),
-      new RegExp(`(?:^|[^\\p{L}\\d])([\\d][\\d\\s]*(?:[.,]\\d{1,2})?)\\s*(${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'),
-    ];
+    const patterns = pricePatterns();
     for (const [index, pattern] of patterns.entries()) {
       for (const m of line.matchAll(pattern)) {
         const amount = index === 0 ? m[2] : m[1];
         const currency = index === 0 ? m[1] : m[2];
-        const cost = Number(amount.replace(/\s/g, '').replace(',', '.'));
-        if (Number.isFinite(cost)) candidates.push({ cost, currency: currencyFor(currency), priority });
+        const cost = parseAmount(amount);
+        if (cost != null) candidates.push({ cost, currency: currencyFor(currency), priority });
       }
     }
   });
@@ -244,9 +287,10 @@ function priceIn(text: string): { cost: number; currency: string } | null {
 }
 
 function transportIn(text: string): ExtractedLeg['transport'] {
-  if (/\b(flight|airline|airport|boarding|terminal|gate)\b/i.test(text)) return 'Plane';
+  if (/\b(flight|airline|boarding|gate)\b/i.test(text)) return 'Plane';
   if (/\b(train|rail|gare|station|tgv|ter|sncf|eurostar)\b/i.test(text)) return 'Train';
   if (/\b(bus|coach|flixbus)\b/i.test(text)) return 'Bus';
+  if (/\b(airport|terminal)\b/i.test(text)) return 'Plane';
   if (/\b(taxi|cab)\b/i.test(text)) return 'Taxi';
   if (/\b(car|rental|drive)\b/i.test(text)) return 'Car';
   return 'Other';
@@ -362,12 +406,28 @@ export function parseLocalHotel(text: string, now = new Date()): ExtractedHotel 
     && !/\b(search|results?|booking|details?|check.?in|check.?out)\b/i.test(line));
   const hotel: ExtractedHotel = {};
   if (nameLine) hotel.name = nameLine;
-  if (dates[0]) {
-    hotel.checkIn = `${dates[0].value.getFullYear()}-${pad(dates[0].value.getMonth() + 1)}-${pad(dates[0].value.getDate())}T15:00`;
-  }
-  if (dates[1]) {
-    hotel.checkOut = `${dates[1].value.getFullYear()}-${pad(dates[1].value.getMonth() + 1)}-${pad(dates[1].value.getDate())}T11:00`;
-  }
+  const nearestLabeledDate = (label: RegExp, exclude?: ParsedDate): ParsedDate | undefined => {
+    const labelLines = lines.flatMap((line, index) => label.test(line) ? [index] : []);
+    return dates.filter((date) => date !== exclude)
+      .flatMap((date) => labelLines.map((line) => ({
+        date,
+        distance: Math.abs(line - date.line),
+        // When equally near, a date following a standalone label is more
+        // likely to belong to it than a preceding booking/cancellation date.
+        precedesLabel: date.line < line,
+      })))
+      .filter(({ distance }) => Number.isFinite(distance) && distance <= 2)
+      .sort((a, b) => a.distance - b.distance || Number(a.precedesLabel) - Number(b.precedesLabel))[0]?.date;
+  };
+  const labeledIn = nearestLabeledDate(/\b(check[ -]?in|arrival|arrivee?|entree)\b/i);
+  const labeledOut = nearestLabeledDate(/\b(check[ -]?out|departure|depart|sortie)\b/i, labeledIn);
+  const checkIn = labeledIn ?? (dates.length === 2 ? dates[0] : undefined);
+  const checkOut = labeledOut ?? (dates.length === 2 ? dates[1] : undefined);
+  const dateOnly = (date: Date): string => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  if (checkIn) hotel.checkInDate = dateOnly(checkIn.value);
+  if (checkOut && (!checkIn || checkOut.value > checkIn.value)) hotel.checkOutDate = dateOnly(checkOut.value);
+  const cityLine = lines.find((line) => /\b(?:city|ville|ciudad|citt[aà]|cidade)\s*[:\-]/i.test(line));
+  if (cityLine) hotel.city = clean(cityLine.replace(/^.*?\b(?:city|ville|ciudad|citt[aà]|cidade)\s*[:\-]\s*/i, ''));
   const address = lines.find((line) => /\b\d{1,5}\s+.+\b(street|st\.?|road|rd\.?|avenue|ave\.?|rue|boulevard|blvd|place|platz|via)\b/i.test(line));
   if (address) hotel.addr = address;
   const price = priceIn(text);
@@ -375,13 +435,21 @@ export function parseLocalHotel(text: string, now = new Date()): ExtractedHotel 
     hotel.cost = price.cost;
     hotel.currency = price.currency;
   }
-  const signals = [!!hotel.name, !!hotel.checkIn, !!hotel.addr, hotel.cost != null && !!hotel.currency]
+  const signals = [!!hotel.name, !!hotel.checkInDate, !!hotel.city, !!hotel.addr, hotel.cost != null && !!hotel.currency]
     .filter(Boolean).length;
   return signals >= 2 ? hotel : null;
 }
 
-export const localHotelComplete = (hotel: ExtractedHotel): boolean =>
-  !!hotel.name && !!hotel.checkIn && !!hotel.checkOut;
+export function localHotelMissingFields(hotel: ExtractedHotel): string[] {
+  const missing: string[] = [];
+  if (!hotel.name) missing.push('hotel name');
+  if (!hotel.city) missing.push('city');
+  if (!hotel.checkIn) missing.push(hotel.checkInDate ? 'check-in time' : 'check-in date and time');
+  if (!hotel.checkOut) missing.push(hotel.checkOutDate ? 'check-out time' : 'check-out date and time');
+  return missing;
+}
+
+export const localHotelComplete = (hotel: ExtractedHotel): boolean => localHotelMissingFields(hotel).length === 0;
 
 export function parseLocalAuto(text: string, note = '', now = new Date()): AutoExtract | null {
   const looksHotel = /\b(check.?in|check.?out|nights?|rooms?|hotel|hostel|resort)\b/i.test(text);

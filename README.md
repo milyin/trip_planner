@@ -128,18 +128,21 @@ If both Scribe.js and LLM parsing are disabled, the app explains that
 recognition is unavailable and manual entry remains available.
 
 The Recognize tab can use Local Scribe.js, the configured **Default Fallback**,
-or any parser for that attempt without changing the default. After a local
-attempt it switches to Default Fallback so an LLM retry is one click away.
-Hotel recognition is LLM-only; local Scribe.js parsing is available for legs.
+or any parser for that attempt without changing the default. A local attempt
+keeps Local Scribe.js selected; choose an LLM explicitly for a remote retry.
+Recognition started from an open hotel dialog is LLM-only. A pasted image may
+still be inspected locally first to identify a partial hotel or leg result.
 
 ## Your data stays with you
 
 Trip Planner has no server. Your trips, your screenshots, and your API keys all
-live in your browser's local storage and never leave your device except when a
-screenshot is sent to the recognition provider you configured, and only when
-local recognition cannot confidently extract the trip fields. The pinned
-Scribe.js browser engine and its OCR language data are downloaded and cached on
-first use, but OCR itself runs in your browser.
+live in your browser's local storage. A screenshot or PDF is sent to a configured
+recognition provider when you explicitly choose an LLM parser, when Scribe.js is
+disabled and an LLM is selected, when local recognition finds no usable trip
+data and a Default Fallback is configured, or when you run the LLM-only hotel
+recognition flow. Choosing **No LLM parsing** prevents automatic remote fallback.
+The pinned Scribe.js browser engine and its OCR language data are downloaded and
+cached on first use, but OCR itself runs in your browser.
 
 - **Workspaces** let you keep separate trips side by side. Create, rename, and
   switch between them from the ☰ menu.

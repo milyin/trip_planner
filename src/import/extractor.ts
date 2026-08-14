@@ -37,6 +37,9 @@ export interface ExtractedHotel {
   /** `datetime-local` strings (`YYYY-MM-DDTHH:MM`). */
   checkIn?: string;
   checkOut?: string;
+  /** Local OCR may recover dates while leaving the unknown times blank. */
+  checkInDate?: string;
+  checkOutDate?: string;
   cost?: number;
   currency?: CurrencyCode;
 }

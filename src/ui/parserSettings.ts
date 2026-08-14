@@ -61,7 +61,6 @@ export function wireParserSettings(): void {
       return;
     }
     settings.parsers.push({ accountId: acc.id, model: DEFAULT_MODELS[acc.provider] });
-    settings.activeParser = settings.parsers.length - 1;
     saveSettings();
     renderLists();
   };
