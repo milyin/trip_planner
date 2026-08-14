@@ -116,7 +116,7 @@ export const OCR_LANGUAGES = [
 
 export type OcrLanguageCode = typeof OCR_LANGUAGES[number][0];
 
-export const DEFAULT_OCR_LANGUAGES: OcrLanguageCode[] = ['eng'];
+export const DEFAULT_OCR_LANGUAGES: OcrLanguageCode[] = ['eng', 'fra', 'rus'];
 
 const LANGUAGE_CODES = new Set<string>(OCR_LANGUAGES.map(([code]) => code));
 

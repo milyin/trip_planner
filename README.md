@@ -166,11 +166,12 @@ automatically. With Scribe.js disabled, files go directly to the selected LLM.
 Local recognition needs no account or API key.
 
 Choose the Tesseract models used for local OCR under **⚙ Settings → Local
-parser**. English is enabled for existing installations; add Russian or any
-other languages that may appear in booking images. Each model is downloaded
-and cached on first use, and selecting more languages increases recognition
-time. OCR language support controls text recognition; it does not add new
-grammar or booking-layout knowledge to the deterministic trip parser.
+parser**. English, French and Russian are enabled by default for new
+installations; existing language selections are preserved. Add or remove models
+to match the languages used in your booking images. Each model is downloaded and
+cached on first use, and selecting more languages increases recognition time.
+OCR language support controls text recognition; it does not add new grammar or
+booking-layout knowledge to the deterministic trip parser.
 
 To use an LLM, open **⚙ Settings → LLM Parsers**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then
