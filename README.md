@@ -166,12 +166,15 @@ automatically. With Scribe.js disabled, files go directly to the selected LLM.
 Local recognition needs no account or API key.
 
 Choose the Tesseract models used for local OCR under **⚙ Settings → Local
-parser**. English, French and Russian are enabled by default for new
-installations; existing language selections are preserved. Add or remove models
-to match the languages used in your booking images. Each model is downloaded and
-cached on first use, and selecting more languages increases recognition time.
-OCR language support controls text recognition; it does not add new grammar or
-booking-layout knowledge to the deterministic trip parser.
+parser**. For a new installation, the app enables English, the likely language
+of the primary browser locale's region, and every supported language in the
+browser's preferred-language list. It uses locale metadata only—there is no
+geolocation prompt or IP lookup—and existing language selections are preserved.
+Because a locale region is only an approximation of physical location, review
+the list and add or remove models to match your booking images. Each model is
+downloaded and cached on first use, and selecting more languages increases
+recognition time. OCR language support controls text recognition; it does not
+add new grammar or booking-layout knowledge to the deterministic trip parser.
 
 To use an LLM, open **⚙ Settings → LLM Parsers**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then

@@ -116,7 +116,74 @@ export const OCR_LANGUAGES = [
 
 export type OcrLanguageCode = typeof OCR_LANGUAGES[number][0];
 
-export const DEFAULT_OCR_LANGUAGES: OcrLanguageCode[] = ['eng', 'fra', 'rus'];
+/** OCR is always usable for English even when browser locale detection is not
+ * available (for example in a non-browser test environment). */
+export const DEFAULT_OCR_LANGUAGES: OcrLanguageCode[] = ['eng'];
+
+const BROWSER_LANGUAGE_TO_OCR: Record<string, OcrLanguageCode> = {
+  af: 'afr', sq: 'sqi', am: 'amh', ar: 'ara', hy: 'hye', as: 'asm', az: 'aze',
+  eu: 'eus', be: 'bel', bn: 'ben', bs: 'bos', br: 'bre', bg: 'bul', my: 'mya',
+  ca: 'cat', ceb: 'ceb', chr: 'chr', co: 'cos', hr: 'hrv', cs: 'ces', da: 'dan',
+  dv: 'div', nl: 'nld', dz: 'dzo', en: 'eng', eo: 'epo', et: 'est', fo: 'fao',
+  fil: 'fil', tl: 'fil', fi: 'fin', fr: 'fra', fy: 'fry', gl: 'glg', ka: 'kat',
+  de: 'deu', el: 'ell', gu: 'guj', ht: 'hat', he: 'heb', iw: 'heb', hi: 'hin',
+  hu: 'hun', is: 'isl', iu: 'iku', id: 'ind', ga: 'gle', it: 'ita', ja: 'jpn',
+  jv: 'jav', kn: 'kan', kk: 'kaz', km: 'khm', ko: 'kor', ku: 'kmr', ky: 'kir',
+  lo: 'lao', la: 'lat', lv: 'lav', lt: 'lit', lb: 'ltz', mk: 'mkd', ms: 'msa',
+  ml: 'mal', mi: 'mri', mr: 'mar', mn: 'mon', ne: 'nep', no: 'nor', nb: 'nor',
+  nn: 'nor', oc: 'oci', or: 'ori', ps: 'pus', fa: 'fas', pl: 'pol', pt: 'por',
+  pa: 'pan', qu: 'que', ro: 'ron', ru: 'rus', sa: 'san', gd: 'gla', sr: 'srp',
+  sd: 'snd', si: 'sin', sk: 'slk', sl: 'slv', es: 'spa', su: 'sun', sw: 'swa',
+  sv: 'swe', syr: 'syr', tg: 'tgk', ta: 'tam', tt: 'tat', te: 'tel', th: 'tha',
+  bo: 'bod', ti: 'tir', to: 'ton', tr: 'tur', ug: 'uig', uk: 'ukr', ur: 'urd',
+  uz: 'uzb', vi: 'vie', cy: 'cym', yi: 'yid', yo: 'yor',
+};
+
+function ocrLanguageForLocale(tag: string): OcrLanguageCode | null {
+  try {
+    const locale = new Intl.Locale(tag);
+    const maximized = locale.maximize();
+    const script = locale.script ?? maximized.script;
+    const region = locale.region ?? maximized.region;
+    if (locale.language === 'zh') {
+      return script === 'Hant' || ['HK', 'MO', 'TW'].includes(region ?? '') ? 'chi_tra' : 'chi_sim';
+    }
+    if (locale.language === 'az' && script === 'Cyrl') return 'aze_cyrl';
+    if (locale.language === 'sr' && script === 'Latn') return 'srp_latn';
+    if (locale.language === 'uz' && script === 'Cyrl') return 'uzb_cyrl';
+    return BROWSER_LANGUAGE_TO_OCR[locale.language] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Defaults for a fresh install: English, the likely language of the primary
+ * browser locale's region, then all supported browser/system languages. This
+ * uses locale metadata only; it never requests physical location permission. */
+export function defaultOcrLanguages(
+  browserLanguages?: readonly string[],
+  browserLocale?: string,
+): OcrLanguageCode[] {
+  const systemLanguages = browserLanguages
+    ?? (typeof navigator === 'undefined' ? [] : navigator.languages);
+  const primaryLocale = browserLocale
+    ?? (typeof navigator === 'undefined' ? undefined : navigator.language)
+    ?? systemLanguages[0];
+  const defaults: OcrLanguageCode[] = [...DEFAULT_OCR_LANGUAGES];
+  const add = (code: OcrLanguageCode | null): void => {
+    if (code && !defaults.includes(code)) defaults.push(code);
+  };
+  if (primaryLocale) {
+    try {
+      const region = new Intl.Locale(primaryLocale).region;
+      if (region) add(ocrLanguageForLocale(new Intl.Locale(`und-${region}`).maximize().toString()));
+    } catch {
+      /* Invalid browser locale — system-language fallback below still applies. */
+    }
+  }
+  for (const locale of systemLanguages) add(ocrLanguageForLocale(locale));
+  return defaults;
+}
 
 const LANGUAGE_CODES = new Set<string>(OCR_LANGUAGES.map(([code]) => code));
 

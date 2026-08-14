@@ -3,7 +3,7 @@
  * Pages project of the account. */
 
 import {
-  DEFAULT_OCR_LANGUAGES, isOcrLanguageCode, type OcrLanguageCode,
+  defaultOcrLanguages, isOcrLanguageCode, type OcrLanguageCode,
 } from '../import/ocrLanguages';
 
 export type LlmProvider = 'gemini' | 'openrouter' | 'anthropic';
@@ -89,7 +89,7 @@ function load(): Settings {
     const loadedLanguages = Array.isArray(raw.scribeLanguages)
       ? [...new Set(raw.scribeLanguages.filter(isOcrLanguageCode))]
       : [];
-    const scribeLanguages = loadedLanguages.length ? loadedLanguages : [...DEFAULT_OCR_LANGUAGES];
+    const scribeLanguages = loadedLanguages.length ? loadedLanguages : defaultOcrLanguages();
     const baseCurrency = typeof raw.baseCurrency === 'string' && raw.baseCurrency ? raw.baseCurrency : DEFAULT_BASE_CURRENCY;
     const accounts: LlmAccount[] = [];
     const parsers: ImageParser[] = [];
@@ -157,7 +157,7 @@ function load(): Settings {
     return { accounts, parsers, scribeEnabled, scribeLanguages, activeParser, theme, baseCurrency };
   } catch {
     return {
-      accounts: [], parsers: [], scribeEnabled: true, scribeLanguages: [...DEFAULT_OCR_LANGUAGES], activeParser: null,
+      accounts: [], parsers: [], scribeEnabled: true, scribeLanguages: defaultOcrLanguages(), activeParser: null,
       theme: 'dark', baseCurrency: DEFAULT_BASE_CURRENCY,
     };
   }
