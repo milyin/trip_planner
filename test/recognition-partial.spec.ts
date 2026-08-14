@@ -1,6 +1,10 @@
 import { expect, test } from '@playwright/test';
 
-test('fresh settings default to English, French and Russian OCR', async ({ page }) => {
+test('fresh OCR defaults combine English, locale region and system languages', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'language', { configurable: true, get: () => 'ru-FR' });
+    Object.defineProperty(navigator, 'languages', { configurable: true, get: () => ['ru-FR', 'de-DE'] });
+  });
   await page.goto('/trip_planner/');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
@@ -10,7 +14,7 @@ test('fresh settings default to English, French and Russian OCR', async ({ page 
     const { settings } = await import(/* @vite-ignore */ modulePath) as typeof import('../src/state/settings');
     return settings.scribeLanguages;
   });
-  expect(freshLanguages).toEqual(['eng', 'fra', 'rus']);
+  expect(freshLanguages).toEqual(['eng', 'fra', 'rus', 'deu']);
 
   await page.evaluate(() => {
     localStorage.setItem('tripPlanner.settings.v1', JSON.stringify({
