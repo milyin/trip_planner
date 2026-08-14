@@ -1,0 +1,15 @@
+{
+  "languages": ["eng", "fra", "rus"],
+  "now": "2026-08-14T12:00:00Z",
+  "expected": {
+    "transport": "Plane",
+    "depTime": "2026-10-29T19:05",
+    "arrTime": "2026-10-29T20:15",
+    "depAddr": "GVA",
+    "arrAddr": "ORY",
+    "cost": 132,
+    "currency": "EUR",
+    "transfers": 0
+  },
+  "absent": ["depCity", "arrCity"]
+}
