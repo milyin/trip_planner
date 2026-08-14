@@ -13,20 +13,27 @@ interface ParsedDate {
   value: Date;
 }
 
-const MONTHS: Record<string, number> = {
-  jan: 0, january: 0, janvier: 0,
-  feb: 1, february: 1, fev: 1, fevrier: 1,
-  mar: 2, march: 2, mars: 2,
-  apr: 3, april: 3, avr: 3, avril: 3,
-  may: 4, mai: 4,
-  jun: 5, june: 5, juin: 5,
-  jul: 6, july: 6, juillet: 6,
-  aug: 7, august: 7, aout: 7,
-  sep: 8, sept: 8, september: 8, septembre: 8,
-  oct: 9, october: 9, octobre: 9,
-  nov: 10, november: 10, novembre: 10,
-  dec: 11, december: 11, decembre: 11,
-};
+/** Common full and abbreviated month names seen on international booking
+ * screens. Strings are accent-folded before lookup, so e.g. `juil.`, `März`,
+ * `févr.` and `września` work without relying on the browser locale. */
+const MONTH_NAMES: readonly string[][] = [
+  ['jan', 'january', 'janv', 'janvier', 'januar', 'enero', 'ene', 'gennaio', 'gen', 'janeiro', 'januari', 'sty', 'stycznia', 'ian', 'ianuarie', 'ocak', 'янв', 'января'],
+  ['feb', 'february', 'fev', 'fevr', 'fevrier', 'februar', 'febrero', 'febbraio', 'fevereiro', 'lut', 'lutego', 'februarie', 'subat', 'фев', 'февраля'],
+  ['mar', 'march', 'mars', 'marz', 'maerz', 'marzo', 'marco', 'maart', 'marca', 'martie', 'mart', 'март', 'марта'],
+  ['apr', 'april', 'avr', 'avril', 'abril', 'aprile', 'kwiecien', 'kwietnia', 'kwi', 'aprilie', 'nisan', 'апр', 'апреля'],
+  ['may', 'mai', 'mayo', 'maggio', 'mag', 'maio', 'mei', 'maj', 'maja', 'mayis', 'май', 'мая'],
+  ['jun', 'june', 'juin', 'juni', 'junio', 'giugno', 'giu', 'junho', 'cze', 'czerwca', 'iun', 'iunie', 'haziran', 'июн', 'июня'],
+  ['jul', 'july', 'juil', 'juillet', 'juli', 'julio', 'lug', 'luglio', 'julho', 'lip', 'lipca', 'iul', 'iulie', 'temmuz', 'июл', 'июля'],
+  ['aug', 'august', 'aout', 'agosto', 'ago', 'augustus', 'sie', 'sierpnia', 'agustos', 'авг', 'августа'],
+  ['sep', 'sept', 'september', 'septembre', 'septiembre', 'set', 'settembre', 'setembro', 'wrz', 'wrzesnia', 'septembrie', 'eylul', 'сен', 'сентября'],
+  ['oct', 'october', 'octobre', 'okt', 'oktober', 'octubre', 'ott', 'ottobre', 'out', 'outubro', 'paz', 'pazdziernika', 'octombrie', 'ekim', 'окт', 'октября'],
+  ['nov', 'november', 'novembre', 'noviembre', 'listopada', 'lis', 'noiembrie', 'kasim', 'ноя', 'ноября'],
+  ['dec', 'december', 'decembre', 'dez', 'dezember', 'dic', 'diciembre', 'dicembre', 'dezembro', 'gru', 'grudnia', 'decembrie', 'aralik', 'дек', 'декабря'],
+];
+
+const MONTHS = Object.fromEntries(
+  MONTH_NAMES.flatMap((names, month) => names.map((name) => [name, month])),
+) as Record<string, number>;
 
 const clean = (s: string): string => s.replace(/[|]+/g, ' ').replace(/\s+/g, ' ').trim();
 const folded = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -66,12 +73,12 @@ function datesIn(lines: string[], now: Date): ParsedDate[] {
       add(lineN, rawYear == null ? undefined : rawYear < 100 ? 2000 + rawYear : rawYear, Number(m[2]) - 1, Number(m[1]));
     }
     const f = folded(line);
-    for (const m of f.matchAll(/\b(\d{1,2})\s+([a-z]+)\.?\s*(20\d{2})?\b/g)) {
-      const month = MONTHS[m[2].slice(0, 3)] ?? MONTHS[m[2]];
+    for (const m of f.matchAll(/(?:^|[^\p{L}\d])(\d{1,2})\s+([\p{L}]+)\.?\s*(20\d{2})?(?=$|[^\p{L}\d])/gu)) {
+      const month = MONTHS[m[2]];
       if (month != null) add(lineN, m[3] ? Number(m[3]) : undefined, month, Number(m[1]));
     }
-    for (const m of f.matchAll(/\b([a-z]+)\.?\s+(\d{1,2})(?:,?\s*(20\d{2}))?\b/g)) {
-      const month = MONTHS[m[1].slice(0, 3)] ?? MONTHS[m[1]];
+    for (const m of f.matchAll(/(?:^|[^\p{L}\d])([\p{L}]+)\.?\s+(\d{1,2})(?:,?\s*(20\d{2}))?(?=$|[^\p{L}\d])/gu)) {
+      const month = MONTHS[m[1]];
       if (month != null) add(lineN, m[3] ? Number(m[3]) : undefined, month, Number(m[2]));
     }
   });
@@ -283,9 +290,20 @@ export function parseLocalLeg(text: string, note = '', now = new Date()): Extrac
   return hasRoute || (hasTimes && (hasPrice || hasMode)) ? leg : null;
 }
 
-/** Required fields for a complete local leg. Other fields may remain absent. */
-export const localLegComplete = (leg: ExtractedLeg): boolean =>
-  !!leg.depCity && !!leg.arrCity && !!leg.depTime && !!leg.arrTime;
+/** User-facing fields that local recognition could not extract. Clocks are
+ * reported separately from dates so a useful OCR time is not called missing. */
+export function localLegMissingFields(leg: ExtractedLeg): string[] {
+  const missing: string[] = [];
+  if (!leg.depCity) missing.push('departure city');
+  if (!leg.depTime) missing.push(leg.depClock ? 'departure date' : 'departure date and time');
+  if (!leg.arrCity) missing.push('arrival city');
+  if (!leg.arrTime) missing.push(leg.arrClock ? 'arrival date' : 'arrival date and time');
+  if (leg.cost == null) missing.push('cost');
+  else if (!leg.currency) missing.push('currency');
+  return missing;
+}
+
+export const localLegComplete = (leg: ExtractedLeg): boolean => localLegMissingFields(leg).length === 0;
 
 /** Convert OCR text into a hotel stay when dates and a recognizable name are present. */
 export function parseLocalHotel(text: string, now = new Date()): ExtractedHotel | null {

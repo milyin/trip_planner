@@ -359,7 +359,7 @@ const setDT = (dateId: string, timeId: string, s: string): void => {
 };
 const getDT = (dateId: string, timeId: string): string => joinDT(getVal(dateId), getVal(timeId));
 
-const LEG_REQUIRED_FIELDS = ['fDepCity', 'fDepDate', 'fDepTime', 'fArrCity', 'fArrDate', 'fArrTime'] as const;
+const LEG_REQUIRED_FIELDS = ['fDepCity', 'fDepDate', 'fDepTime', 'fArrCity', 'fArrDate', 'fArrTime', 'fCost'] as const;
 
 function clearLegValidation(): void {
   for (const id of LEG_REQUIRED_FIELDS) {
@@ -392,6 +392,7 @@ function validateLegFields(focusFirst = false): boolean {
     ['fArrCity', 'Enter an arrival city.'],
     ['fArrDate', 'Enter an arrival date.'],
     ['fArrTime', 'Enter an arrival time.'],
+    ['fCost', 'Enter the trip cost (use 0 if it is free).'],
   ];
   for (const [id, message] of missing) {
     const field = byId<HTMLInputElement>(id);
@@ -721,6 +722,7 @@ function fillLegFields(leg: ExtractedLeg, partial = false): void {
   set('fTransfers', leg.transfers);
   set('fTransfersInfo', leg.transfersInfo);
   set('fCost', leg.cost);
+  if (partial && leg.cost == null) setVal('fCost', '');
   set('fCur', leg.currency);
   bufHint();
   refreshConv('leg'); // recognised cost/currency — convert to the base currency

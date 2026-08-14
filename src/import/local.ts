@@ -1,7 +1,7 @@
 import { beginExchange, type LlmExchange } from './debugLog';
 import type { AutoExtract, ExtractInput, ExtractedHotel, ExtractedLeg } from './extractor';
 import {
-  localHotelComplete, localLegComplete, parseLocalAuto, parseLocalHotel, parseLocalLeg,
+  localHotelComplete, localLegMissingFields, parseLocalAuto, parseLocalHotel, parseLocalLeg,
 } from './localParse';
 
 export class LocalRecognitionError extends Error {}
@@ -69,7 +69,7 @@ async function recognizeText({ files, note }: ExtractInput): Promise<{ text: str
 async function finish<T>(
   input: ExtractInput,
   parse: (text: string) => T | null,
-  complete: (value: T) => boolean,
+  missingFields: (value: T) => string[],
 ): Promise<T> {
   const { text, exchange } = await recognizeText(input);
   const parsed = parse(text);
@@ -79,24 +79,28 @@ async function finish<T>(
     exchange.error = 'The local parser could not confidently identify enough trip information.';
     throw new LocalRecognitionError(exchange.error);
   }
-  exchange.partial = !complete(parsed);
+  const missing = missingFields(parsed);
+  exchange.partial = missing.length > 0;
   exchange.status = exchange.partial ? 'Local recognition partially succeeded' : 'Local recognition succeeded';
   if (exchange.partial) {
-    exchange.warning = 'Useful fields were extracted, but some information was missing or could not be parsed. Missing fields were left blank.';
+    exchange.warning = `Missing or unparsed fields: ${missing.join(', ')}. They were left blank.`;
   }
   exchange.legs = parsed;
   return parsed;
 }
 
 export const extractLocalLegs = async (input: ExtractInput): Promise<ExtractedLeg[]> => {
-  const leg = await finish(input, (text) => parseLocalLeg(text, input.note), localLegComplete);
+  const leg = await finish(input, (text) => parseLocalLeg(text, input.note), localLegMissingFields);
   return [leg];
 };
 
 export const extractLocalHotel = (input: ExtractInput): Promise<ExtractedHotel> =>
-  finish(input, (text) => parseLocalHotel(text), localHotelComplete);
+  finish(input, (text) => parseLocalHotel(text), (hotel) => (
+    localHotelComplete(hotel) ? [] : ['hotel name or dates']
+  ));
 
 export const extractLocalAuto = (input: ExtractInput): Promise<AutoExtract> =>
-  finish(input, (text) => parseLocalAuto(text, input.note), (value) => (
-    'hotel' in value ? localHotelComplete(value.hotel) : value.legs.length > 0 && value.legs.every(localLegComplete)
-  ));
+  finish(input, (text) => parseLocalAuto(text, input.note), (value) => {
+    if ('hotel' in value) return localHotelComplete(value.hotel) ? [] : ['hotel name or dates'];
+    return value.legs.flatMap(localLegMissingFields);
+  });
