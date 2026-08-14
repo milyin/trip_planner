@@ -194,9 +194,22 @@ const NON_AIRPORT_CODES = new Set(['TGV']);
 /** Return an unambiguous pair of IATA airport codes. Two codes are required so
  * isolated all-caps OCR text is not mistaken for a route. */
 function airportCodesIn(text: string): [string, string] | null {
-  const codes = [...maskPrices(text).matchAll(/\b[A-Z]{3}\b/g)]
+  const masked = maskPrices(text);
+  const codes = [...masked.matchAll(/\b[A-Z]{3}\b/g)]
+    .filter((match) => {
+      const code = match[0];
+      if (NON_AIRPORT_CODES.has(code)) return false;
+      // Multilingual OCR may render a Cyrillic month as an uppercase Latin
+      // abbreviation (`29 OKT.`). Keep real airport codes that happen to look
+      // like months, but exclude the token when it is next to a day number.
+      if (MONTHS[folded(code)] == null) return true;
+      const start = match.index ?? 0;
+      const before = masked.slice(Math.max(0, start - 8), start);
+      const after = masked.slice(start + code.length, start + code.length + 8);
+      return !(/\d{1,2}\s*$/u.test(before) || /^\s*\.?\s+\d{1,2}\b/u.test(after));
+    })
     .map((match) => match[0])
-    .filter((code, index, all) => !NON_AIRPORT_CODES.has(code) && all.indexOf(code) === index);
+    .filter((code, index, all) => all.indexOf(code) === index);
   return codes.length === 2 ? [codes[0], codes[1]] : null;
 }
 

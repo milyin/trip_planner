@@ -11,7 +11,7 @@ const SCRIBE_BROWSER_ROOT = `${import.meta.env.BASE_URL}vendor/scribe`;
 
 interface LocalScribeDocument {
   importFiles(files: File[]): Promise<void>;
-  recognize(options: { langs: string[]; mode: 'speed'; ocrPages: 'autoDeep' }): Promise<unknown>;
+  recognize(options: { langs: string[]; modeAdv: 'lstm'; ocrPages: 'autoDeep' }): Promise<unknown>;
   exportData(format: 'text'): Promise<string>;
   close(): Promise<void>;
 }
@@ -48,9 +48,10 @@ async function recognizeText({ files, note }: ExtractInput): Promise<{ text: str
     let text: string;
     try {
       await doc.importFiles(files);
-      // The default quality mode runs both OCR engines. LSTM-only speed mode
-      // is accurate for clean booking screenshots and uses much less memory.
-      await doc.recognize({ langs, mode: 'speed', ocrPages: 'autoDeep' });
+      // Pin the LSTM engine explicitly. Besides using less memory than combined
+      // recognition, it reads small booking prices more reliably than Scribe's
+      // legacy engine (which can, for example, confuse a narrow 3 with a 5).
+      await doc.recognize({ langs, modeAdv: 'lstm', ocrPages: 'autoDeep' });
       text = (await doc.exportData('text')).trim();
     } finally {
       await doc.close();
