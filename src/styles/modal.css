@@ -11,6 +11,8 @@
 .modal-tabs .x{margin-left:auto; cursor:pointer; color:var(--muted); font-size:18px; line-height:1; padding:8px 0 8px 12px}
 .mtab{background:none; border:none; border-bottom:2px solid transparent; color:var(--muted);
   padding:9px 12px; margin-bottom:-1px; cursor:pointer; font:inherit; font-size:13px}
+.settings-tabs{padding-left:10px; padding-right:14px}
+.settings-tabs .mtab{padding-left:8px; padding-right:8px; font-size:12px}
 .mtab:hover{color:var(--text)}
 .mtab.active{color:var(--text); border-bottom-color:var(--accent)}
 
@@ -44,6 +46,14 @@
 .field input, .field select{background:var(--panel-2); border:1px solid var(--border); color:var(--text);
   border-radius:10px; padding:9px 11px; font:inherit; outline:none; min-width:0}
 .field input:focus, .field select:focus{border-color:var(--accent)}
+.field input.field-invalid, .field select.field-invalid{border-color:var(--danger);
+  background:color-mix(in srgb, var(--danger) 8%, var(--panel-2)); box-shadow:0 0 0 1px color-mix(in srgb, var(--danger) 24%, transparent)}
+.field input.field-invalid:focus, .field select.field-invalid:focus{border-color:var(--danger);
+  box-shadow:0 0 0 2px color-mix(in srgb, var(--danger) 28%, transparent)}
+.form-validation{grid-column:1/-1; margin:0; padding:9px 11px; border-radius:9px;
+  border:1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  background:color-mix(in srgb, var(--danger) 8%, var(--panel-2)); color:var(--danger); font-size:12px}
+.form-validation a{color:inherit; font-weight:700; text-decoration:underline}
 /* date + time side by side (date a bit wider than the clock) */
 .dt-row{display:flex; gap:8px}
 .dt-row input{min-width:0}
@@ -81,6 +91,7 @@
 .modal-foot .spacer{flex:1}
 
 .modal.narrow{width:min(440px,94vw)}
+.modal.settings-modal{width:min(560px,94vw)}
 .modal-body.single{grid-template-columns:1fr}
 .hint-block{grid-column:1/-1; margin:0; color:var(--faint); font-size:12px; line-height:1.4}
 
@@ -105,8 +116,14 @@
 .import-controls input{flex:1}
 .import-controls input:focus, .import-controls select:focus{border-color:var(--accent)}
 .import-controls select{max-width:200px}
+.leg-import > .hint-block{padding:0 20px 10px}
 
-/* LLM configuration dialog: inline-editable account and parser rows. */
+/* Recognition configuration dialog. */
+.recognition-toggle{display:flex; align-items:center; gap:10px; padding:10px 12px;
+  border:1px solid var(--border); border-radius:10px; background:var(--panel-2); cursor:pointer}
+.recognition-toggle input{width:18px; height:18px; margin:0; accent-color:var(--accent)}
+.recognition-toggle span{display:flex; flex-direction:column; gap:2px; color:var(--text); font-size:13px}
+.recognition-toggle small{color:var(--faint); font-size:11px; font-weight:400}
 .parser-list{display:flex; flex-direction:column; gap:6px}
 .parser-row{display:flex; align-items:center; gap:8px; background:var(--panel-2);
   border:1px solid var(--border); border-radius:10px; padding:4px 6px}
@@ -115,10 +132,12 @@
 .parser-row select{flex:0 0 auto; max-width:45%}
 .parser-row input{flex:1}
 .parser-row select:focus, .parser-row input:focus{border-color:var(--accent)}
-/* the "default parser" radio must not stretch or take the text-input styling */
-.parser-row input.def-radio{flex:0 0 auto; width:16px; height:16px; min-width:0; margin:0 2px;
-  padding:0; border-radius:50%; accent-color:var(--accent); cursor:pointer}
 .empty-note{color:var(--faint); font-size:12px}
+.language-add{display:flex; align-items:center; gap:8px}
+.language-add select{flex:1; min-width:0; background:var(--panel-2); border:1px solid var(--border);
+  color:var(--text); border-radius:10px; padding:8px 10px; font:inherit; font-size:13px; outline:none}
+.language-add select:focus{border-color:var(--accent)}
+.language-name{flex:1; min-width:0; padding:4px 6px; color:var(--text); font-size:13px}
 
 /* Notes tab: list of files (LLM + user) and text/link notes, each removable. */
 .notes-list{display:flex; flex-direction:column; gap:6px}
@@ -158,6 +177,7 @@ a.note-name:hover{color:var(--accent); text-decoration:underline}
 .file-preview.gallery{display:flex; flex-wrap:wrap; gap:8px; padding:10px; justify-content:center}
 .file-preview.gallery img, .file-preview.gallery embed{width:auto; height:auto}
 .file-preview.gallery .thumb{position:relative; flex:0 0 auto}
+.file-preview.gallery .thumb-link{display:block; cursor:zoom-in}
 .file-preview.gallery .thumb img, .file-preview.gallery .thumb embed{display:block; width:auto; max-width:180px; height:96px; object-fit:contain;
   border:1px solid var(--border); border-radius:8px; background:var(--panel)}
 .thumb-rm{position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%;

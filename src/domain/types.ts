@@ -8,10 +8,9 @@ export type TransportKind = 'Plane' | 'Train' | 'Bus' | 'Taxi' | 'Car' | 'Other'
  * accepted (the picker offers the full `Intl.supportedValuesOf('currency')` set). */
 export type CurrencyCode = string;
 
-/** One attachment or note kept on a segment. Files loaded on the Recognize page
- * are `source: 'llm'`; files, links and text the user adds in the Notes tab are
- * `source: 'user'`. Any entry can be removed, but only user entries are addable
- * in the Notes tab. */
+/** One attachment or note kept on a segment. For compatibility, files loaded
+ * on the Recognize page are `source: 'llm'` even when local OCR handles them;
+ * files, links and text added in Notes are `source: 'user'`. */
 export interface NoteEntry {
   id: string;
   source: 'llm' | 'user';

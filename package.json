@@ -8,14 +8,17 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test:ocr": "tsc --noEmit -p tsconfig.test.json && playwright test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
     "leaflet": "^1.9.4",
+    "scribe.js-ocr": "0.14.5",
     "tz-lookup": "^6.1.25"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/leaflet": "^1.9.21",
     "typescript": "^5.9.3",
     "vite": "^6.4.3"

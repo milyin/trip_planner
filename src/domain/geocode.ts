@@ -8,6 +8,7 @@ import { geocode as gazetteer } from './geo';
 
 const ENDPOINT = 'https://nominatim.openstreetmap.org/search';
 const CACHE_KEY = 'tripPlanner.geocache.v1';
+const DETAILS_CACHE_KEY = 'tripPlanner.placeDetails.v1';
 const CACHE_MAX = 200;
 /** Nominatim usage policy: at most one request per second. */
 const MIN_SPACING_MS = 1100;
@@ -78,19 +79,93 @@ function enqueue<T>(task: () => Promise<T>, priority: boolean): Promise<T> {
 interface NominatimHit {
   lat: string;
   lon: string;
+  category?: string;
+  type?: string;
+  name?: string;
+  display_name?: string;
+  address?: Record<string, string>;
+  namedetails?: Record<string, string>;
 }
 
-async function search(q: string): Promise<LatLng | null> {
-  const url = `${ENDPOINT}?format=jsonv2&limit=1&q=${encodeURIComponent(q)}`;
+async function searchHit(q: string, details = false): Promise<NominatimHit | null> {
+  const detailParams = details ? '&addressdetails=1&namedetails=1' : '';
+  const url = `${ENDPOINT}?format=jsonv2&limit=1${detailParams}&q=${encodeURIComponent(q)}`;
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) throw new Error(`Nominatim HTTP ${res.status}`);
   const hits = (await res.json()) as NominatimHit[];
-  if (!hits.length) return null;
-  const ll: LatLng = [Number(hits[0].lat), Number(hits[0].lon)];
+  return hits[0] ?? null;
+}
+
+function hitLatLng(hit: NominatimHit | null): LatLng | null {
+  if (!hit) return null;
+  const ll: LatLng = [Number(hit.lat), Number(hit.lon)];
   return Number.isFinite(ll[0]) && Number.isFinite(ll[1]) ? ll : null;
+}
+
+async function search(q: string): Promise<LatLng | null> {
+  return hitLatLng(await searchHit(q));
+}
+
+export interface LocatedPlace {
+  ll: LatLng;
+  /** Locality inferred from the matched stop/airport when the input city was blank. */
+  city?: string;
+  /** Human-readable matched feature name, retained for diagnostics/UI hints. */
+  name?: string;
+}
+
+type DetailsCache = Record<string, LocatedPlace>;
+
+function loadDetailsCache(): DetailsCache {
+  try {
+    return (JSON.parse(localStorage.getItem(DETAILS_CACHE_KEY) || '{}') as DetailsCache) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+const detailsCache = loadDetailsCache();
+
+function saveDetailsCache(): void {
+  try {
+    const keys = Object.keys(detailsCache);
+    for (const k of keys.slice(0, Math.max(0, keys.length - CACHE_MAX))) delete detailsCache[k];
+    localStorage.setItem(DETAILS_CACHE_KEY, JSON.stringify(detailsCache));
+  } catch {
+    /* quota exceeded or storage disabled — cache stays in-memory */
+  }
+}
+
+const firstAddressValue = (address: Record<string, string> | undefined, keys: string[]): string | undefined =>
+  keys.map((key) => address?.[key]?.trim()).find(Boolean);
+
+/** Airport municipalities are often not the city advertised to travellers
+ * (GVA is in Le Grand-Saconnex; ORY is in Villeneuve-le-Roi). Prefer the city
+ * embedded in the airport's English OSM name when the query matches its IATA
+ * code, with the ordinary address locality as a safe fallback. */
+function cityFromHit(hit: NominatimHit, query: string): string | undefined {
+  const locality = firstAddressValue(hit.address, ['city', 'town', 'village', 'municipality', 'county']);
+  const names = hit.namedetails;
+  const code = query.trim().toUpperCase();
+  const isAirportCode = /^[A-Z]{3}$/.test(code)
+    && (names?.iata?.toUpperCase() === code || names?.ref?.toUpperCase() === code)
+    && (hit.category === 'aeroway' || hit.type === 'aerodrome');
+  if (!isAirportCode) return locality;
+
+  const airportName = names?.['short_name:en'] ?? names?.['name:en'] ?? hit.name;
+  if (!airportName) return locality;
+  const withoutType = airportName
+    .replace(/\b(?:international|regional|municipal|metropolitan)\s+(?:airport|aerodrome)\b.*$/i, '')
+    .replace(/\b(?:airport|aerodrome)\b.*$/i, '')
+    .trim();
+  const separatedCity = withoutType.split(/\s*[–—-]\s*/, 1)[0]?.trim();
+  if (separatedCity && separatedCity !== withoutType) return separatedCity;
+  if (locality && withoutType.toLocaleLowerCase().startsWith(locality.toLocaleLowerCase())) return locality;
+  if (/^[\p{L}'’.  ]+$/u.test(withoutType) && withoutType.split(/\s+/).length === 1) return withoutType;
+  return locality ?? (withoutType || undefined);
 }
 
 export interface GeocodeOptions {
@@ -131,23 +206,38 @@ export async function geocodePlace(city: string, addr?: string, opts?: GeocodeOp
   }
 }
 
-/** Resolve a specific address/stop within a city — no bare-city fallback, so
- * a miss genuinely means "this address wasn't found" (the city may still be). */
-export async function geocodeAddress(city: string, addr: string, opts?: GeocodeOptions): Promise<LatLng | null> {
+/** Resolve a specific address/stop and retain its matched locality. There is no
+ * bare-city fallback, so a miss genuinely means the address wasn't found. */
+export async function locateAddress(city: string, addr: string, opts?: GeocodeOptions): Promise<LocatedPlace | null> {
   const c = (city || '').trim();
   const a = (addr || '').trim();
   if (!a) return null;
   // 'x:' namespace: legacy combined-lookup entries may hold city-fallback coords.
   const key = `x:${c}|${a}`.toLowerCase();
-  if (cache[key]) return cache[key];
+  if (detailsCache[key]) return detailsCache[key];
   if (misses.has(key) && !opts?.force) return null;
   try {
-    const ll = await enqueue(() => search(c ? `${a}, ${c}` : a), !!opts?.priority);
-    if (ll) {
+    const hit = await enqueue(() => searchHit(c ? `${a}, ${c}` : a, true), !!opts?.priority);
+    const ll = hitLatLng(hit);
+    if (hit && ll) {
+      const located: LocatedPlace = {
+        ll,
+        city: c || cityFromHit(hit, a),
+        name: hit.name?.trim() || hit.display_name?.split(',', 1)[0]?.trim() || undefined,
+      };
       cache[key] = ll;
+      detailsCache[key] = located;
+      // The dialog will save the inferred city. Cache that future query shape
+      // too, so reopening the leg does not spend another network request.
+      if (!c && located.city) {
+        const cityKey = `x:${located.city}|${a}`.toLowerCase();
+        cache[cityKey] = ll;
+        detailsCache[cityKey] = located;
+      }
       misses.delete(key);
       saveCache();
-      return ll;
+      saveDetailsCache();
+      return located;
     }
     misses.add(key);
     return null;
@@ -155,6 +245,11 @@ export async function geocodeAddress(city: string, addr: string, opts?: GeocodeO
     misses.add(key);
     return null;
   }
+}
+
+/** Coordinate-only compatibility wrapper used by existing callers. */
+export async function geocodeAddress(city: string, addr: string, opts?: GeocodeOptions): Promise<LatLng | null> {
+  return (await locateAddress(city, addr, opts))?.ll ?? null;
 }
 
 /** Snapshot of the persistent geocode cache (for workspace sharing). */

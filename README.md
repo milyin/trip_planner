@@ -88,15 +88,38 @@ The app reads the cities, times, dates, price, carrier, and so on, and drops the
 into the form. You always review and edit before saving — nothing is added
 without your say-so.
 
-Reading screenshots is powered by an AI model, which you configure once (below).
-Everything else in the app works with no model at all.
+By default, screenshots and PDFs are first read locally in your browser with
+Scribe.js OCR. The app then uses a built-in parser to identify the dates, times,
+places and prices. Your file does not leave the device during this attempt.
 
-## Setting up screenshot recognition
+If local recognition finds useful but incomplete trip information, the app
+fills those fields, leaves genuinely missing values blank, and lets you review
+the result. Places are checked with the app's normal OpenStreetMap lookup. You
+can explicitly retry that result with a configured AI model. The app falls back
+automatically only when the local parser finds no reliable trip structure.
 
-Open **⚙ LLM configuration** from the ☰ menu. You add an **account** (a provider
-plus your API key) and a **parser** (which model on that account to use). Your
-keys are stored only in this browser and are never sent anywhere except to the
-provider you chose.
+## Setting up recognition
+
+Open **⚙ Settings → Image recognition** from the ☰ menu. The first option
+enables or disables local Scribe.js recognition. Below it, choose one configured LLM parser or
+**No LLM parsing**. With Scribe.js enabled, the selected LLM handles definite
+local failures and explicit retries; useful partial results are not sent
+automatically. With Scribe.js disabled, files go directly to the selected LLM.
+Local recognition needs no account or API key.
+
+Choose the Tesseract models used for local OCR under **⚙ Settings → Local
+parser**. English is enabled for existing installations; add Russian or any
+other languages that may appear in booking images. Each model is downloaded
+and cached on first use, and selecting more languages increases recognition
+time. The built-in trip parser understands common Russian month forms and IATA
+airport-code pairs. If a ticket contains only airport codes, the codes are kept
+as the stops and the missing city fields remain highlighted for confirmation.
+
+To use an LLM, open **⚙ Settings → LLM Parsers**, add an **account** (a provider
+plus your API key) and a **parser** (which model on that account to use), then
+select that parser under **Image recognition**.
+Your keys are stored only in this browser and are never sent anywhere except to
+the provider you chose.
 
 Supported providers:
 
@@ -108,15 +131,26 @@ Supported providers:
   console.anthropic.com.
 - **Gemini (Google)** — get a key at aistudio.google.com.
 
-You can keep several accounts and parsers and switch between them in the add
-dialog. If you never set one up, the app still does everything else — you just
-enter trip details yourself.
+You can keep several accounts and parsers while selecting one as the default.
+If both Scribe.js and LLM parsing are disabled, the app explains that
+recognition is unavailable and manual entry remains available.
+
+The Recognize tab can use Local Scribe.js, the configured **Default Fallback**,
+or any parser for that attempt without changing the default. A local attempt
+keeps Local Scribe.js selected; choose an LLM explicitly for a remote retry.
+Recognition started from an open hotel dialog is LLM-only. A pasted image may
+still be inspected locally first to identify a partial hotel or leg result.
 
 ## Your data stays with you
 
 Trip Planner has no server. Your trips, your screenshots, and your API keys all
-live in your browser's local storage and never leave your device except when a
-screenshot is sent to the recognition provider you configured.
+live in your browser's local storage. A screenshot or PDF is sent to a configured
+recognition provider when you explicitly choose an LLM parser, when Scribe.js is
+disabled and an LLM is selected, when local recognition finds no usable trip
+data and a Default Fallback is configured, or when you run the LLM-only hotel
+recognition flow. Choosing **No LLM parsing** prevents automatic remote fallback.
+The pinned Scribe.js browser engine and its OCR language data are downloaded and
+cached on first use, but OCR itself runs in your browser.
 
 - **Workspaces** let you keep separate trips side by side. Create, rename, and
   switch between them from the ☰ menu.

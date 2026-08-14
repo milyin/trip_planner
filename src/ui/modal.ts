@@ -1,26 +1,32 @@
 import type { CurrencyCode, Hotel, LatLng, Leg, NoteEntry, Segment, TransportKind } from '../domain/types';
 import { getRate, RATES_SOURCE, rateSourceUrl } from '../domain/convert';
-import { geocodeAddress, geocodePlace } from '../domain/geocode';
+import { geocodePlace, locateAddress } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
-import { tzForLatLng, tzOffset } from '../domain/tz';
+import { isValidTz, toMs, tzForLatLng, tzOffset, zonedMs } from '../domain/tz';
 import { bufferMin } from '../domain/transport';
 import { formatExchange, lastExchange, type LlmExchange } from '../import/debugLog';
 import type { ExtractedHotel, ExtractedLeg } from '../import/extractor';
-import { runAutoRecognition, runHotelRecognition, runRecognition } from '../import/recognise';
+import {
+  runAutoRecognition, runHotelRecognition, runRecognition,
+  tryLocalAutoRecognition, tryLocalRecognition,
+} from '../import/recognise';
 import {
   deleteAttachment, getAttachment, getExchange, putAttachment, putExchange, resolveLink,
 } from '../state/attachments';
-import { parserName, resolveParser, saveSettings, settings, type ResolvedParser } from '../state/settings';
+import { parserName, resolveParser, settings, type ResolvedParser } from '../state/settings';
 import { deleteSegment, emitChange, findItem, upsertItem } from '../state/store';
 import { genNoteId, nextId } from '../state/id';
 import { fillCurrencySelect } from './currency';
 import { byId, getVal, mkBtn, setVal } from './dom';
-import { openParserSettings } from './parserSettings';
 
 export interface LegPrefill {
   inPlan?: boolean;
   depCity?: string; depAddr?: string; depTime?: string;
   arrCity?: string; arrAddr?: string; arrTime?: string;
+  /** Clock-only values from partial local OCR; corresponding dates stay blank. */
+  depClock?: string; arrClock?: string;
+  /** Leave missing recognition fields blank instead of keeping form defaults. */
+  partial?: boolean;
   transport?: TransportKind; company?: string; cost?: number; currency?: CurrencyCode;
   transfers?: number; transfersInfo?: string;
   /** Ticket images carried into the dialog (queued multi-leg recognition). */
@@ -31,6 +37,10 @@ export interface HotelPrefill {
   inPlan?: boolean;
   name?: string; city?: string; addr?: string;
   checkIn?: string; checkOut?: string; cost?: number; currency?: CurrencyCode;
+  /** Date-only values from local OCR; corresponding times stay blank. */
+  checkInDate?: string; checkOutDate?: string;
+  /** Leave missing recognition fields blank instead of keeping form defaults. */
+  partial?: boolean;
   /** Booking images carried into the dialog (auto-import from paste). */
   files?: File[];
 }
@@ -63,9 +73,14 @@ let originalAttachments = new Set<string>();
 /** Remaining legs of a multi-leg recognition, opened one dialog at a time. */
 let queuedLegs: ExtractedLeg[] = [];
 let queuedFiles: File[] = [];
+/** Whether queued recognized legs must keep omitted fields blank and validate immediately. */
+let queuedLegsPartial = false;
 /** Exchange shown in this dialog: loaded from storage when editing, replaced
  * by a fresh recognition. Saved with the leg. */
 let dialogExchange: LlmExchange | null = null;
+/** Once validation is requested (by recognition or Save), keep it live while
+ * the user corrects fields. New manually opened forms stay quiet initially. */
+let legValidationActive = false;
 
 /** The LLM-source file notes — the images sent to the model and shown in the
  * Recognize tab's gallery. */
@@ -151,8 +166,20 @@ function thumbMedia(url: string, type: string, name: string): HTMLElement {
   return emb;
 }
 
-/** Render the LLM file notes as a removable thumbnail gallery in the Recognize
- * tab. Files added here become the images sent to the model. */
+/** Make a preview openable without bubbling to the surrounding file picker. */
+function thumbLink(url: string, type: string, name: string): HTMLAnchorElement {
+  const link = document.createElement('a');
+  link.className = 'thumb-link';
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.title = 'Open in a new tab';
+  link.onclick = (e) => e.stopPropagation();
+  link.appendChild(thumbMedia(url, type, name));
+  return link;
+}
+
+/** Render recognition file notes as a removable thumbnail gallery. */
 function renderPreview(): void {
   const box = byId('filePreview');
   revokePreviews();
@@ -177,19 +204,19 @@ function renderPreview(): void {
     if (n.file) {
       const url = URL.createObjectURL(n.file);
       previewUrls.push(url);
-      cell.insertBefore(thumbMedia(url, n.mime || n.file.type, n.name || 'image'), rm);
+      cell.insertBefore(thumbLink(url, n.mime || n.file.type, n.name || 'image'), rm);
     } else if (n.attachment) {
       void resolveLink(n.attachment).then((r) => {
         if (!r || !byId('overlay').classList.contains('open')) return;
         previewUrls.push(r.url);
-        cell.insertBefore(thumbMedia(r.url, r.type, n.name || 'image'), rm);
+        cell.insertBefore(thumbLink(r.url, r.type, n.name || 'image'), rm);
       });
     }
   });
   applyTabs();
 }
 
-/** Render the Notes tab: every entry (LLM + user), each removable. */
+/** Render the Notes tab: every recognition + user entry, each removable. */
 function renderNotes(): void {
   byId('mtabNotes').textContent = notes.length ? `Notes · ${notes.length}` : 'Notes';
   const box = byId('notesList');
@@ -203,7 +230,7 @@ function renderNotes(): void {
     row.className = 'note-row';
     const badge = document.createElement('span');
     badge.className = 'note-badge ' + n.source;
-    badge.textContent = n.source === 'llm' ? 'LLM' : 'you';
+    badge.textContent = n.source === 'llm' ? 'recognition' : 'you';
     badge.title = n.source === 'llm' ? 'Loaded on the Recognize tab' : 'Added by you';
     const body = document.createElement('div');
     body.className = 'note-body';
@@ -277,6 +304,10 @@ function addUserText(text: string): void {
 function showBody(kind: 'leg' | 'hotel'): void {
   editKind = kind;
   activeTab = 'form';
+  legValidationActive = false;
+  hotelValidationActive = false;
+  clearLegValidation();
+  clearHotelValidation();
   byId('mtabForm').textContent = kind === 'hotel' ? 'Edit hotel' : 'Edit leg';
   byId('saveBtn').textContent = kind === 'hotel' ? 'Save hotel' : 'Save leg';
   byId('dropHint').textContent =
@@ -342,6 +373,163 @@ const setDT = (dateId: string, timeId: string, s: string): void => {
   setVal(timeId, time);
 };
 const getDT = (dateId: string, timeId: string): string => joinDT(getVal(dateId), getVal(timeId));
+
+const LEG_REQUIRED_FIELDS = ['fDepCity', 'fDepDate', 'fDepTime', 'fArrCity', 'fArrDate', 'fArrTime', 'fCost'] as const;
+
+function clearLegValidation(): void {
+  for (const id of LEG_REQUIRED_FIELDS) {
+    const field = byId<HTMLInputElement>(id);
+    field.classList.remove('field-invalid');
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('data-validation-message');
+    field.title = '';
+  }
+  const summary = document.getElementById('legValidation');
+  if (summary) summary.style.display = 'none';
+}
+
+function invalidateLegField(id: typeof LEG_REQUIRED_FIELDS[number], message: string): void {
+  const field = byId<HTMLInputElement>(id);
+  field.classList.add('field-invalid');
+  field.setAttribute('aria-invalid', 'true');
+  field.dataset.validationMessage = message;
+  field.title = message;
+}
+
+/** Validate the core fields needed for a usable leg. Date ordering is resolved
+ * with the selected place time zones when available. */
+function validateLegFields(focusFirst = false): boolean {
+  clearLegValidation();
+  const missing: Array<[typeof LEG_REQUIRED_FIELDS[number], string]> = [
+    ['fDepCity', 'Enter a departure city.'],
+    ['fDepDate', 'Enter a departure date.'],
+    ['fDepTime', 'Enter a departure time.'],
+    ['fArrCity', 'Enter an arrival city.'],
+    ['fArrDate', 'Enter an arrival date.'],
+    ['fArrTime', 'Enter an arrival time.'],
+    ['fCost', 'Enter the trip cost (use 0 if it is free).'],
+  ];
+  for (const [id, message] of missing) {
+    const field = byId<HTMLInputElement>(id);
+    if (!field.value.trim() || !field.checkValidity()) invalidateLegField(id, message);
+  }
+
+  const dep = getDT('fDepDate', 'fDepTime');
+  const arr = getDT('fArrDate', 'fArrTime');
+  if (dep && arr && !LEG_REQUIRED_FIELDS.some((id) => byId(id).classList.contains('field-invalid'))) {
+    const depTz = getVal('fDepTz').trim();
+    const arrTz = getVal('fArrTz').trim();
+    const compareInZones = isValidTz(depTz) && isValidTz(arrTz);
+    const depLocalMs = toMs(dep);
+    const arrLocalMs = toMs(arr);
+    if (!Number.isFinite(depLocalMs)) {
+      invalidateLegField('fDepDate', 'Enter a valid departure date and time.');
+      invalidateLegField('fDepTime', 'Enter a valid departure date and time.');
+    }
+    if (!Number.isFinite(arrLocalMs)) {
+      invalidateLegField('fArrDate', 'Enter a valid arrival date and time.');
+      invalidateLegField('fArrTime', 'Enter a valid arrival date and time.');
+    } else if (compareInZones && Number.isFinite(depLocalMs)) {
+      const depMs = zonedMs(dep, depTz);
+      const arrMs = zonedMs(arr, arrTz);
+      if (Number.isFinite(depMs) && Number.isFinite(arrMs) && arrMs <= depMs) {
+        invalidateLegField('fArrDate', 'Arrival must be later than departure.');
+        invalidateLegField('fArrTime', 'Arrival must be later than departure.');
+      }
+    }
+  }
+
+  const invalid = LEG_REQUIRED_FIELDS.map((id) => byId<HTMLInputElement>(id))
+    .filter((field) => field.classList.contains('field-invalid'));
+  const summary = byId('legValidation');
+  summary.replaceChildren(document.createTextNode('Complete or correct the highlighted fields before saving.'));
+  if (dialogExchange?.provider === 'local' && dialogExchange.partial) {
+    summary.append(' You can fill them manually, or add missing details in Additional note on ');
+    const recognizeLink = document.createElement('a');
+    recognizeLink.href = '#';
+    recognizeLink.textContent = 'Recognize';
+    recognizeLink.onclick = (e) => {
+      e.preventDefault();
+      activeTab = 'rec';
+      applyTabs();
+      byId<HTMLInputElement>('fNote').focus();
+    };
+    summary.append(recognizeLink, ' and run local recognition again.');
+  }
+  summary.style.display = invalid.length ? '' : 'none';
+  if (focusFirst && invalid[0]) invalid[0].focus();
+  return invalid.length === 0;
+}
+
+function showParsedLegValidation(): void {
+  legValidationActive = true;
+  validateLegFields();
+}
+
+const HOTEL_REQUIRED_FIELDS = ['hName', 'hCity', 'hInDate', 'hInTime', 'hOutDate', 'hOutTime'] as const;
+let hotelValidationActive = false;
+
+function clearHotelValidation(): void {
+  for (const id of HOTEL_REQUIRED_FIELDS) {
+    const field = byId<HTMLInputElement>(id);
+    field.classList.remove('field-invalid');
+    field.removeAttribute('aria-invalid');
+    field.removeAttribute('data-validation-message');
+    field.title = '';
+  }
+  byId('hotelValidation').style.display = 'none';
+}
+
+function invalidateHotelField(id: typeof HOTEL_REQUIRED_FIELDS[number], message: string): void {
+  const field = byId<HTMLInputElement>(id);
+  field.classList.add('field-invalid');
+  field.setAttribute('aria-invalid', 'true');
+  field.dataset.validationMessage = message;
+  field.title = message;
+}
+
+function validateHotelFields(focusFirst = false): boolean {
+  clearHotelValidation();
+  const required: Array<[typeof HOTEL_REQUIRED_FIELDS[number], string]> = [
+    ['hName', 'Enter a hotel name.'],
+    ['hCity', 'Enter a city.'],
+    ['hInDate', 'Enter a check-in date.'],
+    ['hInTime', 'Enter a check-in time.'],
+    ['hOutDate', 'Enter a check-out date.'],
+    ['hOutTime', 'Enter a check-out time.'],
+  ];
+  for (const [id, message] of required) {
+    const field = byId<HTMLInputElement>(id);
+    if (!field.value.trim() || !field.checkValidity()) invalidateHotelField(id, message);
+  }
+  const checkIn = getDT('hInDate', 'hInTime');
+  const checkOut = getDT('hOutDate', 'hOutTime');
+  if (checkIn && checkOut && !HOTEL_REQUIRED_FIELDS.some((id) => byId(id).classList.contains('field-invalid'))) {
+    const inMs = toMs(checkIn);
+    const outMs = toMs(checkOut);
+    if (!Number.isFinite(inMs)) {
+      invalidateHotelField('hInDate', 'Enter a valid check-in date and time.');
+      invalidateHotelField('hInTime', 'Enter a valid check-in date and time.');
+    }
+    if (!Number.isFinite(outMs)) {
+      invalidateHotelField('hOutDate', 'Enter a valid check-out date and time.');
+      invalidateHotelField('hOutTime', 'Enter a valid check-out date and time.');
+    } else if (Number.isFinite(inMs) && outMs <= inMs) {
+      invalidateHotelField('hOutDate', 'Check-out must be later than check-in.');
+      invalidateHotelField('hOutTime', 'Check-out must be later than check-in.');
+    }
+  }
+  const invalid = HOTEL_REQUIRED_FIELDS.map((id) => byId<HTMLInputElement>(id))
+    .filter((field) => field.classList.contains('field-invalid'));
+  byId('hotelValidation').style.display = invalid.length ? '' : 'none';
+  if (focusFirst && invalid[0]) invalid[0].focus();
+  return invalid.length === 0;
+}
+
+function showParsedHotelValidation(): void {
+  hotelValidationActive = true;
+  validateHotelFields();
+}
 
 // --- automatic time zone from the city --------------------------------------
 // Each place's slots feed a time-zone input, auto-filled from the resolved
@@ -414,14 +602,24 @@ function resolveSlot(key: SlotKey, force = false): void {
   g.status = 'busy';
   renderGeoChip(key);
   const lookup = spec.cityInput
-    ? geocodeAddress(getVal(spec.cityInput).trim(), text, { priority: true, force })
-    : geocodePlace(text, undefined, { priority: true, force });
-  void lookup.then((ll) => {
+    ? locateAddress(getVal(spec.cityInput).trim(), text, { priority: true, force })
+    : geocodePlace(text, undefined, { priority: true, force }).then((ll) => (ll ? { ll, city: undefined } : null));
+  void lookup.then((place) => {
     if (g.token !== token) return; // field changed meanwhile
+    const ll = place?.ll ?? null;
     g.ll = ll;
     g.status = ll ? 'ok' : 'fail';
     renderGeoChip(key);
     maybeAutoTz(key, ll);
+    // Recognition may know only a stop/airport identifier. Nominatim already
+    // returns its locality alongside the coordinates; fill a still-blank city
+    // without ever overwriting a city the user entered or corrected.
+    if (spec.cityInput && place?.city && !getVal(spec.cityInput).trim()) {
+      setVal(spec.cityInput, place.city);
+      setSlot(SIBLING[key], ll, true);
+      if (editKind === 'leg' && legValidationActive) validateLegFields();
+      if (editKind === 'hotel' && hotelValidationActive) validateHotelFields();
+    }
   });
 }
 
@@ -534,41 +732,102 @@ function readConverted(kind: 'leg' | 'hotel'): { costConverted?: number; costCon
   return { costConverted: v, costConvertedManual: convManual[s.conv] ? true : undefined };
 }
 
+type RecognitionChoice = 'local' | 'default' | `parser:${number}`;
+
+function resolvedParserAt(index: number | null): ResolvedParser | null {
+  if (index == null) return null;
+  const entry = settings.parsers[index];
+  if (!entry) return null;
+  const parser = resolveParser(entry);
+  return parser?.apiKey ? parser : null;
+}
+
+const defaultLlmParser = (): ResolvedParser | null => resolvedParserAt(settings.activeParser);
+
+function parserForChoice(choice: string): ResolvedParser | null {
+  if (choice === 'default') return defaultLlmParser();
+  const match = choice.match(/^parser:(\d+)$/);
+  return match ? resolvedParserAt(Number(match[1])) : null;
+}
+
+function refreshRecognitionHint(): void {
+  const choice = getVal('fParser') as RecognitionChoice;
+  if (editKind === 'hotel') {
+    byId('recognitionHint').textContent = choice === 'default'
+      ? 'Hotel recognition uses the configured Default Fallback. Local Scribe.js parsing is disabled for hotels.'
+      : 'Hotel recognition uses the selected LLM parser. Local Scribe.js parsing is disabled for hotels.';
+    byId('recogniseBtn').title = 'Recognise the hotel with the selected LLM parser';
+    return;
+  }
+  if (choice === 'local') {
+    byId('recognitionHint').textContent = 'Scribe.js parses the image and Additional note together. To retry with an LLM, select that parser explicitly.';
+    byId('recogniseBtn').title = 'Recognise locally with Scribe.js';
+  } else if (choice === 'default') {
+    byId('recognitionHint').textContent = 'Recognise directly with the Default Fallback configured in Settings → Image recognition.';
+    byId('recogniseBtn').title = 'Recognise with the Default Fallback';
+  } else {
+    byId('recognitionHint').textContent = 'Recognise directly with this LLM parser for this attempt only.';
+    byId('recogniseBtn').title = 'Recognise with the selected LLM parser';
+  }
+}
+
 function refreshParserCombo(): void {
   const sel = byId<HTMLSelectElement>('fParser');
   sel.innerHTML = '';
+  if (editKind === 'leg' && settings.scribeEnabled) {
+    const local = document.createElement('option');
+    local.value = 'local';
+    local.textContent = 'Local Scribe.js';
+    sel.appendChild(local);
+  }
+  const fallback = document.createElement('option');
+  fallback.value = 'default';
+  const active = settings.activeParser;
+  fallback.textContent = active != null && settings.parsers[active]
+    ? `◉ ${parserName(settings.parsers[active])}`
+    : '◉ Not configured';
+  sel.appendChild(fallback);
   settings.parsers.forEach((p, i) => {
+    if (i === active) return;
     const o = document.createElement('option');
-    o.value = String(i);
-    o.textContent = parserName(p);
+    o.value = `parser:${i}`;
+    o.textContent = `○ ${parserName(p)}`;
     sel.appendChild(o);
   });
-  if (!settings.parsers.length) {
-    const o = document.createElement('option');
-    o.value = '';
-    o.textContent = 'no parsers — add in ⚙';
-    sel.appendChild(o);
-    return;
-  }
-  sel.value = String(Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1));
+  sel.value = editKind === 'leg' && settings.scribeEnabled ? 'local' : 'default';
+  sel.title = 'Parser used for this recognition attempt';
+  refreshRecognitionHint();
 }
 
 /** Fill the leg form from an extracted leg (only fields the model set). */
-function fillLegFields(leg: ExtractedLeg): void {
+function fillLegFields(leg: ExtractedLeg, partial = false): void {
   const set = (id: string, v: unknown): void => {
     if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
   };
   set('fDepCity', leg.depCity);
+  if (partial && !leg.depCity) setVal('fDepCity', '');
   set('fDepAddr', leg.depAddr);
   if (leg.depTime) setDT('fDepDate', 'fDepTime', leg.depTime);
+  else if (leg.depClock) {
+    setVal('fDepDate', '');
+    setVal('fDepTime', leg.depClock);
+  }
+  else if (partial) setDT('fDepDate', 'fDepTime', '');
   set('fArrCity', leg.arrCity);
+  if (partial && !leg.arrCity) setVal('fArrCity', '');
   set('fArrAddr', leg.arrAddr);
   if (leg.arrTime) setDT('fArrDate', 'fArrTime', leg.arrTime);
+  else if (leg.arrClock) {
+    setVal('fArrDate', '');
+    setVal('fArrTime', leg.arrClock);
+  }
+  else if (partial) setDT('fArrDate', 'fArrTime', '');
   set('fTransport', leg.transport);
   set('fCompany', leg.company);
   set('fTransfers', leg.transfers);
   set('fTransfersInfo', leg.transfersInfo);
   set('fCost', leg.cost);
+  if (partial && leg.cost == null) setVal('fCost', '');
   set('fCur', leg.currency);
   bufHint();
   refreshConv('leg'); // recognised cost/currency — convert to the base currency
@@ -576,28 +835,28 @@ function fillLegFields(leg: ExtractedLeg): void {
   for (const k of ['depCity', 'depAddr', 'arrCity', 'arrAddr'] as SlotKey[]) resolveSlot(k);
 }
 
-/** Resolve the active parser, walking the user to the LLM configuration when
- * none is usable yet. Returns `null` when still unconfigured. */
-async function ensureParser(): Promise<ResolvedParser | null> {
-  if (!settings.parsers.length) {
-    await openParserSettings('llm');
-    refreshParserCombo();
-    if (!settings.parsers.length) return null;
+function explainUnavailableRecognition(localError?: string, hadFiles = true): void {
+  const detail = localError ? `\n\nLocal result: ${localError}` : '';
+  if (editKind === 'hotel') {
+    alert('Hotel recognition requires an LLM parser. Configure a Default Fallback or choose a parser in Settings → LLM Parsers.');
+    return;
   }
-  const entry = settings.parsers[Math.min(Math.max(settings.activeParser, 0), settings.parsers.length - 1)];
-  const parser = resolveParser(entry);
-  if (!parser || !parser.apiKey) {
-    alert('The selected parser has no account key — fill it in the LLM configuration.');
-    await openParserSettings('llm');
-    refreshParserCombo();
-    return null;
+  if (!settings.scribeEnabled) {
+    alert(
+      settings.activeParser == null
+        ? 'Recognition is unavailable. Configure a Default Fallback or choose a parser in Settings → LLM Parsers.'
+        : 'The selected LLM parser is unavailable. Check its account and API key in Settings → LLM Parsers.',
+    );
+    return;
   }
-  return parser;
+  alert(
+    `${hadFiles ? 'Local recognition could not confidently fill the trip fields.' : 'Scribe.js only reads attached images and PDFs.'} You can enter the fields manually, `
+      + 'or configure a Default Fallback in Settings and try again. Your file is sent to the configured '
+      + `provider only when local recognition is insufficient.${detail}`,
+  );
 }
 
 async function recognise(): Promise<void> {
-  const parser = await ensureParser();
-  if (!parser) return;
   const note = getVal('fNote');
   const files: File[] = [];
   for (const n of llmFileNotes()) {
@@ -608,24 +867,56 @@ async function recognise(): Promise<void> {
     alert('Attach a screenshot or write a note first.');
     return;
   }
+
+  const selectedChoice = getVal('fParser') as RecognitionChoice;
+  const useLocal = editKind === 'leg' && selectedChoice === 'local';
+  let localError: string | undefined;
   if (editKind === 'hotel') {
+    const parser = parserForChoice(selectedChoice);
+    if (!parser) {
+      explainUnavailableRecognition(localError, files.length > 0);
+      recogniseFailed();
+      return;
+    }
     const hotel = await runHotelRecognition(files, note, parser);
     dialogExchange = lastExchange();
     if (!hotel) {
       recogniseFailed();
       return;
     }
-    fillHotelFields(hotel);
+    fillHotelFields(hotel, true);
+    showParsedHotelValidation();
   } else {
+    if (useLocal && files.length) {
+      const local = await tryLocalRecognition(files, note);
+      dialogExchange = lastExchange();
+      if (local.value) {
+        fillLegFields(local.value[0], !!local.partial);
+        activeTab = 'form';
+        showParsedLegValidation();
+        applyTabs();
+        return;
+      }
+      localError = local.error;
+    }
+    const parser = useLocal ? defaultLlmParser() : parserForChoice(selectedChoice);
+    if (!parser) {
+      if (useLocal) explainUnavailableRecognition(localError, files.length > 0);
+      else alert('The selected LLM parser is unavailable. Check its account and API key in Settings → LLM Parsers.');
+      recogniseFailed();
+      return;
+    }
     const legs = await runRecognition(files, note, parser);
     dialogExchange = lastExchange();
     if (!legs) {
       recogniseFailed();
       return;
     }
-    fillLegFields(legs[0]);
+    fillLegFields(legs[0], true);
+    showParsedLegValidation();
     queuedLegs = legs.slice(1);
     queuedFiles = queuedLegs.length ? files : [];
+    queuedLegsPartial = queuedLegs.length > 0;
   }
   // success: jump to the edit form with the extracted values
   activeTab = 'form';
@@ -643,9 +934,30 @@ function recogniseFailed(): void {
 /** Image pasted with no dialog open: auto-detect leg vs hotel, then open the
  * matching dialog with the image attached and the fields filled. */
 export async function importPastedImage(file: File): Promise<void> {
-  const parser = await ensureParser();
-  if (!parser) return;
-  const result = await runAutoRecognition([file], '', parser);
+  let localError: string | undefined;
+  let resultPartial = false;
+  let result = null;
+  const attemptedLocal = settings.scribeEnabled;
+  if (attemptedLocal) {
+    const local = await tryLocalAutoRecognition([file], '');
+    result = local.value;
+    localError = local.error;
+    resultPartial = !!local.partial;
+  }
+  if (!result) {
+    const parser = defaultLlmParser();
+    if (!parser) {
+      openModal(null, { files: [file] });
+      dialogExchange = attemptedLocal ? lastExchange() : null;
+      explainUnavailableRecognition(localError);
+      recogniseFailed();
+      return;
+    }
+    result = await runAutoRecognition([file], '', parser);
+    // Remote schemas intentionally allow omitted fields. Never replace those
+    // omissions with the new-form placeholder dates.
+    if (result) resultPartial = true;
+  }
   if (!result) {
     // Open a blank leg dialog with the image so the exchange is inspectable
     // and the user can adjust the note and retry.
@@ -655,19 +967,23 @@ export async function importPastedImage(file: File): Promise<void> {
     return;
   }
   if ('hotel' in result) {
-    openHotelModal(null, { ...result.hotel, files: [file] });
+    openHotelModal(null, { ...result.hotel, partial: true, files: [file] });
   } else {
     const [first, ...rest] = result.legs;
-    openModal(null, { ...first, files: [file] });
+    openModal(null, { ...first, partial: resultPartial, files: [file] });
     queuedLegs = rest;
     queuedFiles = rest.length ? [file] : [];
+    queuedLegsPartial = rest.length > 0 && resultPartial;
   }
   // The exchange belongs to the record(s) just opened; openModal cleared it.
   dialogExchange = lastExchange();
+  if ('hotel' in result) showParsedHotelValidation();
+  else showParsedLegValidation();
+  applyTabs();
 }
 
 /** Fill the hotel form from an extracted stay (only fields the model set). */
-function fillHotelFields(h: ExtractedHotel): void {
+function fillHotelFields(h: ExtractedHotel, partial = false): void {
   const set = (id: string, v: unknown): void => {
     if (v !== undefined && v !== null && v !== '') setVal(id, String(v));
   };
@@ -675,7 +991,17 @@ function fillHotelFields(h: ExtractedHotel): void {
   set('hCity', h.city);
   set('hAddr', h.addr);
   if (h.checkIn) setDT('hInDate', 'hInTime', h.checkIn);
+  else if (h.checkInDate) {
+    setVal('hInDate', h.checkInDate);
+    setVal('hInTime', '');
+  }
+  else if (partial) setDT('hInDate', 'hInTime', '');
   if (h.checkOut) setDT('hOutDate', 'hOutTime', h.checkOut);
+  else if (h.checkOutDate) {
+    setVal('hOutDate', h.checkOutDate);
+    setVal('hOutTime', '');
+  }
+  else if (partial) setDT('hOutDate', 'hOutTime', '');
   set('hCost', h.cost);
   set('hCur', h.currency);
   refreshConv('hotel'); // recognised cost/currency — convert to the base currency
@@ -706,9 +1032,19 @@ export function openModal(id: string | null, prefill?: LegPrefill): void {
   setVal('fDepCity', r ? r.dep.city : P.depCity ?? '');
   setVal('fDepAddr', r ? r.dep.addr : P.depAddr ?? '');
   setDT('fDepDate', 'fDepTime', r ? r.dep.time : P.depTime ?? '2026-05-01T12:00');
+  if (!r && P.depClock) {
+    setVal('fDepDate', '');
+    setVal('fDepTime', P.depClock);
+  }
+  else if (!r && P.partial && !P.depTime) setDT('fDepDate', 'fDepTime', '');
   setVal('fArrCity', r ? r.arr.city : P.arrCity ?? '');
   setVal('fArrAddr', r ? r.arr.addr : P.arrAddr ?? '');
   setDT('fArrDate', 'fArrTime', r ? r.arr.time : P.arrTime ?? '2026-05-01T14:00');
+  if (!r && P.arrClock) {
+    setVal('fArrDate', '');
+    setVal('fArrTime', P.arrClock);
+  }
+  else if (!r && P.partial && !P.arrTime) setDT('fArrDate', 'fArrTime', '');
   const depTz = r ? r.dep.tz ?? '' : '';
   const arrTz = r ? r.arr.tz ?? '' : '';
   setVal('fDepTz', depTz); tzAuto.fDepTz = !depTz;
@@ -753,6 +1089,16 @@ export function openHotelModal(id: string | null, prefill?: HotelPrefill): void 
   setVal('hAddr', h ? h.addr : P.addr ?? '');
   setDT('hInDate', 'hInTime', h ? h.checkIn : P.checkIn ?? '2026-05-01T15:00');
   setDT('hOutDate', 'hOutTime', h ? h.checkOut : P.checkOut ?? '2026-05-03T11:00');
+  if (!h && P.checkInDate && !P.checkIn) {
+    setVal('hInDate', P.checkInDate);
+    setVal('hInTime', '');
+  }
+  if (!h && P.checkOutDate && !P.checkOut) {
+    setVal('hOutDate', P.checkOutDate);
+    setVal('hOutTime', '');
+  }
+  if (!h && P.partial && !P.checkIn && !P.checkInDate) setDT('hInDate', 'hInTime', '');
+  if (!h && P.partial && !P.checkOut && !P.checkOutDate) setDT('hOutDate', 'hOutTime', '');
   const hTz = h ? h.tz ?? '' : '';
   setVal('hTz', hTz); tzAuto.hTz = !hTz;
   setVal('hCost', h ? h.cost : P.cost ?? '');
@@ -777,21 +1123,26 @@ export function closeModal(): void {
     const [leg, ...rest] = queuedLegs;
     queuedLegs = [];
     const f = queuedFiles;
+    const partial = queuedLegsPartial;
     if (!rest.length) queuedFiles = [];
-    openModal(null, { ...leg, files: f.length ? f : undefined });
+    if (!rest.length) queuedLegsPartial = false;
+    openModal(null, { ...leg, partial, files: f.length ? f : undefined });
     queuedLegs = rest;
     // Every leg of the itinerary came from the same recognition.
     dialogExchange = ex;
+    if (partial) showParsedLegValidation();
   }
 }
 
 async function saveLeg(): Promise<void> {
-  const dc = getVal('fDepCity');
-  const ac = getVal('fArrCity');
-  if (!dc || !ac) {
-    alert('Departure and arrival city are required.');
+  legValidationActive = true;
+  activeTab = 'form';
+  applyTabs();
+  if (!validateLegFields(true)) {
     return;
   }
+  const dc = getVal('fDepCity').trim();
+  const ac = getVal('fArrCity').trim();
   // Storing the image is async — block a double-click on Save meanwhile.
   const saveBtn = byId<HTMLButtonElement>('saveBtn');
   if (saveBtn.disabled) return;
@@ -848,12 +1199,12 @@ function saveModal(): void {
 }
 
 async function saveHotel(): Promise<void> {
-  const name = getVal('hName');
-  const city = getVal('hCity');
-  if (!name || !city) {
-    alert('Hotel name and city are required.');
-    return;
-  }
+  hotelValidationActive = true;
+  activeTab = 'form';
+  applyTabs();
+  if (!validateHotelFields(true)) return;
+  const name = getVal('hName').trim();
+  const city = getVal('hCity').trim();
   // Storing the image is async — block a double-click on Save meanwhile.
   const saveBtn = byId<HTMLButtonElement>('saveBtn');
   if (saveBtn.disabled) return;
@@ -913,6 +1264,22 @@ export function wireModal(): void {
   for (const id of ['fDepTz', 'fArrTz', 'hTz']) {
     byId(id).innerHTML = tzOptions;
     byId(id).addEventListener('change', () => { tzAuto[id] = false; });
+  }
+  for (const id of LEG_REQUIRED_FIELDS) {
+    byId(id).addEventListener('input', () => {
+      if (legValidationActive) validateLegFields();
+    });
+    byId(id).addEventListener('change', () => {
+      if (legValidationActive) validateLegFields();
+    });
+  }
+  for (const id of HOTEL_REQUIRED_FIELDS) {
+    byId(id).addEventListener('input', () => {
+      if (hotelValidationActive) validateHotelFields();
+    });
+    byId(id).addEventListener('change', () => {
+      if (hotelValidationActive) validateHotelFields();
+    });
   }
   // Converted cost: editing the cost or currency re-converts (unless the user
   // typed their own value); the chip forces a fresh conversion.
@@ -1017,17 +1384,7 @@ export function wireModal(): void {
     }
   });
   byId('recogniseBtn').onclick = () => void recognise();
-  byId('cfgParsersBtn').onclick = async () => {
-    await openParserSettings('llm');
-    refreshParserCombo();
-  };
-  byId('fParser').onchange = () => {
-    const v = Number(getVal('fParser'));
-    if (!Number.isNaN(v)) {
-      settings.activeParser = v;
-      saveSettings();
-    }
-  };
+  byId('fParser').onchange = refreshRecognitionHint;
   byId('overlay').onclick = (e) => {
     if ((e.target as HTMLElement).id === 'overlay') closeModal();
   };

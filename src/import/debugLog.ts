@@ -1,5 +1,5 @@
-/** In-memory record of the most recent LLM exchange, shown in the segment
- * dialog's "LLM exchange" tab for debugging extraction problems. */
+/** In-memory record of the most recent local or remote recognition attempt,
+ * shown in the segment dialog for debugging extraction problems. */
 
 interface FileMeta {
   name: string;
@@ -23,6 +23,9 @@ export interface LlmExchange {
   status?: string;
   rawResponse?: string;
   legs?: unknown;
+  /** Local extraction produced useful fields but could not fill every core field. */
+  partial?: boolean;
+  warning?: string;
   error?: string;
 }
 
@@ -40,11 +43,11 @@ export const lastExchange = (): LlmExchange | null => last;
 /** Render the exchange as plain text for the debug tab. */
 export function formatExchange(x: LlmExchange | null): string {
   if (!x) {
-    return 'No LLM exchange in this session yet.\nAttach a screenshot (or write a note) and press Recognise.';
+    return 'No recognition attempt in this session yet.\nAttach a screenshot (or write a note) and press Recognise.';
   }
   const files = x.files ?? (x.file ? [x.file] : []);
   const lines = [
-    `Parser: ${x.provider} ${x.model}`,
+    `Recognizer: ${x.provider} ${x.model}`,
     files.length
       ? `Files: ${files.map((f) => `${f.name || 'image'} (${f.type || 'unknown type'}, ${(f.size / 1024).toFixed(1)} KB)`).join(', ')}`
       : 'Files: (none — note only)',
@@ -52,6 +55,7 @@ export function formatExchange(x: LlmExchange | null): string {
     `When: ${new Date(x.startedAt).toLocaleString()}${x.durationMs != null ? ` · took ${(x.durationMs / 1000).toFixed(1)} s` : ''}`,
     `Status: ${x.status ?? '—'}`,
   ];
+  if (x.warning) lines.push('', '--- Warning ---', x.warning);
   if (x.error) lines.push('', '--- Error ---', x.error);
   if (x.request !== undefined) lines.push('', '--- Request (file payload elided) ---', JSON.stringify(x.request, null, 2));
   if (x.rawResponse) lines.push('', '--- Raw response ---', x.rawResponse);

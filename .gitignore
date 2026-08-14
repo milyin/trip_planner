@@ -3,6 +3,8 @@ dist
 dist-ssr
 *.local
 .vite
+playwright-report
+test-results
 
 .DS_Store
 *.sqlite

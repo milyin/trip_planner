@@ -2,6 +2,10 @@
  * app name because `<user>.github.io` is one origin shared by every GitHub
  * Pages project of the account. */
 
+import {
+  DEFAULT_OCR_LANGUAGES, isOcrLanguageCode, type OcrLanguageCode,
+} from '../import/ocrLanguages';
+
 export type LlmProvider = 'gemini' | 'openrouter' | 'anthropic';
 
 /** A provider credential; several parsers can share one account. */
@@ -27,8 +31,12 @@ export interface ResolvedParser {
 export interface Settings {
   accounts: LlmAccount[];
   parsers: ImageParser[];
-  /** Index into `parsers` of the last parser used. */
-  activeParser: number;
+  /** Whether browser-local Scribe.js OCR is attempted. */
+  scribeEnabled: boolean;
+  /** Tesseract language models loaded by browser-local Scribe.js OCR. */
+  scribeLanguages: OcrLanguageCode[];
+  /** The selected LLM parser, or `null` for no LLM parsing. */
+  activeParser: number | null;
   theme: 'dark' | 'light';
   /** ISO 4217 code every cost is converted to for the plan totals. */
   baseCurrency: string;
@@ -77,6 +85,11 @@ function load(): Settings {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || '{}') as Partial<Settings> & LegacySettings;
     const theme: Settings['theme'] = raw.theme === 'light' ? 'light' : 'dark';
+    const scribeEnabled = raw.scribeEnabled !== false;
+    const loadedLanguages = Array.isArray(raw.scribeLanguages)
+      ? [...new Set(raw.scribeLanguages.filter(isOcrLanguageCode))]
+      : [];
+    const scribeLanguages = loadedLanguages.length ? loadedLanguages : [...DEFAULT_OCR_LANGUAGES];
     const baseCurrency = typeof raw.baseCurrency === 'string' && raw.baseCurrency ? raw.baseCurrency : DEFAULT_BASE_CURRENCY;
     const accounts: LlmAccount[] = [];
     const parsers: ImageParser[] = [];
@@ -87,13 +100,26 @@ function load(): Settings {
       accounts.push(acc);
       return acc.id;
     };
+    const loadActiveParser = (count: number): number | null => {
+      if (raw.activeParser === null) return null;
+      if (typeof raw.activeParser === 'number') {
+        return raw.activeParser >= 0 && raw.activeParser < count ? raw.activeParser : null;
+      }
+      // Before the explicit "No LLM parsing" choice, having parsers implied
+      // that the first one was selected.
+      return count ? 0 : null;
+    };
 
     if (Array.isArray(raw.accounts)) {
       // Current shape.
+      const loadedParsers = (raw.parsers as ImageParser[]) ?? [];
       return {
         accounts: raw.accounts,
-        parsers: (raw.parsers as ImageParser[]) ?? [],
-        activeParser: raw.activeParser ?? 0,
+        parsers: loadedParsers,
+        scribeEnabled,
+        scribeLanguages,
+        // Existing installs already selected a parser; preserve that choice.
+        activeParser: loadActiveParser(loadedParsers.length),
         theme,
         baseCurrency,
       };
@@ -103,7 +129,15 @@ function load(): Settings {
       for (const p of raw.parsers as { provider: LlmProvider; model: string; apiKey: string }[]) {
         parsers.push({ accountId: addAccount(p.provider, p.apiKey), model: p.model });
       }
-      return { accounts, parsers, activeParser: raw.activeParser ?? 0, theme, baseCurrency };
+      return {
+        accounts,
+        parsers,
+        scribeEnabled,
+        scribeLanguages,
+        activeParser: loadActiveParser(parsers.length),
+        theme,
+        baseCurrency,
+      };
     }
     // Oldest shape: one key per provider.
     if (raw.geminiApiKey) {
@@ -118,13 +152,14 @@ function load(): Settings {
         model: raw.openrouterModel || DEFAULT_MODELS.openrouter,
       });
     }
-    const activeParser = Math.max(
-      0,
-      accounts.findIndex((a) => a.provider === raw.provider),
-    );
-    return { accounts, parsers, activeParser, theme, baseCurrency };
+    const legacyActive = accounts.findIndex((a) => a.provider === raw.provider);
+    const activeParser = parsers.length ? Math.max(0, legacyActive) : null;
+    return { accounts, parsers, scribeEnabled, scribeLanguages, activeParser, theme, baseCurrency };
   } catch {
-    return { accounts: [], parsers: [], activeParser: 0, theme: 'dark', baseCurrency: DEFAULT_BASE_CURRENCY };
+    return {
+      accounts: [], parsers: [], scribeEnabled: true, scribeLanguages: [...DEFAULT_OCR_LANGUAGES], activeParser: null,
+      theme: 'dark', baseCurrency: DEFAULT_BASE_CURRENCY,
+    };
   }
 }
 

@@ -1,0 +1,47 @@
+{
+  "languages": ["eng", "fra", "rus"],
+  "now": "2026-08-14T12:00:00Z",
+  "expected": {
+    "transport": "Plane",
+    "depTime": "2026-10-29T19:05",
+    "arrTime": "2026-10-29T20:15",
+    "depAddr": "GVA",
+    "arrAddr": "ORY",
+    "cost": 132,
+    "currency": "EUR",
+    "transfers": 0
+  },
+  "absent": ["depCity", "arrCity"],
+  "lookups": {
+    "GVA": [{
+      "lat": "46.2377125",
+      "lon": "6.1079823",
+      "category": "aeroway",
+      "type": "aerodrome",
+      "name": "Aéroport international de Genève",
+      "display_name": "Aéroport international de Genève, Le Grand-Saconnex, Genève, Suisse",
+      "address": { "town": "Le Grand-Saconnex", "state": "Genève", "country": "Suisse" },
+      "namedetails": {
+        "iata": "GVA",
+        "name:en": "Geneva International Airport",
+        "short_name:en": "Geneva Airport"
+      }
+    }],
+    "ORY": [{
+      "lat": "48.7300596",
+      "lon": "2.3678313",
+      "category": "aeroway",
+      "type": "aerodrome",
+      "name": "Aéroport de Paris-Orly",
+      "display_name": "Aéroport de Paris-Orly, Villeneuve-le-Roi, France",
+      "address": { "town": "Villeneuve-le-Roi", "state": "Île-de-France", "country": "France" },
+      "namedetails": { "iata": "ORY", "name:en": "Paris–Orly Airport" }
+    }]
+  },
+  "dialogExpected": {
+    "fDepCity": "Geneva",
+    "fDepAddr": "GVA",
+    "fArrCity": "Paris",
+    "fArrAddr": "ORY"
+  }
+}
