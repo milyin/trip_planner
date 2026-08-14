@@ -675,7 +675,7 @@ function refreshRecognitionHint(): void {
     return;
   }
   if (choice === 'local') {
-    byId('recognitionHint').textContent = 'Scribe.js parses the image and Additional note together. After this attempt, the selector switches to the default LLM for an optional retry.';
+    byId('recognitionHint').textContent = 'Scribe.js parses the image and Additional note together. To retry with an LLM, select that parser explicitly.';
     byId('recogniseBtn').title = 'Recognise locally with Scribe.js';
   } else if (choice === 'default') {
     byId('recognitionHint').textContent = 'Recognise directly with the Default Fallback configured in Settings → Image recognition.';
@@ -805,8 +805,6 @@ async function recognise(): Promise<void> {
       const local = await tryLocalRecognition(files, note);
       dialogExchange = lastExchange();
       if (local.value) {
-        byId<HTMLSelectElement>('fParser').value = 'default';
-        refreshRecognitionHint();
         fillLegFields(local.value[0], !!local.partial);
         activeTab = 'form';
         showParsedLegValidation();
