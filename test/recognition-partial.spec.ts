@@ -32,6 +32,23 @@ test('fresh OCR defaults combine English, locale region and system languages', a
   expect(existingLanguages).toEqual(['fra']);
 });
 
+test('fresh OCR defaults tolerate a browser without navigator.languages', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'language', { configurable: true, get: () => 'ru' });
+    Object.defineProperty(navigator, 'languages', { configurable: true, get: () => undefined });
+  });
+  await page.goto('/trip_planner/');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+
+  const freshLanguages = await page.evaluate(async () => {
+    const modulePath = '/trip_planner/src/state/settings.ts';
+    const { settings } = await import(/* @vite-ignore */ modulePath) as typeof import('../src/state/settings');
+    return settings.scribeLanguages;
+  });
+  expect(freshLanguages).toEqual(['eng', 'rus']);
+});
+
 test('remote recognition keeps omitted fields blank on pasted and queued legs', async ({ context, page }) => {
   await context.route('https://nominatim.openstreetmap.org/**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));

@@ -164,10 +164,16 @@ export function defaultOcrLanguages(
   browserLanguages?: readonly string[],
   browserLocale?: string,
 ): OcrLanguageCode[] {
-  const systemLanguages = browserLanguages
-    ?? (typeof navigator === 'undefined' ? [] : navigator.languages);
+  const navigatorLocale = typeof navigator !== 'undefined' && typeof navigator.language === 'string'
+    ? navigator.language
+    : undefined;
+  const navigatorLanguages = typeof navigator !== 'undefined' && Array.isArray(navigator.languages)
+    ? navigator.languages
+    : navigatorLocale ? [navigatorLocale] : [];
+  const systemLanguages = (Array.isArray(browserLanguages) ? browserLanguages : navigatorLanguages)
+    .filter((locale): locale is string => typeof locale === 'string');
   const primaryLocale = browserLocale
-    ?? (typeof navigator === 'undefined' ? undefined : navigator.language)
+    ?? navigatorLocale
     ?? systemLanguages[0];
   const defaults: OcrLanguageCode[] = [...DEFAULT_OCR_LANGUAGES];
   const add = (code: OcrLanguageCode | null): void => {
