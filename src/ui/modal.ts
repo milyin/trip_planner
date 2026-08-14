@@ -678,8 +678,8 @@ function refreshParserCombo(): void {
   fallback.value = 'default';
   const active = settings.activeParser;
   fallback.textContent = active != null && settings.parsers[active]
-    ? `◉ Default Fallback — ${parserName(settings.parsers[active])}`
-    : '◉ Default Fallback — not configured';
+    ? `◉ ${parserName(settings.parsers[active])}`
+    : '◉ Not configured';
   sel.appendChild(fallback);
   settings.parsers.forEach((p, i) => {
     if (i === active) return;
