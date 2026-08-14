@@ -111,7 +111,9 @@ Choose the Tesseract models used for local OCR under **⚙ Settings → Local
 parser**. English is enabled for existing installations; add Russian or any
 other languages that may appear in booking images. Each model is downloaded
 and cached on first use, and selecting more languages increases recognition
-time.
+time. The built-in trip parser understands common Russian month forms and IATA
+airport-code pairs. If a ticket contains only airport codes, the codes are kept
+as the stops and the missing city fields remain highlighted for confirmation.
 
 To use an LLM, open **⚙ Settings → LLM Parsers**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then

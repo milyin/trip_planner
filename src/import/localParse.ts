@@ -17,30 +17,31 @@ interface ParsedDate {
  * screens. Strings are accent-folded before lookup, so e.g. `juil.`, `März`,
  * `févr.` and `września` work without relying on the browser locale. */
 const MONTH_NAMES: readonly string[][] = [
-  ['jan', 'january', 'janv', 'janvier', 'januar', 'enero', 'ene', 'gennaio', 'gen', 'janeiro', 'januari', 'sty', 'stycznia', 'ian', 'ianuarie', 'ocak', 'янв', 'января'],
-  ['feb', 'february', 'fev', 'fevr', 'fevrier', 'februar', 'febrero', 'febbraio', 'fevereiro', 'lut', 'lutego', 'februarie', 'subat', 'фев', 'февраля'],
-  ['mar', 'march', 'mars', 'marz', 'maerz', 'marzo', 'marco', 'maart', 'marca', 'martie', 'mart', 'март', 'марта'],
-  ['apr', 'april', 'avr', 'avril', 'abril', 'aprile', 'kwiecien', 'kwietnia', 'kwi', 'aprilie', 'nisan', 'апр', 'апреля'],
+  ['jan', 'january', 'janv', 'janvier', 'januar', 'enero', 'ene', 'gennaio', 'gen', 'janeiro', 'januari', 'sty', 'stycznia', 'ian', 'ianuarie', 'ocak', 'янв', 'январь', 'января'],
+  ['feb', 'february', 'fev', 'fevr', 'fevrier', 'februar', 'febrero', 'febbraio', 'fevereiro', 'lut', 'lutego', 'februarie', 'subat', 'фев', 'февраль', 'февраля'],
+  ['mar', 'march', 'mars', 'marz', 'maerz', 'marzo', 'marco', 'maart', 'marca', 'martie', 'mart', 'мар', 'март', 'марта'],
+  ['apr', 'april', 'avr', 'avril', 'abril', 'aprile', 'kwiecien', 'kwietnia', 'kwi', 'aprilie', 'nisan', 'апр', 'апрель', 'апреля'],
   ['may', 'mai', 'mayo', 'maggio', 'mag', 'maio', 'mei', 'maj', 'maja', 'mayis', 'май', 'мая'],
-  ['jun', 'june', 'juin', 'juni', 'junio', 'giugno', 'giu', 'junho', 'cze', 'czerwca', 'iun', 'iunie', 'haziran', 'июн', 'июня'],
-  ['jul', 'july', 'juil', 'juillet', 'juli', 'julio', 'lug', 'luglio', 'julho', 'lip', 'lipca', 'iul', 'iulie', 'temmuz', 'июл', 'июля'],
-  ['aug', 'august', 'aout', 'agosto', 'ago', 'augustus', 'sie', 'sierpnia', 'agustos', 'авг', 'августа'],
-  ['sep', 'sept', 'september', 'septembre', 'septiembre', 'set', 'settembre', 'setembro', 'wrz', 'wrzesnia', 'septembrie', 'eylul', 'сен', 'сентября'],
-  ['oct', 'october', 'octobre', 'okt', 'oktober', 'octubre', 'ott', 'ottobre', 'out', 'outubro', 'paz', 'pazdziernika', 'octombrie', 'ekim', 'окт', 'октября'],
-  ['nov', 'november', 'novembre', 'noviembre', 'listopada', 'lis', 'noiembrie', 'kasim', 'ноя', 'ноября'],
-  ['dec', 'december', 'decembre', 'dez', 'dezember', 'dic', 'diciembre', 'dicembre', 'dezembro', 'gru', 'grudnia', 'decembrie', 'aralik', 'дек', 'декабря'],
+  ['jun', 'june', 'juin', 'juni', 'junio', 'giugno', 'giu', 'junho', 'cze', 'czerwca', 'iun', 'iunie', 'haziran', 'июн', 'июнь', 'июня'],
+  ['jul', 'july', 'juil', 'juillet', 'juli', 'julio', 'lug', 'luglio', 'julho', 'lip', 'lipca', 'iul', 'iulie', 'temmuz', 'июл', 'июль', 'июля'],
+  ['aug', 'august', 'aout', 'agosto', 'ago', 'augustus', 'sie', 'sierpnia', 'agustos', 'авг', 'август', 'августа'],
+  ['sep', 'sept', 'september', 'septembre', 'septiembre', 'set', 'settembre', 'setembro', 'wrz', 'wrzesnia', 'septembrie', 'eylul', 'сен', 'сент', 'сентябрь', 'сентября'],
+  ['oct', 'october', 'octobre', 'okt', 'oktober', 'octubre', 'ott', 'ottobre', 'out', 'outubro', 'paz', 'pazdziernika', 'octombrie', 'ekim', 'окт', 'октябрь', 'октября'],
+  ['nov', 'november', 'novembre', 'noviembre', 'listopada', 'lis', 'noiembrie', 'kasim', 'ноя', 'ноябрь', 'ноября'],
+  ['dec', 'december', 'decembre', 'dez', 'dezember', 'dic', 'diciembre', 'dicembre', 'dezembro', 'gru', 'grudnia', 'decembrie', 'aralik', 'дек', 'декабрь', 'декабря'],
 ];
-
-const MONTHS = Object.fromEntries(
-  MONTH_NAMES.flatMap((names, month) => names.map((name) => [name, month])),
-) as Record<string, number>;
 
 const clean = (s: string): string => s.replace(/[|]+/g, ' ').replace(/\s+/g, ' ').trim();
 const folded = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+const MONTHS = Object.fromEntries(
+  MONTH_NAMES.flatMap((names, month) => names.map((name) => [folded(name), month])),
+) as Record<string, number>;
+
 const pad = (n: number): string => String(n).padStart(2, '0');
 
 const CURRENCIES: Record<string, string> = {
-  '€': 'EUR', eur: 'EUR', euro: 'EUR', euros: 'EUR',
+  '€': 'EUR', eur: 'EUR', euro: 'EUR', euros: 'EUR', 'е': 'EUR',
   'евро': 'EUR',
   '$': 'USD', usd: 'USD', dollar: 'USD', dollars: 'USD', 'us dollar': 'USD', 'us dollars': 'USD',
   '£': 'GBP', gbp: 'GBP', pound: 'GBP', pounds: 'GBP', sterling: 'GBP', 'british pound': 'GBP', 'british pounds': 'GBP',
@@ -70,7 +71,10 @@ const AMOUNT_SOURCE = String.raw`\d(?:[\d\s.,]*\d)?`;
 function pricePatterns(): RegExp[] {
   return [
     new RegExp(`(?:^|[^\\p{L}\\d])(${CURRENCY_SOURCE})\\s*(${AMOUNT_SOURCE})(?![\\d.,])`, 'giu'),
-    new RegExp(`(?:^|[^\\p{L}\\d])(${AMOUNT_SOURCE})\\s*(${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'),
+    // A suffix price may follow a clock on the same OCR line. Do not begin at
+    // the minute portion of `20:15 152 EUR`; the following space still lets
+    // the real `152 EUR` token match.
+    new RegExp(`(?:^|[^\\p{L}\\d:.])(${AMOUNT_SOURCE})\\s*(${CURRENCY_SOURCE})(?=\\s|$|[.,;:!?])`, 'giu'),
   ];
 }
 
@@ -90,6 +94,14 @@ function maskPrices(line: string): string {
   let masked = line;
   for (const pattern of pricePatterns()) masked = masked.replace(pattern, maskMatch);
   return masked;
+}
+
+/** OCR often renders a duration such as `1ч 10 мин.` as `14.10 мин.`.
+ * Preserve offsets while hiding duration-shaped tokens from clock parsing. */
+function maskDurations(line: string): string {
+  return line
+    .replace(/(?<!\d)\d{1,2}[:.]\d{2}\s*(?:h(?:ou)?rs?|hours?|minutes?|mins?|min|мин(?:ут(?:а|ы)?)?|ч(?:ас(?:а|ов)?)?)(?:\.)?/giu, maskMatch)
+    .replace(/(?<!\d)\d{1,2}\s*h\s*\d{1,2}(?!\d)/giu, maskMatch);
 }
 
 /** Normalize decimal and thousands separators. When both occur, the last one
@@ -164,8 +176,7 @@ function datesIn(lines: string[], now: Date): ParsedDate[] {
 function timesIn(lines: string[]): DatedTime[] {
   const out: DatedTime[] = [];
   lines.forEach((line, lineN) => {
-    if (/\b(duration|travel time|journey time)\b/i.test(line)) return;
-    const withoutDates = maskNumericDates(maskPrices(line));
+    const withoutDates = maskNumericDates(maskPrices(maskDurations(line)));
     for (const m of withoutDates.matchAll(/\b([01]?\d|2[0-3])[:.]([0-5]\d)\s*(am|pm)?\b/gi)) {
       let hour = Number(m[1]);
       const suffix = m[3]?.toLowerCase();
@@ -176,6 +187,17 @@ function timesIn(lines: string[]): DatedTime[] {
     }
   });
   return out;
+}
+
+const NON_AIRPORT_CODES = new Set(['TGV']);
+
+/** Return an unambiguous pair of IATA airport codes. Two codes are required so
+ * isolated all-caps OCR text is not mistaken for a route. */
+function airportCodesIn(text: string): [string, string] | null {
+  const codes = [...maskPrices(text).matchAll(/\b[A-Z]{3}\b/g)]
+    .map((match) => match[0])
+    .filter((code, index, all) => !NON_AIRPORT_CODES.has(code) && all.indexOf(code) === index);
+  return codes.length === 2 ? [codes[0], codes[1]] : null;
 }
 
 function closestDate(time: DatedTime, dates: ParsedDate[], fallback?: ParsedDate): Date | null {
@@ -274,6 +296,7 @@ function priceIn(text: string): { cost: number; currency: string } | null {
     return CURRENCIES[normalized] ?? CURRENCIES[folded(normalized)] ?? token.toUpperCase();
   };
   text.split('\n').forEach((line) => {
+    if (/\b(?:freeze|lock|hold)\s+(?:the\s+)?price\b/i.test(line) || /заморозить\s+цену/iu.test(line)) return;
     const priority = /\b(total|price|fare|amount|cost)\b/i.test(line)
       || /(?:стоимость|цена|итого|тариф)/iu.test(line) ? 1 : 0;
     const patterns = pricePatterns();
@@ -334,9 +357,11 @@ export function parseLocalLeg(text: string, note = '', now = new Date()): Extrac
   }
   const [departure, arrival] = times;
   const hasTimePair = !!departure && !!arrival;
+  const airports = airportCodesIn(`${note}\n${text}`);
   const noteTransport = transportIn(note);
+  const detectedTransport = noteTransport !== 'Other' ? noteTransport : transportIn(text);
   const leg: ExtractedLeg = {
-    transport: noteTransport !== 'Other' ? noteTransport : transportIn(text),
+    transport: detectedTransport === 'Other' && airports ? 'Plane' : detectedTransport,
   };
   if (hasTimePair) {
     const depDate = closestDate(departure, dates, dates[0]);
@@ -357,12 +382,16 @@ export function parseLocalLeg(text: string, note = '', now = new Date()): Extrac
   }
 
   const route = routeFrom(noteLines) ?? routeFrom(lines)
-    ?? (hasTimePair ? routeFollowingTimes(combinedLines, departure, arrival) : null);
-  const depLoc = route?.[0] ?? (departure ? nearbyLocation(combinedLines, departure.line) : null);
-  const arrLoc = route?.[1] ?? (arrival ? nearbyLocation(combinedLines, arrival.line, depLoc ?? undefined) : null);
+    ?? (!airports && hasTimePair ? routeFollowingTimes(combinedLines, departure, arrival) : null);
+  const depLoc = route?.[0] ?? (!airports && departure ? nearbyLocation(combinedLines, departure.line) : null);
+  const arrLoc = route?.[1] ?? (!airports && arrival ? nearbyLocation(combinedLines, arrival.line, depLoc ?? undefined) : null);
   if (depLoc && arrLoc) {
     applyLocation(leg, 'dep', depLoc);
     applyLocation(leg, 'arr', arrLoc);
+  }
+  if (airports) {
+    leg.depAddr = airports[0];
+    leg.arrAddr = airports[1];
   }
 
   const price = priceIn(note) ?? priceIn(text);
@@ -371,14 +400,14 @@ export function parseLocalLeg(text: string, note = '', now = new Date()): Extrac
     leg.currency = price.currency;
   }
   const combinedText = `${text}\n${note}`;
-  if (/\b(direct|non.?stop)\b/i.test(combinedText)) leg.transfers = 0;
+  if (/\b(direct|non.?stop)\b/i.test(combinedText) || /(?:прямой|без\s+пересадок)/iu.test(combinedText)) leg.transfers = 0;
   else {
     const stops = combinedText.match(/\b(\d+)\s+(?:stop|change|transfer|connection)s?\b/i);
     if (stops) leg.transfers = Number(stops[1]);
   }
   // Keep useful route-shaped output while rejecting isolated weak matches.
   const hasTimes = !!(leg.depClock || leg.depTime) && !!(leg.arrClock || leg.arrTime);
-  const hasRoute = !!leg.depCity && !!leg.arrCity;
+  const hasRoute = (!!leg.depCity && !!leg.arrCity) || (!!leg.depAddr && !!leg.arrAddr);
   const hasPrice = leg.cost != null && !!leg.currency;
   const hasMode = leg.transport !== 'Other';
   // A route pair is independently useful. Otherwise require two clocks plus
