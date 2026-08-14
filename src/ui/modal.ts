@@ -1,6 +1,6 @@
 import type { CurrencyCode, Hotel, LatLng, Leg, NoteEntry, Segment, TransportKind } from '../domain/types';
 import { getRate, RATES_SOURCE, rateSourceUrl } from '../domain/convert';
-import { geocodeAddress, geocodePlace } from '../domain/geocode';
+import { geocodePlace, locateAddress } from '../domain/geocode';
 import { fmtDur } from '../domain/format';
 import { isValidTz, toMs, tzForLatLng, tzOffset, zonedMs } from '../domain/tz';
 import { bufferMin } from '../domain/transport';
@@ -600,14 +600,24 @@ function resolveSlot(key: SlotKey, force = false): void {
   g.status = 'busy';
   renderGeoChip(key);
   const lookup = spec.cityInput
-    ? geocodeAddress(getVal(spec.cityInput).trim(), text, { priority: true, force })
-    : geocodePlace(text, undefined, { priority: true, force });
-  void lookup.then((ll) => {
+    ? locateAddress(getVal(spec.cityInput).trim(), text, { priority: true, force })
+    : geocodePlace(text, undefined, { priority: true, force }).then((ll) => (ll ? { ll, city: undefined } : null));
+  void lookup.then((place) => {
     if (g.token !== token) return; // field changed meanwhile
+    const ll = place?.ll ?? null;
     g.ll = ll;
     g.status = ll ? 'ok' : 'fail';
     renderGeoChip(key);
     maybeAutoTz(key, ll);
+    // Recognition may know only a stop/airport identifier. Nominatim already
+    // returns its locality alongside the coordinates; fill a still-blank city
+    // without ever overwriting a city the user entered or corrected.
+    if (spec.cityInput && place?.city && !getVal(spec.cityInput).trim()) {
+      setVal(spec.cityInput, place.city);
+      setSlot(SIBLING[key], ll, true);
+      if (editKind === 'leg' && legValidationActive) validateLegFields();
+      if (editKind === 'hotel' && hotelValidationActive) validateHotelFields();
+    }
   });
 }
 

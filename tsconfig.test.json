@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node", "@playwright/test", "vite/client"]
   },
-  "include": ["playwright.config.ts", "test/**/*.ts"]
+  "include": ["playwright.config.ts", "test/**/*.ts", "src/vite-env.d.ts"]
 }

@@ -8,6 +8,8 @@ interface OcrFixture {
   note?: string;
   expected: Record<string, unknown>;
   absent?: string[];
+  lookups?: Record<string, unknown[]>;
+  dialogExpected?: Record<string, string>;
 }
 
 const ASSETS = join(import.meta.dirname, 'assets');
@@ -35,8 +37,14 @@ test.describe('local Scribe.js OCR fixtures', () => {
 
   for (const { imageFile, imageBase64, fixture } of fixtures) {
     test(imageFile, async ({ context, page }, testInfo) => {
-      await context.route('https://nominatim.openstreetmap.org/**', (route) =>
-        route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+      await context.route('https://nominatim.openstreetmap.org/**', (route) => {
+        const query = new URL(route.request().url()).searchParams.get('q') ?? '';
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(fixture.lookups?.[query] ?? []),
+        });
+      });
       await page.addInitScript(({ languages, fixedNow }) => {
         const RealDate = Date;
         class FixedDate extends RealDate {
@@ -84,6 +92,19 @@ test.describe('local Scribe.js OCR fixtures', () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject(fixture.expected);
       for (const field of fixture.absent ?? []) expect(result[0]).not.toHaveProperty(field);
+
+      if (fixture.dialogExpected) {
+        await page.evaluate(async (leg) => {
+          const modalModulePath = '/trip_planner/src/ui/modal.ts';
+          const { openModal } = await import(/* @vite-ignore */ modalModulePath) as typeof import('../src/ui/modal');
+          openModal(null, { ...leg, partial: true });
+        }, result[0]);
+        for (const [id, value] of Object.entries(fixture.dialogExpected)) {
+          await expect(page.locator(`#${id}`)).toHaveValue(value);
+        }
+        await page.locator('#saveBtn').click();
+        await expect(page.locator('#overlay')).not.toHaveClass(/open/);
+      }
     });
   }
 });
