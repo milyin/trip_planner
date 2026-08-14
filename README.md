@@ -88,15 +88,73 @@ The app reads the cities, times, dates, price, carrier, and so on, and drops the
 into the form. You always review and edit before saving — nothing is added
 without your say-so.
 
-By default, screenshots and PDFs are first read locally in your browser with
-Scribe.js OCR. The app then uses a built-in parser to identify the dates, times,
-places and prices. Your file does not leave the device during this attempt.
+### How local recognition works
 
-If local recognition finds useful but incomplete trip information, the app
-fills those fields, leaves genuinely missing values blank, and lets you review
-the result. Places are checked with the app's normal OpenStreetMap lookup. You
-can explicitly retry that result with a configured AI model. The app falls back
-automatically only when the local parser finds no reliable trip structure.
+Local recognition is a two-stage, non-LLM pipeline:
+
+1. **Scribe.js OCR** runs in the browser and turns the screenshot or PDF into
+   plain text. It uses the OCR languages selected in **Settings → Local parser**.
+   The image and its raw OCR text stay on the device.
+2. A **deterministic trip parser** (ordinary TypeScript code) searches that text
+   and the optional Additional note for trip fields. It does not understand the
+   image semantically and does not call an AI model.
+
+The code parser recognizes common booking formats, including:
+
+- ISO and day-first numeric dates, plus common month names and abbreviations in
+  several European languages and Russian;
+- 24-hour clocks written with a colon or dot, overnight arrivals, and durations
+  that should not be mistaken for departure times;
+- routes written as `from … to …`, locations beside departure/arrival times,
+  common station names, and an unambiguous pair of IATA airport codes;
+- common transport words for planes, trains, buses, taxis and cars, plus direct
+  journeys and simple transfer counts;
+- prices written with currency symbols, ISO codes, or common currency names,
+  including decimal/thousands separators and Russian currency words;
+- missing or corrected details supplied in the Additional note.
+
+Recognized values are copied into the edit form for review. Missing required
+values remain blank and are highlighted immediately; the app never saves an
+incomplete leg. Airport/station identifiers are checked through the normal
+OpenStreetMap Nominatim lookup. When that lookup returns a locality, the dialog
+can fill the blank city while preserving the original identifier as the stop.
+For example, `GVA → ORY` becomes `Geneva → Paris`, with `GVA` and `ORY` kept in
+the airport fields.
+
+### Local parsing limitations
+
+Local OCR and code parsing are deliberately conservative. In particular:
+
+- OCR quality depends on resolution, contrast, fonts, layout and the selected
+  languages. Logos, icons, columns and small text can be read in the wrong order
+  or as the wrong character. Adding languages increases download size, memory
+  use and recognition time, and can sometimes introduce additional ambiguity.
+- The parser works from flattened OCR text, not the visual relationships in the
+  screenshot. It cannot reliably interpret every booking-site layout, fare
+  condition, crossed-out price, passenger total or multi-column alternative.
+- Transport parsing normally produces one leg. A screen containing several
+  alternatives, connections, or more than two timetable-like times is rejected
+  when the parser cannot choose safely. An Additional note can identify the
+  intended departure or supply missing fields.
+- Numeric dates are interpreted as day-first unless they are ISO `YYYY-MM-DD`.
+  A missing year is assigned to the next matching future date. Truly ambiguous
+  or unreadable dates are left blank rather than guessed.
+- There is no bundled worldwide database of cities, airports, railway stations
+  or bus stops. IATA recognition requires an unambiguous pair of three-letter
+  codes; other names are extracted heuristically. City enrichment needs an
+  internet connection and a matching OpenStreetMap result, and should always be
+  reviewed by the user.
+- Price extraction uses labels, currency tokens and line-level heuristics. When
+  several unrelated prices remain plausible, the result may be incomplete or
+  require correction. A missing price is reported and left blank.
+- Simple hotel-shaped pasted images may be identified locally, but recognition
+  started from an already-open hotel dialog is LLM-only. Complex hotel listings
+  generally need manual entry or an LLM parser.
+
+Useful partial results stay local for review. You can choose an LLM explicitly
+if you believe OCR or parsing missed something. Automatic LLM fallback happens
+only when the local parser finds no reliable trip structure—not merely because
+some fields are absent.
 
 ## Setting up recognition
 
@@ -111,9 +169,8 @@ Choose the Tesseract models used for local OCR under **⚙ Settings → Local
 parser**. English is enabled for existing installations; add Russian or any
 other languages that may appear in booking images. Each model is downloaded
 and cached on first use, and selecting more languages increases recognition
-time. The built-in trip parser understands common Russian month forms and IATA
-airport-code pairs. If a ticket contains only airport codes, the codes are kept
-as the stops and the missing city fields remain highlighted for confirmation.
+time. OCR language support controls text recognition; it does not add new
+grammar or booking-layout knowledge to the deterministic trip parser.
 
 To use an LLM, open **⚙ Settings → LLM Parsers**, add an **account** (a provider
 plus your API key) and a **parser** (which model on that account to use), then
@@ -150,7 +207,9 @@ disabled and an LLM is selected, when local recognition finds no usable trip
 data and a Default Fallback is configured, or when you run the LLM-only hotel
 recognition flow. Choosing **No LLM parsing** prevents automatic remote fallback.
 The pinned Scribe.js browser engine and its OCR language data are downloaded and
-cached on first use, but OCR itself runs in your browser.
+cached on first use, but OCR itself runs in your browser. Place validation may
+send only the recognized city, airport, station or stop text to OpenStreetMap
+Nominatim; the screenshot and full OCR response are not included in that lookup.
 
 - **Workspaces** let you keep separate trips side by side. Create, rename, and
   switch between them from the ☰ menu.
