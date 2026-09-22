@@ -11,8 +11,8 @@ import { selectFromMap } from '../ui/selection';
 
 let map: L.Map;
 let segmentLayer: L.LayerGroup;
-let darkTiles: L.TileLayer;
-let lightTiles: L.TileLayer;
+let darkTiles: L.LayerGroup;
+let lightTiles: L.LayerGroup;
 let initialFit = true;
 let mobileFitted = false;
 // When false, available (not-in-plan) records are hidden from the map so only
@@ -159,12 +159,30 @@ export function initMap(): void {
     // and a slower scroll wheel so an exact scale is easier to reach
     zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 120,
   }).setView([45, 6], 5);
-  darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap · © CARTO',
-  });
-  lightTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    subdomains: 'abcd', maxZoom: 19, attribution: '© OpenStreetMap · © CARTO',
-  });
+  // CARTO's dark_all/light_all raster basemaps now require a registered API key
+  // (they're being retired in favor of vector tiles — see
+  // https://github.com/CartoDB/basemap-styles). Anonymous requests silently get
+  // served a watermarked "API KEY REQUIRED" placeholder instead of an error, so
+  // we switched to Esri's keyless "Gray Canvas" tiles, which look similar.
+  // If swapping providers again in the future, verify the new provider's
+  // current keyless/free-tier terms first to avoid a silent regression like this.
+  const attribution = '© OpenStreetMap contributors · © Esri';
+  darkTiles = L.layerGroup([
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution,
+    }),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution,
+    }),
+  ]);
+  lightTiles = L.layerGroup([
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution,
+    }),
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution,
+    }),
+  ]);
   segmentLayer = L.layerGroup().addTo(map);
   applyTiles();
   map.on('moveend zoomend', () => placeLegend());
